@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>HTML5 WebSockets</title>
+    <link href="{{ url_for('static', path='/styles.css') }}" rel="stylesheet">
+</head>
+<body>
+    <h1>HTML5 WebSocket Chat</h1>
+    <input type="text" id="text-view" />
+    <input type="button" id="send-button" value="Send" />
+    <input type="button" id="stop-button" value="Stop" />
+    <br/>
+    <label id="status-label">Status</label>
+</body>
+</html>
+
+<script>
+    let buttonSend = document.getElementById("send-button");
+
+    buttonSend.onclick = function() {
+        console.log("Button clicked!");
+    }
+</script>
