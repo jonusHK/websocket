@@ -5,13 +5,20 @@
 //    console.log("WebSockets not supported.");
 // }
 
+function uuidv4() {
+  return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+    (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+  );
+}
+
 window.onload = function() {
     const textView = document.getElementById("text-view");
     const buttonSend = document.getElementById("send-button");
     const buttonStop = document.getElementById("stop-button");
     const label = document.getElementById("status-label");
-
-    const socket = new WebSocket("ws://localhost:8000/chat");
+    const roomId = 'room_1';
+    const clientId = uuidv4();
+    const socket = new WebSocket(`ws://localhost:8000/chat/${roomId}/${clientId}`);
 
     // 연결이 성공적으로 이뤄진 후 발생
     socket.onopen = function (event) {
