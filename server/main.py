@@ -1,3 +1,4 @@
+from functools import lru_cache
 from time import time
 from typing import List, Dict, Mapping
 
@@ -5,12 +6,36 @@ import uvicorn
 from fastapi import FastAPI, Request
 from starlette import status
 from starlette.endpoints import WebSocketEndpoint
+from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import HTMLResponse
 from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
+from server import config
+from server.databases import SessionLocal, engine, Base
+
+Base.metadata.create_all(bind=engine)
+
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+)
+
+
+@lru_cache()
+def get_settings():
+    return config.Settings()
+
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
