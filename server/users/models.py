@@ -1,12 +1,13 @@
 from sqlalchemy import Column, String, Boolean, DateTime, BigInteger, func, Text, ForeignKey
 from sqlalchemy.orm import relationship
 
+from server.base.models import S3Media, TimestampMixin
 from server.databases import Base
 from server.base.enums import RelationshipType, ProfileImageType
 from server.base.utils import IntTypeEnum
 
 
-class User(Base):
+class User(TimestampMixin, Base):
     __tablename__ = "users"
 
     id = Column(BigInteger, primary_key=True, index=True)
@@ -18,13 +19,11 @@ class User(Base):
     last_login = Column(DateTime, nullable=True)
     is_staff = Column(Boolean, default=False, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
-    created = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated = Column(DateTime(timezone=True), onupdate=func.now(), nullable=False)
 
     profiles = relationship("UserProfile", back_populates="user")
 
 
-class UserProfile(Base):
+class UserProfile(TimestampMixin, Base):
     __tablename__ = "user_profiles"
 
     id = Column(BigInteger, primary_key=True, index=True)
@@ -33,8 +32,6 @@ class UserProfile(Base):
     status_message = Column(Text, nullable=True)
     is_default = Column(Boolean, default=False, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
-    created = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated = Column(DateTime(timezone=True), onupdate=func.now(), nullable=False)
 
     user = relationship("User", back_populates="profiles")
     my_relationships = relationship("UserRelationship", back_populates="my_profile")
@@ -59,12 +56,17 @@ class UserRelationship(Base):
     other_profile = relationship("UserProfile", back_populates="other_relationships")
 
 
-class UserProfileImage(Base):
+class UserProfileImage(S3Media):
     __tablename__ = "user_profile_images"
 
-    id = Column(BigInteger, primary_key=True, index=True)
+    id = Column(BigInteger, ForeignKey('s3_media.id'), primary_key=True)
     user_profile_id = Column(BigInteger, ForeignKey("user_profiles.id"), nullable=False)
     type = Column(IntTypeEnum(enum_class=ProfileImageType), nullable=False)
     is_default = Column(Boolean, default=False, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
 
     profile = relationship("UserProfile", back_populates="images")
+
+    __mapper_args__ = {
+        "polymorphic_identity": "user_profile_image"
+    }
