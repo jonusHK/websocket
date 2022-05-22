@@ -1,4 +1,3 @@
-from functools import lru_cache
 from typing import List, Mapping
 
 import uvicorn
@@ -9,7 +8,6 @@ from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
-from server import config
 from server.base.utils.codes.websockets import ClientDisconnect
 from server.databases import SessionLocal, engine, Base
 
@@ -20,11 +18,6 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
 )
-
-
-@lru_cache()
-def get_settings():
-    return config.Settings()
 
 
 def get_db():
