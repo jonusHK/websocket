@@ -13,6 +13,8 @@ sys.path = ['', '..'] + sys.path[1:]
 
 from server.main import get_settings
 from server.users.models import *
+from server.services.models import *
+from server.base.models import *
 
 config = context.config
 
