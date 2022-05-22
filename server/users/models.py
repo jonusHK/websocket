@@ -40,6 +40,7 @@ class UserProfile(Base):
     my_relationships = relationship("UserRelationship", back_populates="my_profile")
     other_relationships = relationship("UserRelationship", back_populates="other_profile")
     images = relationship("UserProfileImage", back_populates="profile")
+    room_mapping = relationship("service.ChatRoomUserMapping", back_populates="user_profile")
 
 
 class UserRelationship(Base):
