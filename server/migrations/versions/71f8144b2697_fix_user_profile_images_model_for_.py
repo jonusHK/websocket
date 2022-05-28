@@ -8,10 +8,10 @@ Create Date: 2022-05-22 18:15:57.834208
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import mysql
-from server.base import utils
+from server.core import utils
 
 # revision identifiers, used by Alembic.
-from server.base.enums import ProfileImageType
+from server.core.enums import ProfileImageType
 
 revision = '71f8144b2697'
 down_revision = '9d0804a804aa'
