@@ -10,8 +10,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-from server.base import utils
-from server.base.enums import ProfileImageType
+from server.core import utils
+from server.core.enums import ProfileImageType
 
 revision = '1b09278a4268'
 down_revision = 'f89ad05e8d41'

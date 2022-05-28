@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 import server
-from server.base.enums import RelationshipType
+from server.core.enums import RelationshipType
 
 revision = '04e3c4a2aaff'
 down_revision = 'd615269dde6d'

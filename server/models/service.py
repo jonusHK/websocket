@@ -1,8 +1,8 @@
-from sqlalchemy import Column, BigInteger, String, DateTime, func, ForeignKey, Text, Boolean
+from sqlalchemy import Column, BigInteger, String, ForeignKey, Text, Boolean
 from sqlalchemy.orm import relationship
 
-from server.base.models import TimestampMixin
-from server.databases import Base
+from server.models import Base
+from server.models.base import TimestampMixin
 
 
 class ChatRoom(TimestampMixin, Base):
@@ -24,7 +24,7 @@ class ChatRoomUserMapping(TimestampMixin, Base):
     name = Column(String(30), nullable=True)
 
     room = relationship("ChatRoom", back_populates="user_mapping")
-    user_profile = relationship("base.UserProfile", back_populates="room_mapping")
+    user_profile = relationship("user.UserProfile", back_populates="room_mapping")
 
 
 class ChatHistory(TimestampMixin, Base):

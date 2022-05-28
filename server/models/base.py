@@ -1,11 +1,11 @@
 from sqlalchemy import BigInteger, Column, String, DateTime, func
 
-from server.databases import Base
+from server.models import Base
 
 
 class TimestampMixin(object):
-    created = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated = Column(DateTime(timezone=True), onupdate=func.now(), nullable=False)
+    created = Column(DateTime(timezone=True), default=func.now())
+    updated = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
 
 
 class S3Media(TimestampMixin, Base):
@@ -16,10 +16,10 @@ class S3Media(TimestampMixin, Base):
     file_key = Column(String(45), nullable=False)
     file_path = Column(String(100), nullable=False)
     content_type = Column(String(45), nullable=False)
-    type = Column(String(50), nullable=True)
+    use_type = Column(String(50), nullable=True)
 
     __mapper_args__ = {
         'polymorphic_identity': 's3_media',
-        'polymorphic_on': type,
+        'polymorphic_on': use_type,
         'with_polymorphic': '*'
     }

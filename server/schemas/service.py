@@ -15,6 +15,9 @@ class ChatRoom(ChatRoomBase):
     id: int
     created: datetime
 
+    class Config:
+        orm_model = True
+
 
 class ChatRoomUserMappingBase(BaseModel):
     name: str
@@ -29,10 +32,13 @@ class ChatRoomUserMapping(ChatRoomUserMappingBase):
     user_profile_id: int
     created: datetime
 
+    class Config:
+        orm_model = True
+
 
 class ChatHistoryBase(BaseModel):
     contents: str
-    is_active: bool
+    is_active: bool = True
 
 
 class ChatHistoryCreate(ChatHistoryBase):
@@ -44,3 +50,6 @@ class ChatHistory(ChatHistoryBase):
     room_id: int
     s3_media_id: int
     created: datetime
+
+    class Config:
+        orm_model = True
