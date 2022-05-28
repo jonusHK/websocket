@@ -2,31 +2,28 @@ from typing import List, Mapping
 
 import uvicorn
 from fastapi import FastAPI, Request
+from sqlalchemy import create_engine
 from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import HTMLResponse
 from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
-from server.base.utils.codes.websockets import ClientDisconnect
-from server.databases import SessionLocal, engine, Base
-
-Base.metadata.create_all(bind=engine)
+from server.core.utils.codes.websockets import ClientDisconnect
+from server.databases import DATABASE_URL
+from server.models import initialize_sql
+from server.routers import user as user_routers
 
 app = FastAPI()
+
+engine = create_engine(DATABASE_URL)
+initialize_sql(engine)
 
 app.add_middleware(
     CORSMiddleware,
 )
 
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
+app.include_router(user_routers.router)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
