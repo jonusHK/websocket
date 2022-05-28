@@ -14,4 +14,7 @@ class S3MediaCreate(S3MediaBase):
 
 class S3Media(S3MediaBase):
     id: int
-    type: str
+    use_type: str
+
+    class Config:
+        orm_model = True

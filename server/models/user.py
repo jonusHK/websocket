@@ -1,10 +1,10 @@
 from sqlalchemy import Column, String, Boolean, DateTime, BigInteger, func, Text, ForeignKey
 from sqlalchemy.orm import relationship
 
-from server.base.models import S3Media, TimestampMixin
-from server.databases import Base
-from server.base.enums import RelationshipType, ProfileImageType
-from server.base.utils import IntTypeEnum
+from server.models import Base
+from server.core.enums import RelationshipType, ProfileImageType
+from server.core.utils import IntTypeEnum
+from server.models.base import TimestampMixin, S3Media
 
 
 class User(TimestampMixin, Base):
@@ -12,11 +12,11 @@ class User(TimestampMixin, Base):
 
     id = Column(BigInteger, primary_key=True, index=True)
     uid = Column(String(30), nullable=False)
-    password = Column(String(30), nullable=False)
+    password = Column(String(150), nullable=False)
     name = Column(String(30), nullable=False)
     mobile = Column(String(30), unique=True, nullable=False)
     email = Column(String(50), unique=True, nullable=True)
-    last_login = Column(DateTime, nullable=True)
+    last_login = Column(DateTime(timezone=True), nullable=True)
     is_staff = Column(Boolean, default=False, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
 
@@ -34,8 +34,6 @@ class UserProfile(TimestampMixin, Base):
     is_active = Column(Boolean, default=True, nullable=False)
 
     user = relationship("User", back_populates="profiles")
-    my_relationships = relationship("UserRelationship", back_populates="my_profile")
-    other_relationships = relationship("UserRelationship", back_populates="other_profile")
     images = relationship("UserProfileImage", back_populates="profile")
     room_mapping = relationship("service.ChatRoomUserMapping", back_populates="user_profile")
 
@@ -52,8 +50,8 @@ class UserRelationship(Base):
     is_forbidden = Column(Boolean, default=False, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
 
-    my_profile = relationship("UserProfile", back_populates="my_relationships")
-    other_profile = relationship("UserProfile", back_populates="other_relationships")
+    my_profile = relationship("UserProfile", foreign_keys=[my_profile_id])
+    other_profile = relationship("UserProfile", foreign_keys=[other_profile_id])
 
 
 class UserProfileImage(S3Media):
