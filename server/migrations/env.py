@@ -12,9 +12,7 @@ sys.path = ['', '..'] + sys.path[1:]
 
 
 from server.databases import get_settings
-from server.users.models import *
-from server.services.models import *
-from server.base.models import *
+from server.models import user, base, service, Base
 
 config = context.config
 
@@ -86,7 +84,8 @@ def run_migrations_online():
         context.configure(
             connection=connection, target_metadata=target_metadata,
             include_schema=True,
-            version_table_schema='alembic'
+            version_table_schema='alembic',
+            compare_type=True
         )
 
         connection.execute('CREATE SCHEMA IF NOT EXISTS {schema}'.format(schema='alembic'))
