@@ -1,8 +1,6 @@
-from datetime import datetime
-
 from sqlalchemy.orm import Session
 
-from server.core.utils import get_tz, hash_password
+from server.core.utils import hash_password
 from server.models import user as user_models
 from server.schemas import user as user_schemas
 
