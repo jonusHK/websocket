@@ -1,8 +1,8 @@
-"""apply timestampmixin to all models
+"""add cascade option
 
-Revision ID: 472380e4064e
-Revises: 17ea1dc47c30
-Create Date: 2022-05-22 21:04:35.319068
+Revision ID: b1babd717753
+Revises: 7cefcb50533a
+Create Date: 2022-06-01 13:17:08.645786
 
 """
 from alembic import op
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '472380e4064e'
-down_revision = '17ea1dc47c30'
+revision = 'b1babd717753'
+down_revision = '7cefcb50533a'
 branch_labels = None
 depends_on = None
 

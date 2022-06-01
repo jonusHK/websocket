@@ -11,8 +11,8 @@ from sqlalchemy import pool
 sys.path = ['', '..'] + sys.path[1:]
 
 
-from server.databases import get_settings
-from server.models import user, base, service, Base
+from server.databases import get_settings, Base
+from server.models import user, base, service
 
 config = context.config
 

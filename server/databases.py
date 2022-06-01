@@ -1,5 +1,7 @@
 from functools import lru_cache
 
+from sqlalchemy.orm import sessionmaker, scoped_session, declarative_base
+
 from server import config
 
 
@@ -16,3 +18,12 @@ DATABASE_URL = 'mysql+pymysql://{username}:{password}@{host}:{port}/{db_name}'.f
     port=settings.db_port,
     db_name=settings.db_name
 )
+
+DBSession = scoped_session(sessionmaker())
+Base = declarative_base()
+
+
+def initialize_sql(engine):
+    DBSession.configure(autocommit=False, autoflush=False, bind=engine)
+    Base.metadata.bind = engine
+    Base.metadata.create_all(engine)

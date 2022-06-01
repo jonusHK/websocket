@@ -1,4 +1,4 @@
-from ..models import DBSession
+from server.databases import DBSession
 
 
 def get_db():

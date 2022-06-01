@@ -1,7 +1,7 @@
 from sqlalchemy import Column, BigInteger, String, ForeignKey, Text, Boolean
 from sqlalchemy.orm import relationship
 
-from server.models import Base
+from server.databases import Base
 from server.models.base import TimestampMixin
 
 
@@ -11,20 +11,18 @@ class ChatRoom(TimestampMixin, Base):
     id = Column(BigInteger, primary_key=True, index=True)
     name = Column(String(30), nullable=False)
 
-    user_mapping = relationship("ChatRoomUserMapping", back_populates="room")
+    user_profiles = relationship("ChatRoomUserAssociation", back_populates="room", cascade="all, delete", passive_deletes=True)
     histories = relationship("ChatHistory", back_populates="room")
 
 
-class ChatRoomUserMapping(TimestampMixin, Base):
-    __tablename__ = "chat_room_user_mapping"
+class ChatRoomUserAssociation(TimestampMixin, Base):
+    __tablename__ = "chat_room_user_association"
 
-    id = Column(BigInteger, primary_key=True, index=True)
-    room_id = Column(BigInteger, ForeignKey("chat_rooms.id"), nullable=False)
-    user_profile_id = Column(BigInteger, ForeignKey("user_profiles.id"), nullable=False)
-    name = Column(String(30), nullable=True)
+    room_id = Column(BigInteger, ForeignKey("chat_rooms.id", on_delete="cascade"), primary_key=True)
+    user_profile_id = Column(BigInteger, ForeignKey("user_profiles.id", on_delete="cascade"), primary_key=True)
 
-    room = relationship("ChatRoom", back_populates="user_mapping")
-    user_profile = relationship("user.UserProfile", back_populates="room_mapping")
+    room = relationship("ChatRoom", back_populates="user_profiles")
+    user_profile = relationship("UserProfile", back_populates="rooms")
 
 
 class ChatHistory(TimestampMixin, Base):
