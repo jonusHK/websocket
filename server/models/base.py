@@ -1,6 +1,6 @@
 from sqlalchemy import BigInteger, Column, String, DateTime, func
 
-from server.models import Base
+from server.databases import Base
 
 
 class TimestampMixin(object):

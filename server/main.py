@@ -10,8 +10,7 @@ from starlette.templating import Jinja2Templates
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from server.core.utils.codes.websockets import ClientDisconnect
-from server.databases import DATABASE_URL
-from server.models import initialize_sql
+from server.databases import DATABASE_URL, initialize_sql
 from server.routers import user as user_routers
 
 app = FastAPI()
