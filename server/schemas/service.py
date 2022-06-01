@@ -19,15 +19,15 @@ class ChatRoom(ChatRoomBase):
         orm_model = True
 
 
-class ChatRoomUserMappingBase(BaseModel):
+class ChatRoomUserAssociationBase(BaseModel):
     name: str
 
 
-class ChatRoomUserMappingCreate(ChatRoomUserMappingBase):
+class ChatRoomUserAssociationCreate(ChatRoomUserAssociationBase):
     pass
 
 
-class ChatRoomUserMapping(ChatRoomUserMappingBase):
+class ChatRoomUserMapping(ChatRoomUserAssociationBase):
     room_id: int
     user_profile_id: int
     created: datetime

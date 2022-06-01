@@ -35,7 +35,7 @@ class UserProfile(TimestampMixin, Base):
 
     user = relationship("User", back_populates="profiles")
     images = relationship("UserProfileImage", back_populates="profile")
-    room_mapping = relationship("ChatRoomUserMapping", back_populates="user_profile")
+    user_profiles = relationship("ChatRoomUserAssociation", back_populates="user_profile")
 
 
 class UserRelationship(Base):

@@ -11,19 +11,18 @@ class ChatRoom(TimestampMixin, Base):
     id = Column(BigInteger, primary_key=True, index=True)
     name = Column(String(30), nullable=False)
 
-    user_mapping = relationship("ChatRoomUserMapping", back_populates="room")
+    user_profiles = relationship("ChatRoomUserAssociation", back_populates="room")
     histories = relationship("ChatHistory", back_populates="room")
 
 
-class ChatRoomUserMapping(TimestampMixin, Base):
-    __tablename__ = "chat_room_user_mapping"
+class ChatRoomUserAssociation(TimestampMixin, Base):
+    __tablename__ = "chat_room_user_association"
 
-    id = Column(BigInteger, primary_key=True, index=True)
-    room_id = Column(BigInteger, ForeignKey("chat_rooms.id"), nullable=False)
-    user_profile_id = Column(BigInteger, ForeignKey("user_profiles.id"), nullable=False)
+    room_id = Column(BigInteger, ForeignKey("chat_rooms.id"), primary_key=True)
+    user_profile_id = Column(BigInteger, ForeignKey("user_profiles.id"), primary_key=True)
 
-    room = relationship("ChatRoom", back_populates="user_mapping")
-    user_profile = relationship("UserProfile", back_populates="room_mapping")
+    room = relationship("ChatRoom", back_populates="user_profiles")
+    user_profile = relationship("UserProfile", back_populates="rooms")
 
 
 class ChatHistory(TimestampMixin, Base):
