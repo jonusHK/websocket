@@ -2,18 +2,23 @@ from typing import List, Mapping
 
 import uvicorn
 from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from sqlalchemy import create_engine
+from starlette import status
+from starlette.exceptions import HTTPException
 from starlette.middleware.cors import CORSMiddleware
-from starlette.responses import HTMLResponse
+from starlette.responses import HTMLResponse, JSONResponse
 from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
-from server.core.utils.codes.websockets import ClientDisconnect
+from server.core.responses import WebsocketJSONResponse
+from server.core.utils.codes.websockets import CLIENT_DISCONNECT
 from server.databases import DATABASE_URL, initialize_sql
 from server.routers import user as user_routers
 
-app = FastAPI()
+app = FastAPI(default_response_class=WebsocketJSONResponse)
 
 engine = create_engine(DATABASE_URL)
 initialize_sql(engine)
@@ -27,6 +32,28 @@ app.include_router(user_routers.router)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 templates = Jinja2Templates(directory="templates")
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc):
+    err_data = jsonable_encoder({
+        "response": 0,
+        "error": exc.errors()
+    })
+    return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content=err_data)
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+    err_data = {
+        "response": 0,
+        "error": exc.detail
+    }
+    headers = getattr(exc, "headers", None)
+    if headers:
+        return JSONResponse(err_data, status_code=exc.status_code, headers=headers)
+    else:
+        return JSONResponse(err_data, status_code=exc.status_code)
 
 
 class ConnectionManager:
@@ -70,7 +97,7 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, client_id: str)
     except WebSocketDisconnect as e:
         # 반드시 웹소켓 연결 해제 후, 브로드캐스트 진행
         manager.disconnect(websocket, room_id)
-        if e.code == ClientDisconnect.code:
+        if e.code == CLIENT_DISCONNECT:
             await manager.broadcast(f"Client #{client_id} left the chat", room_id)
 
 
