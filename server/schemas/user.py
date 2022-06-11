@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional
 
 from pydantic import BaseModel
 
@@ -20,7 +21,7 @@ class UserCreate(UserBase):
 
 class User(UserBase):
     id: int
-    last_login: datetime
+    last_login: Optional[datetime] = None
 
     class Config:
         orm_model = True
