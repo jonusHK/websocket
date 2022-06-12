@@ -2,7 +2,7 @@ from enum import Enum, EnumMeta
 
 
 class IntValueEnumMeta(EnumMeta):
-    def __new__(metacls, cls, bases, classdict):
+    def __new__(mcs, cls, bases, classdict):
         choices, names, i, default = [], [], 1, None
         for k, v in classdict.items():
             if k in ['_generate_next_value_', '__module__', '__qualname__', '__default__'] or not isinstance(v, str):
@@ -14,7 +14,7 @@ class IntValueEnumMeta(EnumMeta):
             classdict.update({k: i})
             i += 1
 
-        enum_class = super().__new__(metacls, cls, bases, classdict)
+        enum_class = super().__new__(mcs, cls, bases, classdict)
         enum_class._choices = tuple(choices)
         enum_class.choices = lambda: enum_class._choices
         enum_class._names = tuple(names)
