@@ -1,6 +1,23 @@
 from enum import Enum, EnumMeta
 
 
+class ResponseCode(Enum):
+    OK = '정상적으로 처리됐습니다.'
+    INVALID = '유효하지 않은 요청입니다.'
+    UNAUTHORIZED = '유효한 인증 자격 증명이 없습니다.'
+    INVALID_TOKEN = '유효하지 않은 토큰입니다.'
+    TOKEN_EXPIRED = '토큰이 만료됐습니다.'
+    PERMISSION_DENIED = '권한이 없습니다.'
+    NOT_FOUND = '요청한 데이터가 존재하지 않습니다.'
+    METHOD_NOT_ALLOWED = '허용되지 않은 메소드입니다.'
+    NOT_ALLOWED = '허용되지 않은 작업입니다.'
+    INVALID_JSON_FORMAT = '유효한 JSON 포맷이 아닙니다.'
+    INTERNAL_SERVER_ERROR = '정의되지 않은 오류'
+
+    def retrieve(self):
+        return {'code': self.name, 'message': self.value}
+
+
 class IntValueEnumMeta(EnumMeta):
     def __new__(mcs, cls, bases, classdict):
         choices, names, i, default = [], [], 1, None

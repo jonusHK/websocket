@@ -2,13 +2,9 @@ from typing import List, Mapping
 
 import uvicorn
 from fastapi import FastAPI, Request
-from fastapi.encoders import jsonable_encoder
-from fastapi.exceptions import RequestValidationError
 from sqlalchemy import create_engine
-from starlette import status
-from starlette.exceptions import HTTPException
 from starlette.middleware.cors import CORSMiddleware
-from starlette.responses import HTMLResponse, JSONResponse
+from starlette.responses import HTMLResponse
 from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
 from starlette.websockets import WebSocket, WebSocketDisconnect
@@ -32,28 +28,6 @@ app.include_router(user_routers.router)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 templates = Jinja2Templates(directory="templates")
-
-
-@app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request, exc):
-    err_data = jsonable_encoder({
-        "response": 0,
-        "error": exc.errors()
-    })
-    return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content=err_data)
-
-
-@app.exception_handler(HTTPException)
-async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
-    err_data = {
-        "response": 0,
-        "error": exc.detail
-    }
-    headers = getattr(exc, "headers", None)
-    if headers:
-        return JSONResponse(err_data, status_code=exc.status_code, headers=headers)
-    else:
-        return JSONResponse(err_data, status_code=exc.status_code)
 
 
 class ConnectionManager:
