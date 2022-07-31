@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy.orm import Session
 from starlette import status
 
@@ -24,4 +25,4 @@ def create_user(user: user_schemas.UserCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Email already registered")
 
     user = user_crud.create_user(db=db, user=user)
-    return user.__dict__
+    return jsonable_encoder(user)
