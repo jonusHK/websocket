@@ -2,14 +2,15 @@ import typing
 
 from starlette.responses import JSONResponse
 
+from server.core.enums import ResponseCode
+
 
 class WebsocketJSONResponse(JSONResponse):
     def render(self, content: typing.Union[list, dict]) -> bytes:
-        converted = {
-            'response': 1,
-            'data': content
-        }
-        if isinstance(content, list):
-            converted.update({'total': len(content)})
+        response = ResponseCode.OK.retrieve()
+        response.update({'data': content})
 
-        return super().render(converted)
+        if isinstance(content, list):
+            response.update({'total': len(content)})
+
+        return super().render(response)

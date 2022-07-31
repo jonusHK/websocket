@@ -1,5 +1,3 @@
-from typing import Any
-
 from fastapi import Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
@@ -9,13 +7,6 @@ from starlette.responses import JSONResponse
 
 from server.core.enums import ResponseCode
 from server.main import app
-
-
-def convert_err_data(err_data: Any):
-    return {
-        "response": 0,
-        "error": jsonable_encoder(err_data)
-    }
 
 
 class ClassifiableException(Exception):
@@ -28,24 +19,38 @@ class ClassifiableException(Exception):
         self.status_code = status_code
 
 
-@app.exception_handler(ClassifiableException)
-async def classifiable_exception_handler(request: Request, exc: ClassifiableException):
-    return JSONResponse(
-        status_code=exc.status_code,
-        content=convert_err_data(exc.detail))
+@app.exception_handler(Exception)
+async def exception_handler(request: Request, exc: Exception):
+    base_err = {
+        status.HTTP_400_BAD_REQUEST: ResponseCode.INVALID,
+        status.HTTP_401_UNAUTHORIZED: ResponseCode.UNAUTHORIZED,
+        status.HTTP_403_FORBIDDEN: ResponseCode.PERMISSION_DENIED,
+        status.HTTP_404_NOT_FOUND: ResponseCode.NOT_FOUND,
+        status.HTTP_405_METHOD_NOT_ALLOWED: ResponseCode.METHOD_NOT_ALLOWED,
+    }
 
+    if isinstance(exc, HTTPException):
+        code = ResponseCode.NOT_FOUND
+        data = exc.detail
+    elif isinstance(exc, RequestValidationError):
+        code = ResponseCode.INVALID
+        data = exc.errors()
+    elif isinstance(exc, ClassifiableException):
+        code = exc.code
+        data = exc.detail
+    else:
+        code = base_err.get(getattr(exc, 'status_code'), ResponseCode.INTERNAL_SERVER_ERROR)
+        data = str(exc)
 
-@app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    return JSONResponse(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        content=convert_err_data(exc.errors()))
+    err_data = code.retrieve()
+    err_data.update({'data': data})
 
-
-@app.exception_handler(HTTPException)
-async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+    kwargs = {
+        'status_code': next((k for k, v in base_err.items() if v == code), status.HTTP_500_INTERNAL_SERVER_ERROR),
+        'content': jsonable_encoder(err_data)
+    }
     headers = getattr(exc, "headers", None)
-    kwargs = {'status_code': exc.status_code, 'content': convert_err_data(exc.detail)}
     if headers:
         kwargs.update({'headers': headers})
+
     return JSONResponse(**kwargs)
