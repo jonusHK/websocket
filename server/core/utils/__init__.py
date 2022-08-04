@@ -2,6 +2,7 @@ import bcrypt
 from pytz import timezone
 from sqlalchemy.types import TypeDecorator
 from sqlalchemy import Integer
+from passlib.context import CryptContext
 
 
 class IntTypeEnum(TypeDecorator):
@@ -30,9 +31,17 @@ def get_tz(tz='Asia/Seoul'):
     return timezone(tz)
 
 
-def hash_password(target: str) -> bytes:
-    return bcrypt.hashpw(target.encode('utf-8'), bcrypt.gensalt())
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
-def check_password(t1: str, t2: str) -> bool:
-    return bcrypt.checkpw(t1.encode('utf-8'), t2.encode('utf-8'))
+def hash_password(password: str) -> bytes:
+    # return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+    return pwd_context.hash(password)
+
+
+def verify_password(plain_password, hashed_password):
+    return pwd_context.verify(plain_password, hashed_password)
+
+
+# def check_password(t1: str, t2: str) -> bool:
+#     return bcrypt.checkpw(t1.encode('utf-8'), t2.encode('utf-8'))
