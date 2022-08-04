@@ -5,6 +5,10 @@ from server.models import user as user_models
 from server.schemas import user as user_schemas
 
 
+def get_user_by_uid(db: Session, uid: str):
+    return db.query(user_models.User).filter(user_models.User.uid == uid).first()
+
+
 def get_user_by_email(db: Session, email: str):
     return db.query(user_models.User).filter(user_models.User.email == email).first()
 

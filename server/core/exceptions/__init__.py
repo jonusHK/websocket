@@ -39,18 +39,18 @@ async def exception_handler(request: Request, exc: Exception):
         code = exc.code
         data = exc.detail
     else:
-        code = base_err.get(getattr(exc, 'status_code'), ResponseCode.INTERNAL_SERVER_ERROR)
+        code = base_err.get(getattr(exc, "status_code"), ResponseCode.INTERNAL_SERVER_ERROR)
         data = str(exc)
 
     err_data = code.retrieve()
-    err_data.update({'data': data})
+    err_data.update({"data": data})
 
     kwargs = {
-        'status_code': next((k for k, v in base_err.items() if v == code), status.HTTP_500_INTERNAL_SERVER_ERROR),
-        'content': jsonable_encoder(err_data)
+        "status_code": next((k for k, v in base_err.items() if v == code), status.HTTP_500_INTERNAL_SERVER_ERROR),
+        "content": jsonable_encoder(err_data)
     }
     headers = getattr(exc, "headers", None)
     if headers:
-        kwargs.update({'headers': headers})
+        kwargs.update({"headers": headers})
 
     return JSONResponse(**kwargs)
