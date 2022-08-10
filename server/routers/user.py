@@ -1,32 +1,18 @@
-from fastapi import APIRouter, Depends, HTTPException
+from uuid import uuid4, UUID
+
+from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.encoders import jsonable_encoder
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from starlette import status
 
-from server.core.utils import verify_password
+from server.core.authentications import SessionData, backend, cookie, verifier
 from server.crud import user as user_crud
 from server.routers import get_db
 from server.schemas import user as user_schemas
-from server.models import user as user_models
 
 router = APIRouter(
     prefix="/users"
 )
-
-# ex. https://{{domain}}{{root_path}}/token
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
-
-
-async def get_user(token: str = Depends(oauth2_scheme)):
-    user = user_models.User()  # TODO 해당 토큰을 갖고 있으며, is_active = True 인 user 추출
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    return user
 
 
 @router.post(
@@ -44,13 +30,23 @@ async def create_user(user: user_schemas.UserCreate, db: Session = Depends(get_d
     return jsonable_encoder(user)
 
 
-@router.post("/token")
-async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    user = user_crud.get_user_by_uid(db, uid=form_data.username)
-    if not user:
-        raise HTTPException(status_code=400, detail="Incorrect username.")
+@router.post("/create_session/{uid}")
+async def create_session(uid: str, response: Response):
+    session = uuid4()
+    data = SessionData(uid=uid)
 
-    if not verify_password(form_data.password, user.password):
-        raise HTTPException(status_code=400, detail="Incorrect password.")
+    await backend.create(session, data)
+    cookie.attach_to_response(response, session)
+    return f'created session for {uid}'
 
-    return {"access_token": user.uid, "token_type": "bearer"}
+
+@router.get("/whoami", dependencies=[Depends(cookie)])
+async def whoami(session_data: SessionData = Depends(verifier)):
+    return session_data
+
+
+@router.post("/delete_session")
+async def del_session(response: Response, session_id: UUID = Depends(cookie)):
+    await backend.delete(session_id)
+    cookie.delete_from_response(response)
+    return "deleted session"

@@ -14,7 +14,8 @@ from server.core.utils.codes.websockets import CLIENT_DISCONNECT
 from server.databases import DATABASE_URL, initialize_sql
 from server.routers import user as user_routers
 
-app = FastAPI(root_path="/api/v1", default_response_class=WebsocketJSONResponse)
+# app = FastAPI(root_path="/api/v1", default_response_class=WebsocketJSONResponse)
+app = FastAPI(default_response_class=WebsocketJSONResponse)
 
 engine = create_engine(DATABASE_URL)
 initialize_sql(engine)

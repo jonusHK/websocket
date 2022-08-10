@@ -68,3 +68,14 @@ class UserProfileImage(S3Media):
     __mapper_args__ = {
         "polymorphic_identity": "user_profile_image"
     }
+
+
+class UserSession(TimestampMixin, Base):
+    __tablename__ = "user_sessions"
+
+    id = Column(BigInteger, primary_key=True, index=True)
+    user_id = Column(BigInteger, ForeignKey("users.id"), nullable=False)
+    session_id = Column(String(150), nullable=False)
+    expiry_at = Column(DateTime(timezone=True), nullable=False)
+
+    user = relationship("User", back_populates="sessions")
