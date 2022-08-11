@@ -84,3 +84,20 @@ class UserProfileImage(UserProfileImageBase):
 
     class Config:
         orm_model = True
+
+
+class UserSessionBase(BaseModel):
+    user_id: int
+    session_id: str
+    expiry_at: datetime
+
+
+class UserSessionCreate(UserSessionBase):
+    pass
+
+
+class UserSession(UserSessionBase):
+    id: int
+
+    class Config:
+        orm_model = True
