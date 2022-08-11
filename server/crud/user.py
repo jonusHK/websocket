@@ -1,3 +1,4 @@
+from sqlalchemy import insert, select, update, delete
 from sqlalchemy.orm import Session
 
 from server.core.utils import hash_password
@@ -24,3 +25,40 @@ def create_user(db: Session, user: user_schemas.UserCreate):
     db.refresh(db_user)
 
     return db_user
+
+
+def create_session(db: Session, user_session: user_schemas.UserSessionCreate):
+    user_session_dict = user_session.dict()
+    stmt = (
+        insert(user_models.UserSession).
+        values(**user_session_dict)
+    )
+    db.execute(stmt)
+
+
+def get_session_by_session_id(db: Session, session_id: str):
+    stmt = (
+        select(user_models.UserSession).
+        filter_by(session_id=session_id).
+        limit(1)
+    )
+    return db.scalars(stmt).first()  # == db.execute(stmt).scalars().first()
+
+
+def update_session(db: Session, target_id: int, **kwargs):
+    stmt = (
+        update(user_models.UserSession).
+        where(user_models.UserSession.c.id == target_id).
+        values(**kwargs).
+        execution_options(synchronize_session="fetch")
+    )
+    db.execute(stmt)
+
+
+def delete_session(db: Session, target_id: int):
+    stmt = (
+        delete(user_models.UserSession).
+        where(user_models.UserSession.c.id == target_id).
+        execution_options(synchronize_session="fetch")
+    )
+    db.execute(stmt)
