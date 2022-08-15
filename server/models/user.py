@@ -21,6 +21,7 @@ class User(TimestampMixin, Base):
     is_active = Column(Boolean, default=True, nullable=False)
 
     profiles = relationship("UserProfile", back_populates="user")
+    sessions = relationship("UserSession", back_populates="user")
 
 
 class UserProfile(TimestampMixin, Base):
