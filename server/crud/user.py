@@ -21,10 +21,17 @@ def create_user(db: Session, user: user_schemas.UserCreate):
     })
     db_user = user_models.User(**user_dict)
     db.add(db_user)
-    db.commit()
-    db.refresh(db_user)
-
     return db_user
+
+
+def update_user(db: Session, target_id: int, **kwargs):
+    stmt = (
+        update(user_models.User).
+        where(user_models.User.id == target_id).
+        values(**kwargs).
+        execution_options(synchronize_session="fetch")
+    )
+    db.execute(stmt)
 
 
 def create_session(db: Session, user_session: user_schemas.UserSessionCreate):
@@ -48,7 +55,7 @@ def get_session_by_session_id(db: Session, session_id: str):
 def update_session(db: Session, target_id: int, **kwargs):
     stmt = (
         update(user_models.UserSession).
-        where(user_models.UserSession.c.id == target_id).
+        where(user_models.UserSession.id == target_id).
         values(**kwargs).
         execution_options(synchronize_session="fetch")
     )
@@ -58,7 +65,7 @@ def update_session(db: Session, target_id: int, **kwargs):
 def delete_session(db: Session, target_id: int):
     stmt = (
         delete(user_models.UserSession).
-        where(user_models.UserSession.c.id == target_id).
+        where(user_models.UserSession.id == target_id).
         execution_options(synchronize_session="fetch")
     )
     db.execute(stmt)
