@@ -9,12 +9,10 @@ from starlette import status
 from server.core.authentications import SessionData, backend, cookie, verifier
 from server.core.utils import verify_password
 from server.crud import user as user_crud
-from server.routers import get_db
+from server.api import get_db
 from server.schemas import user as user_schemas
 
-router = APIRouter(
-    prefix="/users"
-)
+router = APIRouter()
 
 
 @router.post(

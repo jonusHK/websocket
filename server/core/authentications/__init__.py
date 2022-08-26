@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from server.crud import user as user_crud
 from server.models import user as user_models
-from server.routers import get_db
+from server.api import get_db
 from server.schemas import user as user_schemas
 
 

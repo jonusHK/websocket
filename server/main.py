@@ -9,10 +9,10 @@ from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
+from server.api.v1 import api_router
 from server.core.responses import WebsocketJSONResponse
 from server.core.utils.codes.websockets import CLIENT_DISCONNECT
-from server.databases import DATABASE_URL, initialize_sql
-from server.routers import user as user_routers
+from server.databases import DATABASE_URL, initialize_sql, settings
 
 # app = FastAPI(root_path="/api/v1", default_response_class=WebsocketJSONResponse)
 app = FastAPI(default_response_class=WebsocketJSONResponse)
@@ -20,11 +20,16 @@ app = FastAPI(default_response_class=WebsocketJSONResponse)
 engine = create_engine(DATABASE_URL)
 initialize_sql(engine)
 
-app.add_middleware(
-    CORSMiddleware,
-)
+if settings.backend_cors_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[str(origin) for origin in settings.backend_cors_origins],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
-app.include_router(user_routers.router)
+app.include_router(api_router, prefix=settings.API_V1_STR)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
