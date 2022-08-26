@@ -12,7 +12,6 @@ def get_settings():
 
 settings = get_settings()
 DATABASE_URL = "mysql+pymysql://{username}:{password}@{host}:{port}/{db_name}".format(
-    api_v1_str="/api/v1",
     username=settings.db_username,
     password=settings.db_password,
     host=settings.db_host,

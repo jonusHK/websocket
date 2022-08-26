@@ -4,6 +4,7 @@ from pydantic import BaseSettings, AnyHttpUrl, validator
 
 
 class Settings(BaseSettings):
+    api_v1_str: str = "/api/v1"
     db_name: str
     db_username: str
     db_password: str

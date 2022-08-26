@@ -29,7 +29,7 @@ if settings.backend_cors_origins:
         allow_headers=["*"],
     )
 
-app.include_router(api_router, prefix=settings.API_V1_STR)
+app.include_router(api_router, prefix=settings.api_v1_str)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
@@ -94,4 +94,4 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, client_id: str)
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info", reload=True)
+    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
