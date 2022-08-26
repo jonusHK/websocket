@@ -7,12 +7,12 @@ from sqlalchemy import pool
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
+from server.config import settings
 
 sys.path = ['', '..'] + sys.path[1:]
 
 
-from server.databases import get_settings, Base
-from server.models import user, base, service
+from server.db.databases import get_settings, Base
 
 config = context.config
 
@@ -65,7 +65,6 @@ def run_migrations_online():
     and associate a connection with the context.
 
     """
-    settings = get_settings()
     config.set_main_option('sqlalchemy.url', 'mysql+pymysql://{username}:{password}@{host}:{port}/{db_name}'.format(
         username=settings.db_username,
         password=settings.db_password,

@@ -1,16 +1,7 @@
-from functools import lru_cache
-
 from sqlalchemy.orm import sessionmaker, scoped_session, declarative_base
 
-from server import config
+from server.config import settings
 
-
-@lru_cache()
-def get_settings():
-    return config.Settings()
-
-
-settings = get_settings()
 DATABASE_URL = "mysql+pymysql://{username}:{password}@{host}:{port}/{db_name}".format(
     username=settings.db_username,
     password=settings.db_password,

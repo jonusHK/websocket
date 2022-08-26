@@ -3,7 +3,7 @@ from sqlalchemy.orm import relationship
 
 from server.core.enums import RelationshipType, ProfileImageType
 from server.core.utils import IntTypeEnum
-from server.databases import Base
+from server.db.databases import Base
 from server.models.base import TimestampMixin, S3Media
 
 

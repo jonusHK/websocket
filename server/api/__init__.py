@@ -1,4 +1,4 @@
-from server.databases import DBSession
+from server.db.databases import DBSession
 
 
 async def get_db():
