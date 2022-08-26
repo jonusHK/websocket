@@ -11,7 +11,7 @@ from starlette.websockets import WebSocket, WebSocketDisconnect
 from server.api.v1 import api_router
 from server.core.responses import WebsocketJSONResponse
 from server.core.utils.codes.websockets import CLIENT_DISCONNECT
-from server.db.databases import settings
+from server.db.databases import settings, engine, Base
 
 # app = FastAPI(root_path="/api/v1", default_response_class=WebsocketJSONResponse)
 app = FastAPI(default_response_class=WebsocketJSONResponse)
@@ -30,6 +30,14 @@ app.include_router(api_router, prefix=settings.api_v1_prefix)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 templates = Jinja2Templates(directory="templates")
+
+
+@app.on_event("startup")
+async def startup():
+    # create db tables
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+        await conn.run_sync(Base.metadata.create_all)
 
 
 class ConnectionManager:

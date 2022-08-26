@@ -1,43 +1,37 @@
-from typing import List, Optional
-
-import sqlalchemy as sa
+from sqlalchemy import Column, BigInteger, String, ForeignKey, Text, Boolean
 from sqlalchemy.orm import relationship
-from sqlmodel import Field, Relationship
 
-from server.models.base import TimestampMixin, S3Media, SQLModel
+from server.db.databases import Base
+from server.models.base import TimestampMixin
 
 
-class ChatRoom(SQLModel, TimestampMixin, table=True):
+class ChatRoom(TimestampMixin, Base):
     __tablename__ = "chat_rooms"
 
-    id: int = Field(primary_key=True, index=True)
-    name: str = Field(max_length=30)
+    id = Column(BigInteger, primary_key=True, index=True)
+    name = Column(String(30), nullable=False)
 
-    user_profile_associations: List["ChatRoomUserAssociation"] = Relationship(
-        sa_relationship=relationship(
-            "ChatRoomUserAssociation", back_populates="room", cascade="all, delete", passive_deletes=True))
-    histories: List[Optional["ChatHistory"]] = Relationship(
-        sa_relationship=relationship("ChatHistory", back_populates="room"))
+    user_profiles = relationship("ChatRoomUserAssociation", back_populates="room", cascade="all, delete", passive_deletes=True)
+    histories = relationship("ChatHistory", back_populates="room")
 
 
-class ChatRoomUserAssociation(SQLModel, TimestampMixin, table=True):
+class ChatRoomUserAssociation(TimestampMixin, Base):
     __tablename__ = "chat_room_user_association"
 
-    room_id: int = Field(foreign_key="chat_rooms.id", primary_key=True)
-    user_profile_id = Field(foreign_key="user_profiles.id", primary_key=True)
+    room_id = Column(BigInteger, ForeignKey("chat_rooms.id", on_delete="cascade"), primary_key=True)
+    user_profile_id = Column(BigInteger, ForeignKey("user_profiles.id", on_delete="cascade"), primary_key=True)
 
-    room: ChatRoom = Relationship(back_populates="user_profiles")
-    user_profile: "UserProfile" = Relationship(back_populates="rooms")
+    room = relationship("ChatRoom", back_populates="user_profiles")
+    user_profile = relationship("UserProfile", back_populates="rooms")
 
 
-class ChatHistory(SQLModel, TimestampMixin, table=True):
+class ChatHistory(TimestampMixin, Base):
     __tablename__ = "chat_histories"
 
-    id: int = Field(primary_key=True, index=True)
-    room_id: int = Field(foreign_key="chat_rooms.id")
-    contents: Optional[str] = Field(sa_column=sa.Column(sa.Text, nullable=True))
-    s3_media_id: Optional[int] = Field(foreign_key="s3_media.id", nullable=True)
-    is_active: bool = Field(default=False)
+    id = Column(BigInteger, primary_key=True, index=True)
+    room_id = Column(BigInteger, ForeignKey("chat_rooms.id"), nullable=False)
+    contents = Column(Text, nullable=True)
+    s3_media_id = Column(BigInteger, ForeignKey("s3_media.id"), nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
 
-    room: ChatRoom = Relationship(back_populates="histories")
-    s3_media: Optional[S3Media] = Relationship(back_populates="histories")
+    room = relationship("ChatRoom", back_populates="histories")
