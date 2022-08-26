@@ -18,6 +18,7 @@ class User(TimestampMixin, Base):
     email = Column(String(50), unique=True, nullable=True)
     last_login = Column(DateTime(timezone=True), nullable=True)
     is_staff = Column(Boolean, default=False, nullable=False)
+    is_superuser = Column(Boolean, default=False, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
 
     profiles = relationship("UserProfile", back_populates="user")
