@@ -1,83 +1,93 @@
-from sqlalchemy import Column, String, Boolean, DateTime, BigInteger, Text, ForeignKey
+from datetime import datetime
+from typing import List, Optional
+
+import sqlalchemy as sa
 from sqlalchemy.orm import relationship
+from sqlmodel import Field, Relationship
 
 from server.core.enums import RelationshipType, ProfileImageType
 from server.core.utils import IntTypeEnum
-from server.db.databases import Base
-from server.models.base import TimestampMixin, S3Media
+from server.models.base import TimestampMixin, S3Media, SQLModel
 
 
-class User(TimestampMixin, Base):
+class User(SQLModel, TimestampMixin, table=True):
     __tablename__ = "users"
 
-    id = Column(BigInteger, primary_key=True, index=True)
-    uid = Column(String(30), nullable=False)
-    password = Column(String(150), nullable=False)
-    name = Column(String(30), nullable=False)
-    mobile = Column(String(30), unique=True, nullable=False)
-    email = Column(String(50), unique=True, nullable=True)
-    last_login = Column(DateTime(timezone=True), nullable=True)
-    is_staff = Column(Boolean, default=False, nullable=False)
-    is_superuser = Column(Boolean, default=False, nullable=False)
-    is_active = Column(Boolean, default=True, nullable=False)
+    id: int = Field(primary_key=True, index=True)
+    uid: str = Field(max_length=30)
+    password: str = Field(max_length=150)
+    name: str = Field(max_length=30)
+    mobile: str = Field(max_length=30)
+    email: str = Field(max_length=50)
+    last_login: datetime = Field(sa_column=sa.Column(sa.DateTime(timezone=True), nullable=True))
+    is_staff: bool = Field(default=False)
+    is_superuser: bool = Field(default=False)
+    is_active: bool = Field(default=True)
 
-    profiles = relationship("UserProfile", back_populates="user")
-    sessions = relationship("UserSession", back_populates="user")
+    profiles: List["UserProfile"] = Relationship(back_populates="user")
+    sessions: List["UserSession"] = Relationship(back_populates="user")
 
 
-class UserProfile(TimestampMixin, Base):
+class UserProfile(SQLModel, TimestampMixin, table=True):
     __tablename__ = "user_profiles"
 
-    id = Column(BigInteger, primary_key=True, index=True)
-    user_id = Column(BigInteger, ForeignKey("users.id"), nullable=False)
-    nickname = Column(String(30), nullable=False)
-    status_message = Column(Text, nullable=True)
-    is_default = Column(Boolean, default=False, nullable=False)
-    is_active = Column(Boolean, default=True, nullable=False)
+    id: int = Field(sa_column=sa.Column(sa.BigInteger, primary_key=True, index=True))
+    user_id: int = Field(sa_column=sa.Column(sa.BigInteger), foreign_key="users.id")
+    nickname: str = Field(max_length=30)
+    status_message: str = Field(sa_column=sa.Column(sa.Text, nullable=True))
+    is_default: bool = Field(default=False)
+    is_active: bool = Field(default=True)
 
-    user = relationship("User", back_populates="profiles")
-    images = relationship("UserProfileImage", back_populates="profile", cascade="all, delete-orphan")
-    rooms = relationship("ChatRoomUserAssociation", back_populates="user_profile", cascade="all, delete", passive_deletes=True)
+    user: User = Relationship(back_populates="profiles")
+    images: List[Optional["UserProfileImage"]] = Relationship(
+        sa_relationship=relationship(
+            "UserProfileImage", back_populates="profile", cascade="all, delete-orphan"))
+    rooms: List[Optional["ChatRoomUserAssociation"]] = Relationship(
+        sa_relationship=relationship(
+            "ChatRoomUserAssociation", back_populates="user_profile", cascade="all, delete", passive_deletes=True))
 
 
-class UserRelationship(Base):
+class UserRelationship(SQLModel, table=True):
     __tablename__ = "user_relationships"
 
-    id = Column(BigInteger, primary_key=True, index=True)
-    my_profile_id = Column(BigInteger, ForeignKey("user_profiles.id"), nullable=False)
-    other_profile_id = Column(BigInteger, ForeignKey("user_profiles.id"), nullable=False)
-    type = Column(IntTypeEnum(enum_class=RelationshipType), default=RelationshipType.FRIEND, nullable=False)
-    favorites = Column(Boolean, default=False, nullable=False)
-    is_hidden = Column(Boolean, default=False, nullable=False)
-    is_forbidden = Column(Boolean, default=False, nullable=False)
-    is_active = Column(Boolean, default=True, nullable=False)
+    id: int = Field(sa_column=sa.Column(sa.BigInteger, primary_key=True, index=True))
+    my_profile_id: int = Field(sa_column=sa.Column(sa.BigInteger), foreign_key="user_profiles.id")
+    other_profile_id: int = Field(sa_column=sa.Column(sa.BigInteger, foreign_key="user_profiles.id"))
+    type: IntTypeEnum = Field(
+        sa_column=sa.Column(IntTypeEnum(enum_class=RelationshipType), default=RelationshipType.FRIEND))
+    # type = Column(IntTypeEnum(enum_class=RelationshipType), default=RelationshipType.FRIEND, nullable=False)
+    favorites: bool = Field(default=False)
+    is_hidden: bool = Field(default=False)
+    is_forbidden: bool = Field(default=False)
+    is_active: bool = Field(default=True)
 
-    my_profile = relationship("UserProfile", foreign_keys=[my_profile_id])
-    other_profile = relationship("UserProfile", foreign_keys=[other_profile_id])
+    my_profile = Relationship(sa_relationship=relationship("UserProfile", foreign_keys=[my_profile_id]))
+    other_profile = Relationship(sa_relationship=relationship("UserProfile", foreign_keys=[other_profile_id]))
 
 
 class UserProfileImage(S3Media):
     __tablename__ = "user_profile_images"
 
-    id = Column(BigInteger, ForeignKey('s3_media.id'), primary_key=True)
-    user_profile_id = Column(BigInteger, ForeignKey("user_profiles.id", on_delete="cascade"), nullable=False)
-    type = Column(IntTypeEnum(enum_class=ProfileImageType), nullable=False)
-    is_default = Column(Boolean, default=False, nullable=False)
-    is_active = Column(Boolean, default=True, nullable=False)
+    id: int = Field(sa_column=sa.Column(sa.BigInteger), foreign_key="s3_media.id", primary_key=True)
+    user_profile_id: int = Field(sa_column=sa.Column(sa.BigInteger), foreign_key="user_profiles.id")
+    type: IntTypeEnum = Field(sa_column=sa.Column(IntTypeEnum(enum_class=ProfileImageType)))
+    # type = Column(IntTypeEnum(enum_class=ProfileImageType), nullable=False)
+    is_default: bool = Field(default=False)
+    is_active: bool = Field(default=True)
 
-    profile = relationship("UserProfile", back_populates="images")
+    profile: UserProfile = Relationship(back_populates="images")
 
     __mapper_args__ = {
         "polymorphic_identity": "user_profile_image"
     }
 
 
-class UserSession(TimestampMixin, Base):
+class UserSession(SQLModel, TimestampMixin, table=True):
     __tablename__ = "user_sessions"
 
-    id = Column(BigInteger, primary_key=True, index=True)
-    user_id = Column(BigInteger, ForeignKey("users.id"), nullable=False)
-    session_id = Column(String(150), nullable=False)
-    expiry_at = Column(DateTime(timezone=True), nullable=False)
+    id: int = Field(sa_column=sa.Column(sa.BigInteger, primary_key=True, index=True))
+    user_id: int = Field(sa_column=sa.Column(sa.BigInteger), foreign_key="users.id")
+    session_id: int = Field(max_length=150)
+    expiry_at: datetime = Field(sa_column=sa.Column(sa.DateTime(timezone=True)))
 
-    user = relationship("User", back_populates="sessions")
+    user: User = Relationship(back_populates="sessions")

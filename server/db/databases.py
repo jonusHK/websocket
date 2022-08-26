@@ -1,8 +1,13 @@
-from sqlalchemy.orm import sessionmaker, scoped_session, declarative_base
+from typing import AsyncGenerator
+
+from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.orm import sessionmaker
+from sqlmodel import SQLModel
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from server.config import settings
 
-DATABASE_URL = "mysql+pymysql://{username}:{password}@{host}:{port}/{db_name}".format(
+DATABASE_URL = "mysql+asyncmy://{username}:{password}@{host}:{port}/{db_name}".format(
     username=settings.db_username,
     password=settings.db_password,
     host=settings.db_host,
@@ -10,13 +15,16 @@ DATABASE_URL = "mysql+pymysql://{username}:{password}@{host}:{port}/{db_name}".f
     db_name=settings.db_name
 )
 
-# sessionmaker : 엔진의 연결 풀을 요청하고, 새로운 세션 객체와 연결하여, 새로운 세션 객체를 초기화하는 자동화 기능을 수행함.
-# scoped_session : 생성된 세션 객체들의 레지스트리(registry). 여기서 레지스트리의 Key는 특정한 형태의 thread-safe id.
-DBSession = scoped_session(sessionmaker())
-Base = declarative_base()
+engine = create_async_engine(DATABASE_URL, echo=True, future=True)
 
 
-def initialize_sql(engine):
-    DBSession.configure(autocommit=False, autoflush=True, bind=engine)
-    Base.metadata.bind = engine
-    Base.metadata.create_all(engine)
+async def init_db() -> None:
+    async with engine.begin() as conn:
+        await conn.run_sync(SQLModel.metadata.create_all)
+
+
+async def get_session() -> AsyncGenerator[AsyncSession, None]:
+    # sessionmaker : 엔진의 연결 풀을 요청하고, 새로운 세션 객체와 연결하여, 새로운 세션 객체를 초기화하는 자동화 기능을 수행함
+    async_session = sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
+    async with async_session() as session:
+        yield session

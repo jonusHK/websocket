@@ -2,7 +2,6 @@ from typing import List, Mapping
 
 import uvicorn
 from fastapi import FastAPI, Request
-from sqlalchemy import create_engine
 from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import HTMLResponse
 from starlette.staticfiles import StaticFiles
@@ -12,13 +11,10 @@ from starlette.websockets import WebSocket, WebSocketDisconnect
 from server.api.v1 import api_router
 from server.core.responses import WebsocketJSONResponse
 from server.core.utils.codes.websockets import CLIENT_DISCONNECT
-from server.db.databases import DATABASE_URL, initialize_sql, settings
+from server.db.databases import settings
 
 # app = FastAPI(root_path="/api/v1", default_response_class=WebsocketJSONResponse)
 app = FastAPI(default_response_class=WebsocketJSONResponse)
-
-engine = create_engine(DATABASE_URL)
-initialize_sql(engine)
 
 if settings.backend_cors_origins:
     app.add_middleware(
@@ -29,7 +25,7 @@ if settings.backend_cors_origins:
         allow_headers=["*"],
     )
 
-app.include_router(api_router, prefix=settings.api_v1_str)
+app.include_router(api_router, prefix=settings.api_v1_prefix)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
