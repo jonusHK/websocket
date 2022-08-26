@@ -4,13 +4,14 @@ from pydantic import BaseSettings, AnyHttpUrl, validator
 
 
 class Settings(BaseSettings):
-    api_v1_str: str = "/api/v1"
+    api_v1_prefix: str = "/api/v1"
     db_name: str
     db_username: str
     db_password: str
     db_host: str
     db_port: int
     backend_cors_origins: List[AnyHttpUrl] = []
+    debug: bool
 
     @validator("backend_cors_origins", pre=True)
     def assemble_cors_origins(cls, v: str | List[str]) -> List[str] | str:
