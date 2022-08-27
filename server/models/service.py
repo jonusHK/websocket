@@ -1,7 +1,7 @@
 from sqlalchemy import Column, BigInteger, String, ForeignKey, Text, Boolean
 from sqlalchemy.orm import relationship
 
-from server.databases import Base
+from server.db.databases import Base
 from server.models.base import TimestampMixin
 
 

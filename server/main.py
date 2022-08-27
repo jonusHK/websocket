@@ -2,33 +2,41 @@ from typing import List, Mapping
 
 import uvicorn
 from fastapi import FastAPI, Request
-from sqlalchemy import create_engine
 from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import HTMLResponse
 from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
+from server.api.v1 import api_router
 from server.core.responses import WebsocketJSONResponse
 from server.core.utils.codes.websockets import CLIENT_DISCONNECT
-from server.databases import DATABASE_URL, initialize_sql
-from server.routers import user as user_routers
+from server.db.databases import settings, engine, Base
 
 # app = FastAPI(root_path="/api/v1", default_response_class=WebsocketJSONResponse)
 app = FastAPI(default_response_class=WebsocketJSONResponse)
 
-engine = create_engine(DATABASE_URL)
-initialize_sql(engine)
+if settings.backend_cors_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[str(origin) for origin in settings.backend_cors_origins],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
-app.add_middleware(
-    CORSMiddleware,
-)
-
-app.include_router(user_routers.router)
+app.include_router(api_router, prefix=settings.api_v1_prefix)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 templates = Jinja2Templates(directory="templates")
+
+
+@app.on_event("startup")
+async def startup():
+    # create db tables
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
 
 class ConnectionManager:

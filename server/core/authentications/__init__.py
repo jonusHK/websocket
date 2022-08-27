@@ -9,11 +9,12 @@ from fastapi_sessions.backends.session_backend import SessionModel, BackendError
 from fastapi_sessions.frontends.implementations import SessionCookie, CookieParameters
 from fastapi_sessions.frontends.session_frontend import ID, FrontendError
 from pydantic.main import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
-from server.crud import user as user_crud
+from server.crud.user import UserCRUD
+from server.db.databases import get_async_session
 from server.models import user as user_models
-from server.routers import get_db
 from server.schemas import user as user_schemas
 
 
@@ -71,7 +72,7 @@ class SessionDatabaseVerifier(Generic[ID, SessionModel]):
     def verify_session(self, model: SessionModel) -> bool:
         raise NotImplementedError()
 
-    async def __call__(self, request: Request, db: Session = Depends(get_db)):
+    async def __call__(self, request: Request, session: AsyncSession = Depends(get_async_session)):
         try:
             session_id: ID | FrontendError = request.state.session_ids[
                 self.identifier
@@ -91,7 +92,7 @@ class SessionDatabaseVerifier(Generic[ID, SessionModel]):
                 raise self.auth_http_exception
             return
 
-        session_data = await self.backend.read(session_id, db)
+        session_data = await self.backend.read(session_id, session)
         if not session_data or not self.verify_session(session_data):
             if self.auto_error:
                 raise self.auth_http_exception
@@ -104,34 +105,34 @@ class DatabaseBackend(Generic[ID, SessionModel], SessionDatabaseBackend[ID, Sess
     def __init__(self, _cookie_params: CookieParameters) -> None:
         self.cookie_params = _cookie_params
 
-    async def create(self, session_id: ID, data: SessionModel, db: Session):
-        user: user_models.User = user_crud.get_user_by_uid(db, data.uid)
+    async def create(self, session_id: ID, data: SessionModel, session: AsyncSession):
+        user: user_models.User = await UserCRUD(session).get_user_by_uid(data.uid)
         expiry_at = datetime.datetime.now() + datetime.timedelta(seconds=self.cookie_params.max_age)
         session_create_s = user_schemas.UserSessionCreate(
             user_id=user.id,
             session_id=str(session_id),  # 저장 되는 쿠키 값: str(cookie.signer.dumps(session_id.hex))
             expiry_at=expiry_at)
-        user_crud.create_session(db, session_create_s)
+        await UserCRUD(session).create_session(session_create_s)
 
-    async def read(self, session_id: ID, db: Session):
-        user_session: user_models.UserSession = user_crud.get_session_by_session_id(db, session_id)
+    async def read(self, session_id: ID, session: AsyncSession):
+        user_session: user_models.UserSession = await UserCRUD(session).get_session_by_session_id(session_id)
         if not user_session:
             return
 
         user_session_s = user_schemas.UserSession(**jsonable_encoder(user_session))
         return user_session_s
 
-    async def update(self, session_id: ID, data: SessionModel, db: Session) -> None:
-        user_session: user_models.UserSession = user_crud.get_session_by_session_id(db, session_id)
+    async def update(self, session_id: ID, data: SessionModel, session: AsyncSession) -> None:
+        user_session: user_models.UserSession = await UserCRUD(session).get_session_by_session_id(session_id)
         if not user_session:
             raise BackendError("Session does not exist, cannot update")
-        user_crud.update_session(db, user_session.id, **data.dict())
+        await UserCRUD(session).update_session(user_session.id, **data.dict())
 
-    async def delete(self, session_id: ID, db: Session) -> None:
-        user_session: user_models.UserSession = user_crud.get_session_by_session_id(db, str(session_id))
+    async def delete(self, session_id: ID, session: AsyncSession) -> None:
+        user_session: user_models.UserSession = await UserCRUD(session).get_session_by_session_id(str(session_id))
         if not user_session:
             raise BackendError("Session does not exist, cannot delete")
-        user_crud.delete_session(db, user_session.id)
+        await UserCRUD(session).delete_session(user_session.id)
 
 
 class BasicVerifier(SessionDatabaseVerifier[UUID, SessionData]):

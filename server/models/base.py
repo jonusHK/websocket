@@ -1,11 +1,11 @@
 from sqlalchemy import BigInteger, Column, String, DateTime, func
 
-from server.databases import Base
+from server.db.databases import Base
 
 
 class TimestampMixin(object):
-    created = Column(DateTime(timezone=True), default=func.now())
-    updated = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+    created = Column(DateTime(timezone=True), default=func.now(), nullable=False)
+    updated = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
 
 
 class S3Media(TimestampMixin, Base):

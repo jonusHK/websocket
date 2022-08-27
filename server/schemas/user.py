@@ -11,6 +11,7 @@ class UserBase(BaseModel):
     name: str
     mobile: str
     email: str
+    is_superuser: bool = False
     is_staff: bool = False
     is_active: bool = True
 

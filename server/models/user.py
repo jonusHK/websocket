@@ -3,7 +3,7 @@ from sqlalchemy.orm import relationship
 
 from server.core.enums import RelationshipType, ProfileImageType
 from server.core.utils import IntTypeEnum
-from server.databases import Base
+from server.db.databases import Base
 from server.models.base import TimestampMixin, S3Media
 
 
@@ -11,12 +11,13 @@ class User(TimestampMixin, Base):
     __tablename__ = "users"
 
     id = Column(BigInteger, primary_key=True, index=True)
-    uid = Column(String(30), nullable=False)
+    uid = Column(String(30), unique=True, nullable=False)
     password = Column(String(150), nullable=False)
     name = Column(String(30), nullable=False)
     mobile = Column(String(30), unique=True, nullable=False)
-    email = Column(String(50), unique=True, nullable=True)
+    email = Column(String(50), unique=True, nullable=False)
     last_login = Column(DateTime(timezone=True), nullable=True)
+    is_superuser = Column(Boolean, default=False, nullable=False)
     is_staff = Column(Boolean, default=False, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
 
