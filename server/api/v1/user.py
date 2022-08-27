@@ -21,12 +21,12 @@ router = APIRouter()
     response_model_include={"id"},
     status_code=status.HTTP_201_CREATED
 )
-async def signup(user: user_schemas.UserCreate, session: AsyncSession = Depends(get_async_session)):
-    db_user = await UserCRUD(session).get_user_by_email(email=user.email)
+async def signup(user_s: user_schemas.UserCreate, session: AsyncSession = Depends(get_async_session)):
+    db_user = await UserCRUD(session).get_user_by_uid(uid=user_s.uid)
     if db_user:
         raise HTTPException(status_code=400, detail="Already signed up.")
 
-    user = await UserCRUD(session).create_user(user=user)
+    user = await UserCRUD(session).create_user(user=user_s)
     await session.commit()
     await session.refresh(user)
     return jsonable_encoder(user)
