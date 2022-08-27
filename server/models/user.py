@@ -11,11 +11,11 @@ class User(TimestampMixin, Base):
     __tablename__ = "users"
 
     id = Column(BigInteger, primary_key=True, index=True)
-    uid = Column(String(30), nullable=False)
+    uid = Column(String(30), unique=True, nullable=False)
     password = Column(String(150), nullable=False)
     name = Column(String(30), nullable=False)
     mobile = Column(String(30), unique=True, nullable=False)
-    email = Column(String(50), unique=True, nullable=True)
+    email = Column(String(50), unique=True, nullable=False)
     last_login = Column(DateTime(timezone=True), nullable=True)
     is_superuser = Column(Boolean, default=False, nullable=False)
     is_staff = Column(Boolean, default=False, nullable=False)
