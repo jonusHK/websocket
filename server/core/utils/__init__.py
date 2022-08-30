@@ -1,8 +1,7 @@
-import bcrypt
-from pytz import timezone
-from sqlalchemy.types import TypeDecorator
-from sqlalchemy import Integer
 from passlib.context import CryptContext
+from pytz import timezone
+from sqlalchemy import Integer
+from sqlalchemy.types import TypeDecorator
 
 
 class IntTypeEnum(TypeDecorator):
