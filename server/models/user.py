@@ -60,7 +60,7 @@ class UserProfileImage(S3Media):
     __tablename__ = "user_profile_images"
 
     id = Column(BigInteger, ForeignKey('s3_media.id'), primary_key=True)
-    user_profile_id = Column(BigInteger, ForeignKey("user_profiles.id", on_delete="cascade"), nullable=False)
+    user_profile_id = Column(BigInteger, ForeignKey("user_profiles.id", ondelete="CASCADE"), nullable=False)
     type = Column(IntTypeEnum(enum_class=ProfileImageType), nullable=False)
     is_default = Column(Boolean, default=False, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
