@@ -3,7 +3,9 @@ from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker, declarative_base
 
-from server.config import settings
+from server.config import get_settings
+
+settings = get_settings()
 
 DATABASE_URL = "mysql+asyncmy://{username}:{password}@{host}:{port}/{db_name}".format(
     username=settings.db_username,

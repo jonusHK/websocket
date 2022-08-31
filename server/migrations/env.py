@@ -11,8 +11,10 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 sys.path = ['', '..'] + sys.path[1:]
 
-from server.config import settings
+from server.config import get_settings
 from server.models import *
+
+settings = get_settings()
 
 config = context.config
 

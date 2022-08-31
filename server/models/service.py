@@ -11,15 +11,16 @@ class ChatRoom(TimestampMixin, Base):
     id = Column(BigInteger, primary_key=True, index=True)
     name = Column(String(30), nullable=False)
 
-    user_profiles = relationship("ChatRoomUserAssociation", back_populates="room", cascade="all, delete", passive_deletes=True)
+    user_profiles = relationship(
+        "ChatRoomUserAssociation", back_populates="room", cascade="all, delete", passive_deletes=True)
     histories = relationship("ChatHistory", back_populates="room")
 
 
 class ChatRoomUserAssociation(TimestampMixin, Base):
     __tablename__ = "chat_room_user_association"
 
-    room_id = Column(BigInteger, ForeignKey("chat_rooms.id", on_delete="cascade"), primary_key=True)
-    user_profile_id = Column(BigInteger, ForeignKey("user_profiles.id", on_delete="cascade"), primary_key=True)
+    room_id = Column(BigInteger, ForeignKey("chat_rooms.id", ondelete="CASCADE"), primary_key=True)
+    user_profile_id = Column(BigInteger, ForeignKey("user_profiles.id", ondelete="CASCADE"), primary_key=True)
 
     room = relationship("ChatRoom", back_populates="user_profiles")
     user_profile = relationship("UserProfile", back_populates="rooms")
