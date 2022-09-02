@@ -10,7 +10,7 @@ from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from server.api.v1 import api_router
 from server.core.responses import WebsocketJSONResponse
-from server.core.utils.codes.websockets import CLIENT_DISCONNECT
+from server.core.constants import CLIENT_DISCONNECT
 from server.db.databases import settings, engine, Base
 
 # app = FastAPI(root_path="/api/v1", default_response_class=WebsocketJSONResponse)
