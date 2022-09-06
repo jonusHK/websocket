@@ -1,3 +1,4 @@
+import logging
 from typing import List, Mapping
 
 import uvicorn
@@ -12,6 +13,8 @@ from server.api.v1 import api_router
 from server.core.responses import WebsocketJSONResponse
 from server.core.constants import CLIENT_DISCONNECT
 from server.db.databases import settings, engine, Base
+
+logging.config.fileConfig("logging.conf", disable_existing_loggers=False)
 
 # app = FastAPI(root_path="/api/v1", default_response_class=WebsocketJSONResponse)
 app = FastAPI(default_response_class=WebsocketJSONResponse)

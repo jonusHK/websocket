@@ -1,8 +1,7 @@
 from fastapi import Request
 from fastapi.encoders import jsonable_encoder
-from fastapi.exceptions import RequestValidationError
+from fastapi.exceptions import RequestValidationError, HTTPException
 from starlette import status
-from starlette.exceptions import HTTPException
 from starlette.responses import JSONResponse
 
 from server.core.enums import ResponseCode
