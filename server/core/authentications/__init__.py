@@ -180,7 +180,6 @@ cookie = SessionCookie(
     cookie_params=cookie_params,
 )
 
-# backend = InMemoryBackend[UUID, SessionData]()
 backend = DatabaseBackend[UUID, SessionData](cookie_params)
 
 verifier = BasicVerifier(
