@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     db_port: int
     backend_cors_origins: List[AnyHttpUrl] = []
     debug: bool
+    session_secret_key: str
 
     @validator("backend_cors_origins", pre=True)
     def assemble_cors_origins(cls, v: str | List[str]) -> List[str] | str:

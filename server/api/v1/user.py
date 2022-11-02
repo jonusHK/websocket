@@ -1,18 +1,20 @@
 import datetime
 from uuid import uuid4, UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy.ext.asyncio import AsyncSession
-from starlette import status
 
-from server.core.authentications import SessionData, backend, cookie, verifier
-from server.core.utils import verify_password
+from server.api import ExceptionHandlerRoute
+from server.core.authentications import SessionData, backend, cookie, verifier, RoleChecker
+from server.core.enums import UserType
+from server.core.utils import verify_password, get_tz
 from server.crud.user import UserCRUD
 from server.db.databases import get_async_session
+from server.models import user as user_models
 from server.schemas import user as user_schemas
 
-router = APIRouter()
+router = APIRouter(route_class=ExceptionHandlerRoute)
 
 
 @router.post(
@@ -24,7 +26,7 @@ router = APIRouter()
 async def signup(user_s: user_schemas.UserCreate, session: AsyncSession = Depends(get_async_session)):
     db_user = await UserCRUD(session).get_user_by_uid(uid=user_s.uid)
     if db_user:
-        raise HTTPException(status_code=400, detail="Already signed up.")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Already signed up.")
 
     user = await UserCRUD(session).create_user(user=user_s)
     await session.commit()
@@ -41,21 +43,26 @@ async def login(data: SessionData, response: Response, session: AsyncSession = D
     session_id = uuid4()
     user = await UserCRUD(session).get_user_by_uid(data.uid)
     if not user:
-        raise HTTPException(status_code=400, detail="Invalid uid.")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid uid.")
     if not verify_password(data.password, user.password):
-        raise HTTPException(status_code=400, detail="Invalid password.")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid password.")
 
     await backend.create(session_id, data, session)
     cookie.attach_to_response(response, session_id)
-    await UserCRUD(session).update_user(user.id, last_login=datetime.datetime.now())
+    await UserCRUD(session).update_user(user.id, last_login=datetime.datetime.now(get_tz()))
     await session.commit()
     await session.refresh(user)
     return jsonable_encoder(user)
 
 
 @router.get("/whoami", dependencies=[Depends(cookie)])
-async def whoami(session_data: SessionData = Depends(verifier)):
-    return session_data
+async def whoami(user_session: user_models.UserSession = Depends(verifier)):
+    return user_schemas.UserSession(**jsonable_encoder(user_session))
+
+
+@router.get("/permission", dependencies=[Depends(cookie), Depends(RoleChecker([UserType.USER]))])
+async def permission_test():
+    return {"detail": "ok"}
 
 
 @router.post("/logout")
