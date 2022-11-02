@@ -1,19 +1,21 @@
 import datetime
 from abc import ABC, abstractmethod
-from typing import Generic, Optional
+from typing import Generic, Optional, List
 from uuid import UUID
 
-from fastapi import HTTPException, Request, Depends
+from fastapi import HTTPException, Request, Depends, status
 from fastapi.encoders import jsonable_encoder
 from fastapi_sessions.backends.session_backend import SessionModel, BackendError
 from fastapi_sessions.frontends.implementations import SessionCookie, CookieParameters
 from fastapi_sessions.frontends.session_frontend import ID, FrontendError
 from pydantic.main import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import Session
 
+from server.core.authentications.constants import SESSION_AGE, COOKIE_NAME, SESSION_IDENTIFIER
+from server.core.enums import UserType
+from server.core.utils import get_tz
 from server.crud.user import UserCRUD
-from server.db.databases import get_async_session
+from server.db.databases import get_async_session, settings, async_session
 from server.models import user as user_models
 from server.schemas import user as user_schemas
 
@@ -27,22 +29,22 @@ class SessionDatabaseBackend(ABC, Generic[ID, SessionModel]):
     """Abstract class that defines methods for interacting with session data."""
 
     @abstractmethod
-    async def create(self, session_id: ID, data: SessionModel, db: Session) -> None:
+    async def create(self, session_id: ID, data: SessionModel, db: AsyncSession) -> None:
         """Create a new session."""
         raise NotImplementedError()
 
     @abstractmethod
-    async def read(self, session_id: ID, db: Session) -> Optional[SessionModel]:
+    async def read(self, session_id: ID, db: AsyncSession) -> Optional[SessionModel]:
         """Read session data from the storage."""
         raise NotImplementedError()
 
     @abstractmethod
-    async def update(self, session_id: ID, data: SessionModel, db: Session) -> None:
+    async def update(self, session_id: ID, data: SessionModel, db: AsyncSession) -> None:
         """Update session data to the storage"""
         raise NotImplementedError()
 
     @abstractmethod
-    async def delete(self, session_id: ID, db: Session) -> None:
+    async def delete(self, session_id: ID, db: AsyncSession) -> None:
         """Remove session data from the storage."""
         raise NotImplementedError()
 
@@ -74,31 +76,29 @@ class SessionDatabaseVerifier(Generic[ID, SessionModel]):
 
     async def __call__(self, request: Request, session: AsyncSession = Depends(get_async_session)):
         try:
-            session_id: ID | FrontendError = request.state.session_ids[
-                self.identifier
-            ]
+            session_id: ID | FrontendError = request.state.session_ids[self.identifier]
         except Exception:
             if self.auto_error:
                 raise HTTPException(
-                    status_code=500, detail="internal failure of session verification"
-                )
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Internal failure of session verification")
             else:
                 return BackendError(
-                    "failed to extract the {} session from state", self.identifier
-                )
+                    "Failed to extract the {} session from state", self.identifier)
 
         if isinstance(session_id, FrontendError):
             if self.auto_error:
                 raise self.auth_http_exception
             return
 
-        session_data = await self.backend.read(session_id, session)
-        if not session_data or not self.verify_session(session_data):
+        user_session: user_models.UserSession = await self.backend.read(session_id, session)
+        session_data = user_schemas.UserSession(**jsonable_encoder(user_session))
+        if not user_session or not self.verify_session(session_data):
             if self.auto_error:
                 raise self.auth_http_exception
             return
 
-        return session_data
+        return user_session
 
 
 class DatabaseBackend(Generic[ID, SessionModel], SessionDatabaseBackend[ID, SessionModel]):
@@ -107,7 +107,7 @@ class DatabaseBackend(Generic[ID, SessionModel], SessionDatabaseBackend[ID, Sess
 
     async def create(self, session_id: ID, data: SessionModel, session: AsyncSession):
         user: user_models.User = await UserCRUD(session).get_user_by_uid(data.uid)
-        expiry_at = datetime.datetime.now() + datetime.timedelta(seconds=self.cookie_params.max_age)
+        expiry_at = datetime.datetime.now(get_tz()) + datetime.timedelta(seconds=self.cookie_params.max_age)
         session_create_s = user_schemas.UserSessionCreate(
             user_id=user.id,
             session_id=str(session_id),  # 저장 되는 쿠키 값: str(cookie.signer.dumps(session_id.hex))
@@ -118,9 +118,7 @@ class DatabaseBackend(Generic[ID, SessionModel], SessionDatabaseBackend[ID, Sess
         user_session: user_models.UserSession = await UserCRUD(session).get_session_by_session_id(session_id)
         if not user_session:
             return
-
-        user_session_s = user_schemas.UserSession(**jsonable_encoder(user_session))
-        return user_session_s
+        return user_session
 
     async def update(self, session_id: ID, data: SessionModel, session: AsyncSession) -> None:
         user_session: user_models.UserSession = await UserCRUD(session).get_session_by_session_id(session_id)
@@ -166,25 +164,55 @@ class BasicVerifier(SessionDatabaseVerifier[UUID, SessionData]):
         return self._auth_http_exception
 
     def verify_session(self, schema: user_schemas.UserSession) -> bool:
-        return schema.expiry_at >= datetime.datetime.now()
+        return schema.expiry_at.astimezone() >= datetime.datetime.now(get_tz())
 
 
-cookie_params = CookieParameters(max_age=7 * 24 * 60 * 60)
+cookie_params = CookieParameters(max_age=SESSION_AGE)
 
-# Uses UUID
 cookie = SessionCookie(
-    cookie_name="sessionId",
-    identifier="general_verifier",
+    cookie_name=COOKIE_NAME,
+    identifier=SESSION_IDENTIFIER,
     auto_error=True,
-    secret_key="DONOTUSE",
-    cookie_params=cookie_params,
-)
+    secret_key=settings.session_secret_key,
+    cookie_params=cookie_params)
 
 backend = DatabaseBackend[UUID, SessionData](cookie_params)
 
 verifier = BasicVerifier(
-    identifier="general_verifier",
+    identifier=SESSION_IDENTIFIER,
     auto_error=True,
     _backend=backend,
-    auth_http_exception=HTTPException(status_code=403, detail="Invalid session"),
-)
+    auth_http_exception=HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid session."))
+
+
+async def get_current_user(user_session: Depends(verifier)) -> user_models.User:
+    if not user_session or user_session.user:
+        raise verifier.auth_http_exception
+    return user_session.user
+
+
+class RoleChecker:
+    def __init__(self, allowed_roles: List[UserType]):
+        self.allowed_roles = allowed_roles
+
+    async def __call__(self, request: Request):
+        async with async_session() as session:
+            user_session = await verifier(request, session)
+            user = user_session.user
+            error_msg = None
+            if not user.is_active:
+                error_msg = "User is inactive."
+            elif not user.is_superuser:
+                has_role = False
+                for role in self.allowed_roles:
+                    assert isinstance(role, UserType), "Role is invalid."
+                    if (
+                        (role == UserType.ADMIN and user.is_staff) or
+                        (role == UserType.USER and not user.is_staff)
+                    ):
+                        has_role = True
+                if not has_role:
+                    error_msg = "Unauthorized User."
+
+            if error_msg:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=error_msg)

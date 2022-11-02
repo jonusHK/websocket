@@ -1,5 +1,6 @@
 from sqlalchemy import insert, select, update, delete
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import contains_eager
 
 from server.core.utils import hash_password
 from server.models.user import User, UserSession
@@ -52,6 +53,9 @@ class UserCRUD:
         stmt = (
             select(UserSession).
             filter_by(session_id=session_id).
+            options(
+                contains_eager(UserSession.user)
+            ).
             limit(1)
         )
         results = await self.session.execute(stmt)
