@@ -66,3 +66,9 @@ class RelationshipType(IntValueEnum):
 class ProfileImageType(IntValueEnum):
     PROFILE = "프로필 이미지"
     BACKGROUND = "배경 이미지"
+
+
+class UserType(IntValueEnum):
+    USER = "유저"
+    ADMIN = "관리자"
+    SUPERUSER = "마스터 관리자"
