@@ -3,15 +3,17 @@ from typing import List, Mapping
 
 import uvicorn
 from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
 from starlette.middleware.cors import CORSMiddleware
-from starlette.responses import HTMLResponse
+from starlette.responses import HTMLResponse, JSONResponse
 from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from server.api.v1 import api_router
-from server.core.responses import WebsocketJSONResponse
 from server.core.constants import CLIENT_DISCONNECT
+from server.core.exceptions import ClassifiableException
+from server.core.responses import WebsocketJSONResponse
 from server.db.databases import settings, engine, Base
 
 logging.config.fileConfig("logging.conf", disable_existing_loggers=False)
@@ -36,10 +38,26 @@ templates = Jinja2Templates(directory="templates")
 
 
 @app.on_event("startup")
-async def startup():
+async def on_startup():
     # create db tables
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+    logging.basicConfig()
+    logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
+
+
+@app.exception_handler(ClassifiableException)
+async def exception_handler(request: Request, exc: ClassifiableException):
+    err_response = exc.code.retrieve()
+    err_response.update({
+        "data": exc.detail
+    })
+    kwargs = {
+        "status_code": exc.status_code,
+        "content": jsonable_encoder(err_response)
+    }
+    return JSONResponse(**kwargs)
 
 
 class ConnectionManager:
@@ -100,4 +118,4 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, client_id: str)
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
