@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from server.core.authentications.constants import SESSION_AGE, COOKIE_NAME, SESSION_IDENTIFIER
 from server.core.enums import UserType
 from server.core.utils import get_tz
-from server.crud.user import UserCRUD
+from server.crud.user import UserCRUD, UserSessionCRUD
 from server.db.databases import get_async_session, settings, async_session
 from server.models import user as user_models
 from server.schemas import user as user_schemas
@@ -112,25 +112,25 @@ class DatabaseBackend(Generic[ID, SessionModel], SessionDatabaseBackend[ID, Sess
             user_id=user.id,
             session_id=str(session_id),  # 저장 되는 쿠키 값: str(cookie.signer.dumps(session_id.hex))
             expiry_at=expiry_at)
-        await UserCRUD(session).create_session(session_create_s)
+        await UserSessionCRUD(session).create_session(session_create_s)
 
     async def read(self, session_id: ID, session: AsyncSession):
-        user_session: user_models.UserSession = await UserCRUD(session).get_session_by_session_id(session_id)
+        user_session: user_models.UserSession = await UserSessionCRUD(session).get_session_by_session_id(session_id)
         if not user_session:
             return
         return user_session
 
     async def update(self, session_id: ID, data: SessionModel, session: AsyncSession) -> None:
-        user_session: user_models.UserSession = await UserCRUD(session).get_session_by_session_id(session_id)
+        user_session: user_models.UserSession = await UserSessionCRUD(session).get_session_by_session_id(session_id)
         if not user_session:
             raise BackendError("Session does not exist, cannot update")
-        await UserCRUD(session).update_session(user_session.id, **data.dict())
+        await UserSessionCRUD(session).update_session(user_session.id, **data.dict())
 
     async def delete(self, session_id: ID, session: AsyncSession) -> None:
-        user_session: user_models.UserSession = await UserCRUD(session).get_session_by_session_id(str(session_id))
+        user_session: user_models.UserSession = await UserSessionCRUD(session).get_session_by_session_id(str(session_id))
         if not user_session:
             raise BackendError("Session does not exist, cannot delete")
-        await UserCRUD(session).delete_session(user_session.id)
+        await UserSessionCRUD(session).delete_session(user_session.id)
 
 
 class BasicVerifier(SessionDatabaseVerifier[UUID, SessionData]):
