@@ -17,6 +17,7 @@ class UserBase(BaseModel):
 
 
 class UserCreate(UserBase):
+    uid: Optional[str] = None
     password: str
 
 
@@ -29,10 +30,11 @@ class User(UserBase):
 
 
 class UserProfileBase(BaseModel):
+    user_id: int
     nickname: str
-    status_message: str
-    is_default: bool = False
-    is_active: bool = True
+    status_message: Optional[str] = None
+    is_default: int = False
+    is_active: int = True
 
 
 class UserProfileCreate(UserProfileBase):
@@ -41,7 +43,6 @@ class UserProfileCreate(UserProfileBase):
 
 class UserProfile(UserProfileBase):
     id: int
-    user_id: int
     created: datetime
 
     class Config:
@@ -49,6 +50,8 @@ class UserProfile(UserProfileBase):
 
 
 class UserRelationshipBase(BaseModel):
+    my_profile_id: int
+    other_profile_id: int
     type: int
     favorites: int = False
     is_hidden: int = False
@@ -57,12 +60,11 @@ class UserRelationshipBase(BaseModel):
 
 
 class UserRelationshipCreate(UserRelationshipBase):
-    other_profile_id: int
+    pass
 
 
 class UserRelationship(UserRelationshipBase):
     id: int
-    my_profile_id: int
 
     class Config:
         orm_model = True
@@ -70,6 +72,7 @@ class UserRelationship(UserRelationshipBase):
 
 class UserProfileImageBase(base_schemas.S3MediaBase):
     type: int
+    user_profile_id: int
     is_default: int = False
     is_active: int = True
 
@@ -80,7 +83,6 @@ class UserProfileImageCreate(UserProfileImageBase):
 
 class UserProfileImage(UserProfileImageBase):
     id: int
-    user_profile_id: int
     created: datetime
 
     class Config:

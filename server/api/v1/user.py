@@ -9,7 +9,7 @@ from server.api import ExceptionHandlerRoute
 from server.core.authentications import SessionData, backend, cookie, verifier, RoleChecker
 from server.core.enums import UserType
 from server.core.utils import verify_password, get_tz
-from server.crud.user import UserCRUD
+from server.crud.user import UserCRUD, UserProfileCRUD
 from server.db.databases import get_async_session
 from server.models import user as user_models
 from server.schemas import user as user_schemas
@@ -20,17 +20,27 @@ router = APIRouter(route_class=ExceptionHandlerRoute)
 @router.post(
     "/signup",
     response_model=user_schemas.User,
-    response_model_include={"id"},
+    response_model_include={"id", "uid"},
     status_code=status.HTTP_201_CREATED
 )
 async def signup(user_s: user_schemas.UserCreate, session: AsyncSession = Depends(get_async_session)):
-    db_user = await UserCRUD(session).get_user_by_uid(uid=user_s.uid)
+    user_crud = UserCRUD(session)
+    user_profile_crud = UserProfileCRUD(session)
+
+    db_user = await user_crud.get_user_by_uid(uid=user_s.uid)
     if db_user:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Already signed up.")
-
-    user = await UserCRUD(session).create_user(user=user_s)
+    user = await user_crud.create_user(user_s)
     await session.commit()
     await session.refresh(user)
+
+    user_profile_s = user_schemas.UserProfileCreate(
+        user_id=user.id,
+        nickname=user.name,
+        is_default=True)
+    await user_profile_crud.create_profile(user_profile_s)
+    await session.commit()
+
     return jsonable_encoder(user)
 
 
