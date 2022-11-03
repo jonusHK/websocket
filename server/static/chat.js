@@ -23,9 +23,9 @@ function establishWebSocketConnection() {
     const buttonSend = document.getElementById("send-button");
     const buttonStop = document.getElementById("stop-button");
     const label = document.getElementById("status-label");
-    const roomId = 'room_1';
-    const clientId = uuidv4();
-    const socket = new WebSocket(`ws://localhost:8000/chat/${roomId}/${clientId}`);
+    const roomId = 1;
+    const userId = 1;
+    const socket = new WebSocket(`ws://localhost:8000/api/v1/chats/${roomId}/${userId}`);
 
     // 연결 성공
     socket.onopen = function (event) {
