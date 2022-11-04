@@ -41,7 +41,7 @@ async def index(request: Request):
 
 
 @router.websocket("/{room_id}/{user_id}")
-async def chat_room_connection(websocket: WebSocket, room_id: int, user_id: int):
+async def chat_room_connected(websocket: WebSocket, room_id: int, user_id: int):
     await manager.connect(websocket, room_id)
     # TODO : DB 에서 room_id & user_id 매핑 여부 확인 -> 매핑되어 있지 않을 시 브로드캐스트로 입장 메시지 송신
     try:

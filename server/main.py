@@ -1,17 +1,13 @@
 import logging
-from typing import List, Dict
 
 import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
 from starlette.middleware.cors import CORSMiddleware
-from starlette.responses import HTMLResponse, JSONResponse
+from starlette.responses import JSONResponse
 from starlette.staticfiles import StaticFiles
-from starlette.templating import Jinja2Templates
-from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from server.api.v1 import api_router
-from server.core.constants import CLIENT_DISCONNECT
 from server.core.exceptions import ClassifiableException
 from server.core.responses import WebsocketJSONResponse
 from server.db.databases import settings, engine, Base
