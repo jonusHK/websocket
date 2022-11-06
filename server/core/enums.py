@@ -51,6 +51,9 @@ class IntValueEnumMeta(EnumMeta):
         except ValueError:
             return ''
 
+    def get_by_name(cls, name):
+        return next((e for e, v in cls._mapper.items() if e.name == name.upper()), None)
+
 
 class IntValueEnum(Enum, metaclass=IntValueEnumMeta):
     __default__ = None
@@ -72,3 +75,9 @@ class UserType(IntValueEnum):
     USER = "유저"
     ADMIN = "관리자"
     SUPERUSER = "마스터 관리자"
+
+
+class ChatType(IntValueEnum):
+    MESSAGE = "메시지"
+    FILE = "파일"
+    UPDATE = "변경"
