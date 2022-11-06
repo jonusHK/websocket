@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     backend_cors_origins: List[AnyHttpUrl] = []
     debug: bool
     session_secret_key: str
+    redis_host: str
+    redis_port: int
+    redis_database: int
 
     @validator("backend_cors_origins", pre=True)
     def assemble_cors_origins(cls, v: str | List[str]) -> List[str] | str:

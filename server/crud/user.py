@@ -1,12 +1,18 @@
-from sqlalchemy import insert, select, update, delete
+from typing import Optional
+
+from fastapi import HTTPException
+from sqlalchemy import select, update, delete
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import contains_eager
+from sqlalchemy.orm import contains_eager, joinedload
+from starlette import status
 
 from server.core.utils import hash_password
+from server.crud import CRUDBase
 from server.models.user import User, UserSession, UserProfile
-from server.schemas.user import UserCreate, UserSessionCreate, UserProfileCreate
+from server.schemas.user import UserSessionCreate
 
 
+# TODO CRUDBase 상속
 class UserCRUD:
     def __init__(self, session: AsyncSession):
         self.session = session
@@ -23,13 +29,12 @@ class UserCRUD:
         user = results.scalar_one_or_none()
         return user
 
-    async def create_user(self, create_s: UserCreate):
-        user_dict = create_s.dict()
-        user_dict.update({
-            "uid": user_dict["email"],
-            "password": hash_password(create_s.password)
+    async def create(self, **kwargs):
+        kwargs.update({
+            "uid": kwargs["email"],
+            "password": hash_password(kwargs["password"])
         })
-        user = User(**user_dict)
+        user = User(**kwargs)
         self.session.add(user)
         return user
 
@@ -56,6 +61,7 @@ class UserCRUD:
         return session
 
 
+# TODO CRUDBase 상속
 class UserSessionCRUD:
     def __init__(self, session: AsyncSession):
         self.session = session
@@ -96,20 +102,5 @@ class UserSessionCRUD:
         await self.session.execute(stmt)
 
 
-class UserProfileCRUD:
-    def __init__(self, session: AsyncSession):
-        self.session = session
-
-    async def create_profile(self, create_s: UserProfileCreate):
-        user_profile = UserProfile(**create_s.dict())
-        self.session.add(user_profile)
-        return user_profile
-
-    async def update_profile(self, target_id: int, **kwargs):
-        stmt = (
-            update(UserProfile).
-            where(UserProfile.id == target_id).
-            values(**kwargs).
-            execution_options(synchronize_session="fetch")
-        )
-        await self.session.execute(stmt)
+class UserProfileCRUD(CRUDBase):
+    model = UserProfile

@@ -1,17 +1,13 @@
 import logging
-from typing import List, Dict
 
 import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
 from starlette.middleware.cors import CORSMiddleware
-from starlette.responses import HTMLResponse, JSONResponse
+from starlette.responses import JSONResponse
 from starlette.staticfiles import StaticFiles
-from starlette.templating import Jinja2Templates
-from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from server.api.v1 import api_router
-from server.core.constants import CLIENT_DISCONNECT
 from server.core.exceptions import ClassifiableException
 from server.core.responses import WebsocketJSONResponse
 from server.db.databases import settings, engine, Base
@@ -56,31 +52,6 @@ async def exception_handler(request: Request, exc: ClassifiableException):
         "content": jsonable_encoder(err_response)
     }
     return JSONResponse(**kwargs)
-
-
-class ConnectionManager:
-    def __init__(self):
-        self.active_connections: Mapping[str, List[WebSocket]] = {}
-
-    async def connect(self, websocket: WebSocket, room_id: str):
-        await websocket.accept()
-        connections_for_room = self.active_connections.get(room_id, [])
-        connections_for_room.append(websocket)
-        self.active_connections[room_id] = connections_for_room
-
-    def disconnect(self, websocket: WebSocket, room_id: str):
-        if websocket in self.active_connections[room_id]:
-            self.active_connections[room_id].remove(websocket)
-
-    async def send_personal_message(self, message: str, websocket: WebSocket):
-        await websocket.send_text(message)
-
-    async def broadcast(self, message: str, room_id: str):
-        for connection in self.active_connections[room_id]:
-            await connection.send_text(message)
-
-
-manager = ConnectionManager()
 
 
 @app.exception_handler(ClassifiableException)

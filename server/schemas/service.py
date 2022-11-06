@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 class ChatRoomBase(BaseModel):
     name: str
+    is_active: bool = True
 
 
 class ChatRoomCreate(ChatRoomBase):
@@ -20,16 +21,15 @@ class ChatRoom(ChatRoomBase):
 
 
 class ChatRoomUserAssociationBase(BaseModel):
-    name: str
+    room_id: int
+    user_profile_id: int
 
 
 class ChatRoomUserAssociationCreate(ChatRoomUserAssociationBase):
     pass
 
 
-class ChatRoomUserMapping(ChatRoomUserAssociationBase):
-    room_id: int
-    user_profile_id: int
+class ChatRoomUserAssociation(ChatRoomUserAssociationBase):
     created: datetime
 
     class Config:

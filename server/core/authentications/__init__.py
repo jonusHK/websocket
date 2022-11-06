@@ -93,7 +93,7 @@ class SessionDatabaseVerifier(Generic[ID, SessionModel]):
 
         user_session: user_models.UserSession = await self.backend.read(session_id, session)
         session_data = user_schemas.UserSession(**jsonable_encoder(user_session))
-        if not user_session or not self.verify_session(session_data):
+        if not self.verify_session(session_data):
             if self.auto_error:
                 raise self.auth_http_exception
             return
@@ -117,7 +117,7 @@ class DatabaseBackend(Generic[ID, SessionModel], SessionDatabaseBackend[ID, Sess
     async def read(self, session_id: ID, session: AsyncSession):
         user_session: user_models.UserSession = await UserSessionCRUD(session).get_session_by_session_id(session_id)
         if not user_session:
-            return
+            raise BackendError("Session does not exist.")
         return user_session
 
     async def update(self, session_id: ID, data: SessionModel, session: AsyncSession) -> None:
@@ -185,12 +185,6 @@ verifier = BasicVerifier(
     auth_http_exception=HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid session."))
 
 
-async def get_current_user(user_session: Depends(verifier)) -> user_models.User:
-    if not user_session or user_session.user:
-        raise verifier.auth_http_exception
-    return user_session.user
-
-
 class RoleChecker:
     def __init__(self, allowed_roles: List[UserType]):
         self.allowed_roles = allowed_roles
@@ -216,3 +210,5 @@ class RoleChecker:
 
             if error_msg:
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=error_msg)
+
+            return user

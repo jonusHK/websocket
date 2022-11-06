@@ -21,8 +21,8 @@ class User(TimestampMixin, Base):
     is_staff = Column(Boolean, default=False, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
 
-    profiles = relationship("UserProfile", back_populates="user")
-    sessions = relationship("UserSession", back_populates="user")
+    profiles = relationship("UserProfile", back_populates="user", lazy="selectin")
+    sessions = relationship("UserSession", back_populates="user", lazy="selectin")
 
 
 class UserProfile(TimestampMixin, Base):
@@ -35,9 +35,13 @@ class UserProfile(TimestampMixin, Base):
     is_default = Column(Boolean, default=False, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
 
-    user = relationship("User", back_populates="profiles")
-    images = relationship("UserProfileImage", back_populates="profile", cascade="all, delete-orphan")
-    rooms = relationship("ChatRoomUserAssociation", back_populates="user_profile", cascade="all, delete", passive_deletes=True)
+    user = relationship("User", back_populates="profiles", lazy="selectin")
+    images = relationship(
+        "UserProfileImage",
+        back_populates="profile", cascade="all, delete-orphan", lazy="selectin")
+    rooms = relationship(
+        "ChatRoomUserAssociation",
+        back_populates="user_profile", cascade="all, delete", passive_deletes=True, lazy="selectin")
 
 
 class UserRelationship(Base):
@@ -52,8 +56,8 @@ class UserRelationship(Base):
     is_forbidden = Column(Boolean, default=False, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
 
-    my_profile = relationship("UserProfile", foreign_keys=[my_profile_id])
-    other_profile = relationship("UserProfile", foreign_keys=[other_profile_id])
+    my_profile = relationship("UserProfile", foreign_keys=[my_profile_id], lazy="selectin")
+    other_profile = relationship("UserProfile", foreign_keys=[other_profile_id], lazy="selectin")
 
 
 class UserProfileImage(S3Media):
@@ -65,7 +69,7 @@ class UserProfileImage(S3Media):
     is_default = Column(Boolean, default=False, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
 
-    profile = relationship("UserProfile", back_populates="images")
+    profile = relationship("UserProfile", back_populates="images", lazy="selectin")
 
     __mapper_args__ = {
         "polymorphic_identity": "user_profile_image"
@@ -80,4 +84,4 @@ class UserSession(TimestampMixin, Base):
     session_id = Column(String(150), nullable=False)
     expiry_at = Column(DateTime(timezone=True), nullable=False)
 
-    user = relationship("User", back_populates="sessions")
+    user = relationship("User", back_populates="sessions", lazy="selectin")
