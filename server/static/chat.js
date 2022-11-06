@@ -23,9 +23,9 @@ function establishWebSocketConnection() {
     const buttonSend = document.getElementById("send-button");
     const buttonStop = document.getElementById("stop-button");
     const label = document.getElementById("status-label");
+    const userProfileId = 1;
     const roomId = 1;
-    const userId = 1;
-    const socket = new WebSocket(`ws://localhost:8000/api/v1/chats/${roomId}/${userId}`);
+    const socket = new WebSocket(`ws://localhost:8000/api/v1/chats/${userProfileId}/${roomId}`);
 
     // 연결 성공
     socket.onopen = function (event) {
@@ -38,8 +38,16 @@ function establishWebSocketConnection() {
 
     // 서버가 데이터 송신 시, OnMessage 이벤트 발생
     socket.onmessage = function (event) {
-        if (typeof event.data == "string") {
-            label.innerHTML = label.innerHTML + "<br />" + event.data;
+        let data;
+        try {
+            const json = JSON.parse(event.data)
+            console.log('json - ', json);
+            if (json.type === 'message') {
+                data = json.data;
+                label.innerHTML = label.innerHTML + "<br />" + data.text;
+            }
+        } catch (e) {
+            console.log('Received wrong type message.')
         }
     }
 
@@ -69,7 +77,13 @@ function establishWebSocketConnection() {
 
     buttonSend.onclick = function () {
         if (socket.readyState === WebSocket.OPEN) {
-            socket.send(textView.value);
+            const data = {
+                'type': 'message',
+                'data': {
+                    'text': textView.value
+                }
+            };
+            socket.send(JSON.stringify(data));
         }
     }
 
