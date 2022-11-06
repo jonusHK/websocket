@@ -30,15 +30,9 @@ async def signup(user_s: user_schemas.UserCreate, session: AsyncSession = Depend
     db_user = await user_crud.get_user_by_uid(uid=user_s.uid)
     if db_user:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Already signed up.")
-    user = await user_crud.create_user(user_s)
-    await session.commit()
-    await session.refresh(user)
+    user = await user_crud.create(**user_s.dict())
 
-    user_profile_s = user_schemas.UserProfileCreate(
-        user_id=user.id,
-        nickname=user.name,
-        is_default=True)
-    await user_profile_crud.create_profile(user_profile_s)
+    await user_profile_crud.create(user=user, nickname=user.name, is_default=True)
     await session.commit()
 
     return jsonable_encoder(user)

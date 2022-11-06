@@ -54,31 +54,6 @@ async def exception_handler(request: Request, exc: ClassifiableException):
     return JSONResponse(**kwargs)
 
 
-class ConnectionManager:
-    def __init__(self):
-        self.active_connections: Mapping[str, List[WebSocket]] = {}
-
-    async def connect(self, websocket: WebSocket, room_id: str):
-        await websocket.accept()
-        connections_for_room = self.active_connections.get(room_id, [])
-        connections_for_room.append(websocket)
-        self.active_connections[room_id] = connections_for_room
-
-    def disconnect(self, websocket: WebSocket, room_id: str):
-        if websocket in self.active_connections[room_id]:
-            self.active_connections[room_id].remove(websocket)
-
-    async def send_personal_message(self, message: str, websocket: WebSocket):
-        await websocket.send_text(message)
-
-    async def broadcast(self, message: str, room_id: str):
-        for connection in self.active_connections[room_id]:
-            await connection.send_text(message)
-
-
-manager = ConnectionManager()
-
-
 @app.exception_handler(ClassifiableException)
 async def exception_handler(request: Request, exc: ClassifiableException):
     err_response = exc.code.retrieve()

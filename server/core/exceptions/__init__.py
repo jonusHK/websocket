@@ -1,5 +1,6 @@
 from fastapi import status, HTTPException
 from fastapi.exceptions import RequestValidationError
+from starlette.websockets import WebSocketDisconnect
 
 from server.core.enums import ResponseCode
 
@@ -31,10 +32,13 @@ class ExceptionHandler:
                 if hasattr(exc, status_key):
                     self.code = self.base_err.get(getattr(exc, status_key), self.code)
                     break
+
             if isinstance(exc, HTTPException):
                 self.error = exc.detail
             elif isinstance(exc, RequestValidationError):
                 self.error = exc.errors()
+            elif isinstance(exc, WebSocketDisconnect):
+                self.error = exc.reason
             else:
                 self.error = str(exc)
 
