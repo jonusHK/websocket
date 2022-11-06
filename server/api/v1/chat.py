@@ -1,38 +1,65 @@
+import logging
+from collections import defaultdict
+from datetime import datetime
 from typing import Dict, List
 
-from fastapi import Request, APIRouter
+from fastapi import APIRouter, Depends, HTTPException, Cookie, Query, Request
+from fastapi import WebSocket, WebSocketDisconnect
+from sqlalchemy.ext.asyncio import AsyncSession
+from starlette import status
 from starlette.responses import HTMLResponse
-from starlette.websockets import WebSocket, WebSocketDisconnect
 
-from server.api import templates
+from server.api import ExceptionHandlerRoute, templates
+from server.core.authentications import cookie, RoleChecker
 from server.core.constants import CLIENT_DISCONNECT
+from server.core.enums import UserType, ChatType
+from server.core.exceptions import ExceptionHandler
+from server.core.utils import get_tz
+from server.crud.service import ChatRoomUserAssociationCRUD, ChatRoomCRUD, ChatHistoryCRUD
+from server.crud.user import UserProfileCRUD
+from server.db.databases import get_async_session
+from server.models import service as service_models
+from server.models import user as user_models
+from server.schemas import chat as chat_schemas
 
-router = APIRouter()
+router = APIRouter(route_class=ExceptionHandlerRoute)
+
+logger = logging.getLogger("chat")
 
 
 class ConnectionManager:
     def __init__(self):
-        self.active_connections: Dict[int, List[WebSocket]] = {}
+        self.active_connections: Dict[int, List[WebSocket]] = defaultdict(list)
 
-    async def connect(self, websocket: WebSocket, room_id: int):
-        await websocket.accept()
-        connections_for_room = self.active_connections.get(room_id, [])
-        connections_for_room.append(websocket)
-        self.active_connections[room_id] = connections_for_room
+    async def connect(self, websocket: WebSocket, key: int):
+        if websocket not in self.active_connections[key]:
+            await websocket.accept()
+            self.active_connections[key].append(websocket)
 
-    def disconnect(self, websocket: WebSocket, room_id: int):
-        if websocket in self.active_connections[room_id]:
-            self.active_connections[room_id].remove(websocket)
+    async def disconnect(self, websocket: WebSocket, key: int, e: WebSocketDisconnect):
+        if websocket in self.active_connections[key]:
+            self.active_connections[key].remove(websocket)
+            await websocket.close(code=e.code, reason=e.reason)
 
-    async def send_personal_message(self, message: str, websocket: WebSocket):
-        await websocket.send_text(message)
+    async def unicast(self, data: dict, websocket: WebSocket):
+        await websocket.send_json(data)
 
-    async def broadcast(self, message: str, room_id: int):
-        for connection in self.active_connections[room_id]:
-            await connection.send_text(message)
+    async def broadcast(self, data: dict, key: int):
+        for connection in self.active_connections[key]:
+            await connection.send_json(data)
 
 
 manager = ConnectionManager()
+
+
+async def get_cookie(
+    websocket: WebSocket,
+    session: str | None = Cookie(default=None),
+    token: str | None = Query(default=None)
+):
+    if not session and not token:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+    return session or token
 
 
 @router.get("", response_class=HTMLResponse)
@@ -40,16 +67,173 @@ async def index(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
 
-@router.websocket("/{room_id}/{user_id}")
-async def chat_room_connected(websocket: WebSocket, room_id: int, user_id: int):
-    await manager.connect(websocket, room_id)
-    # TODO : DB 에서 room_id & user_id 매핑 여부 확인 -> 매핑되어 있지 않을 시 브로드캐스트로 입장 메시지 송신
+@router.post("/rooms/invite", dependencies=[Depends(cookie), Depends(RoleChecker([UserType.USER]))])
+async def chat_room_invite(
+    data: chat_schemas.ChatRoomRequest,
+    session: AsyncSession = Depends(get_async_session),
+    request_user: user_models.User = Depends(RoleChecker([UserType.USER]))
+):
+    """
+    대화방 초대
+    1) 기존 방에서 유저 초대
+    2) 새로운 대화방 초대
+    """
+    now = datetime.now(get_tz())
+
+    crud_user_profile = UserProfileCRUD(session)
+    crud_room_user_mapping = ChatRoomUserAssociationCRUD(session)
+    crud_room = ChatRoomCRUD(session)
+
+    user_profile = await crud_user_profile.get(
+        conditions=(
+            user_models.UserProfile.id == data.user_profile_id,
+            user_models.UserProfile.is_active == 1))
+    if user_profile.user.id != request_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authorized user profile.")
+
+    target_profiles = await crud_user_profile.list(conditions=(
+        user_models.UserProfile.id.in_(data.target_profile_ids),
+        user_models.UserProfile.is_active == 1))
+    if len(data.target_profile_ids) != len(target_profiles):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Not exists all for target profile ids.")
+
+    # 유저와 대화방 매핑
+    if not data.room_id:
+        default_room_name = ", ".join([user_profile.nickname] + [profile.nickname for profile in target_profiles])
+        room = await crud_room.create(name=default_room_name)
+        await session.flush()
+        current_room_user_mapping = None
+        current_profile_ids = set()
+    else:
+        room = await crud_room.get(conditions=(
+            service_models.ChatRoom.id == data.room_id,
+            service_models.ChatRoom.is_active == 1))
+        current_room_user_mapping = [p for p in room.user_profiles]
+        if not current_room_user_mapping:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Not exists any user for the room.")
+        if not next((m for m in current_room_user_mapping if m.user_profile_id == user_profile.id), None):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Not exist the user in the room.")
+        current_profile_ids = {m.user_profile_id for m in current_room_user_mapping}
+    add_profile_ids = set([data.user_profile_id] + data.target_profile_ids)
+    profile_ids = add_profile_ids - current_profile_ids
+    if not profile_ids:
+        return []
+    await crud_room_user_mapping.bulk_create([
+        dict(room_id=room.id, user_profile_id=profile_id) for profile_id in profile_ids])
+    await session.commit()
+    await session.refresh(room)
+
+    # 대화 초대 메시지 전송
+    target_msg = None
+    new_room_user_mapping = [m for m in room.user_profiles if m.user_profile_id in profile_ids]
+    if len(new_room_user_mapping) > 1:
+        target_msg = '님과 '.join([mapping.user_profile.nickname for mapping in new_room_user_mapping])
+    elif current_room_user_mapping:
+        target_msg = new_room_user_mapping[0].user_profile.nickname
+    if target_msg:
+        data = {
+            "type": "message",
+            "data": {
+                "text": f"{user_profile.nickname}님이 {target_msg}님을 초대했습니다.",
+                "timestamp": now.timestamp()
+            }
+        }
+        await manager.broadcast(data, room.id)
+
+    return profile_ids
+
+
+# TODO session_id 사용하여 user_profile_id 추출
+@router.websocket("/{user_profile_id}/{room_id}")
+async def chat(
+    websocket: WebSocket,
+    user_profile_id: int,
+    room_id: int,
+    session: AsyncSession = Depends(get_async_session),
+    # cookie: str = Depends(get_cookie)
+):
+    """
+    대화 방 입장 및 실시간 채팅
+    """
+    now = datetime.now(get_tz())
+
+    crud_user_profile = UserProfileCRUD(session)
+    crud_room = ChatRoomCRUD(session)
+    crud_chat_history = ChatHistoryCRUD(session)
+    try:
+        user_profile = await crud_user_profile.get(conditions=(
+            user_models.UserProfile.id == user_profile_id,
+            user_models.UserProfile.is_active == 1))
+        room = await crud_room.get(conditions=(
+            service_models.ChatRoom.id == int(room_id),
+            service_models.ChatRoom.is_active == 1))
+        room_user_mapping = [p for p in room.user_profiles]
+        if not room_user_mapping:
+            raise WebSocketDisconnect(
+                code=status.WS_1007_INVALID_FRAME_PAYLOAD_DATA,
+                reason="Not exist any user in the room.")
+        if not next((mapping for mapping in room_user_mapping
+                     if mapping.user_profile_id == user_profile.id), None):
+            raise WebSocketDisconnect(
+                code=status.WS_1007_INVALID_FRAME_PAYLOAD_DATA,
+                reason="Not exist the user in the room.")
+    except Exception as e:
+        code = e.code if isinstance(e, WebSocketDisconnect) else status.WS_1006_ABNORMAL_CLOSURE
+        await websocket.close(code=code)
+        raise WebSocketDisconnect(code=code, reason=ExceptionHandler(e).error)
+
+    # 웹소켓 연결
+    await manager.connect(websocket, room.id)
+
+    # 실시간 양방향 메시지 송수신
     try:
         while True:
-            data = await websocket.receive_text()
-            await manager.broadcast(f"User #{user_id} says: {data}", room_id)
+            data = await websocket.receive_json()
+            request_s = chat_schemas.ChatReceiveForm(**data)
+            if request_s.type == ChatType.UPDATE.name.lower():
+                if not request_s.data.history_ids:
+                    raise WebSocketDisconnect(
+                        code=status.WS_1007_INVALID_FRAME_PAYLOAD_DATA,
+                        reason="Not exists chat history ids.")
+                chat_histories = await crud_chat_history.list(conditions=(
+                    service_models.ChatHistory.id.in_(request_s.data.history_ids)))
+                chat_history_ids = [h.id for h in chat_histories]
+                # TODO 하드코딩 제거
+                for v in ("is_active",):
+                    if getattr(request_s.data, v) is not None:
+                        await crud_chat_history.update(
+                            values={v: getattr(request_s.data, v)},
+                            conditions=(service_models.ChatHistory.id.in_(chat_history_ids)))
+                        await session.commit()
+                        await session.refresh(room)
+
+            response_s = chat_schemas.ChatSendForm(
+                type=request_s.type,
+                data=chat_schemas.ChatSendData(
+                    user_profile_id=user_profile_id,
+                    nickname=user_profile.nickname,
+                    timestamp=now.timestamp(),
+                    text=request_s.data.text,
+                    history_ids=request_s.data.history_ids,
+                    file_urls=request_s.data.file_urls,
+                    is_active=request_s.data.is_active))
+            await manager.broadcast(response_s.dict(), room.id)
     except WebSocketDisconnect as e:
-        # 반드시 웹소켓 연결 해제 후, 브로드캐스트 진행
-        manager.disconnect(websocket, room_id)
-        if e.code == CLIENT_DISCONNECT:
-            await manager.broadcast(f"User #{user_id} left the chat", room_id)
+        logger.warning(
+            f"Error - room_id: {room.id}, user_profile_id: {user_profile_id}, "
+            f"code: {e.code}, reason: {e.reason}")
+        if e.code == status.WS_1001_GOING_AWAY:
+            await manager.disconnect(websocket, room.id, e)
+            data = {
+                "type": ChatType.MESSAGE.name.lower(),
+                "data": {
+                    "text": f"{user_profile.nickname}님이 나갔습니다."
+                }
+            }
+            await manager.broadcast(data, room.id)
