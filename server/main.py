@@ -54,30 +54,5 @@ async def exception_handler(request: Request, exc: ClassifiableException):
     return JSONResponse(**kwargs)
 
 
-@app.exception_handler(ClassifiableException)
-async def exception_handler(request: Request, exc: ClassifiableException):
-    err_response = exc.code.retrieve()
-    err_response.update({
-        "data": exc.detail
-    })
-    kwargs = {
-        "status_code": exc.status_code,
-        "content": jsonable_encoder(err_response)
-    }
-    return JSONResponse(**kwargs)
-
-
-# @app.websocket_route("/chat")
-# class WebSocketChat(WebSocketEndpoint):
-#     async def on_connect(self, websocket):
-#         await manager.connect(websocket)
-#
-#     async def on_receive(self, websocket: WebSocket, data) -> None:
-#         await manager.send_personal_message(f"You wrote: {data}", websocket)
-#
-#     async def on_disconnect(self, websocket, close_code):
-#         await websocket.close(code=status.WS_1001_GOING_AWAY)
-
-
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

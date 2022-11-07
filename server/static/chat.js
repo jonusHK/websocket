@@ -90,7 +90,8 @@ function establishWebSocketConnection() {
     buttonStop.onclick = function () {
         if (socket.readyState === WebSocket.OPEN) {
             selfClosing = true;
-            socket.close(4000, 'self closing');
+            // 여기선 1001 코드 작동 안함 -> 추후 Vue.js 에서 1001로 사용
+            socket.close(1001, 'self closing');
         }
     }
 }

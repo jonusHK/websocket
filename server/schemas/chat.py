@@ -14,7 +14,7 @@ class ChatRoomRequest(BaseModel):
 class ChatDataBase(BaseModel):
     text: Optional[str] = None
     history_ids: Optional[List[int]] = None
-    file_urls: Optional[List[str]] = None
+    file_ids: Optional[List[int]] = None
     is_active: bool = True
 
 
@@ -33,18 +33,18 @@ class ChatReceiveForm(BaseModel):
     data: ChatReceiveData
 
     @validator("type")
-    def check_type(cls, v):
+    def get_type(cls, v):
         if v not in (e.name.lower() for e in ChatType):
             raise ValueError("Invalid `type` value.")
-        return v
+        return ChatType.get_by_name(v)
 
 
 class ChatSendForm(BaseModel):
-    type: str
+    type: ChatType
     data: ChatSendData
 
     @validator("type")
-    def check_type(cls, v):
-        if v not in (e.name.lower() for e in ChatType):
+    def get_type(cls, v):
+        if v not in ChatType:
             raise ValueError("Invalid `type` value.")
-        return v
+        return v.name.lower()
