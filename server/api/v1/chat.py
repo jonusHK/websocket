@@ -39,7 +39,6 @@ class ConnectionManager:
     async def disconnect(self, websocket: WebSocket, key: int, e: WebSocketDisconnect):
         if websocket in self.active_connections[key]:
             self.active_connections[key].remove(websocket)
-            await websocket.close(code=e.code, reason=e.reason)
 
     async def unicast(self, data: dict, websocket: WebSocket):
         await websocket.send_json(data)
@@ -166,6 +165,7 @@ async def chat(
     crud_user_profile = UserProfileCRUD(session)
     crud_room = ChatRoomCRUD(session)
     crud_chat_history = ChatHistoryCRUD(session)
+    crud_room_user_mapping = ChatRoomUserAssociationCRUD(session)
     try:
         user_profile = await crud_user_profile.get(conditions=(
             user_models.UserProfile.id == user_profile_id,
@@ -194,9 +194,15 @@ async def chat(
     # 실시간 양방향 메시지 송수신
     try:
         while True:
+            # 동일한 유저가 여러 웹소켓을 연결한 상태에서 다른 웹소켓 연결을 끊은 경우
+            await session.refresh(room)
+            if user_profile_id not in (p.user_profile_id for p in room.user_profiles):
+                raise WebSocketDisconnect(code=status.WS_1001_GOING_AWAY, reason="Left the chat room.")
+
             data = await websocket.receive_json()
             request_s = chat_schemas.ChatReceiveForm(**data)
-            if request_s.type == ChatType.UPDATE.name.lower():
+            # 업데이트 요청
+            if request_s.type == ChatType.UPDATE:
                 if not request_s.data.history_ids:
                     raise WebSocketDisconnect(
                         code=status.WS_1007_INVALID_FRAME_PAYLOAD_DATA,
@@ -204,14 +210,26 @@ async def chat(
                 chat_histories = await crud_chat_history.list(conditions=(
                     service_models.ChatHistory.id.in_(request_s.data.history_ids)))
                 chat_history_ids = [h.id for h in chat_histories]
-                # TODO 하드코딩 제거
-                for v in ("is_active",):
+                for v in (service_models.ChatHistory.is_active.name,):
                     if getattr(request_s.data, v) is not None:
                         await crud_chat_history.update(
                             values={v: getattr(request_s.data, v)},
                             conditions=(service_models.ChatHistory.id.in_(chat_history_ids)))
-                        await session.commit()
-                        await session.refresh(room)
+            # 메시지 요청
+            elif request_s.type == ChatType.MESSAGE:
+                await crud_chat_history.create(
+                    room_id=room_id,
+                    user_profile_id=user_profile_id,
+                    contents=request_s.data.text)
+            # 파일 요청
+            else:
+                await crud_chat_history.bulk_create(values=[
+                    dict(
+                        room_id=room_id,
+                        user_profile_id=user_profile_id,
+                        s3_media_id=_id
+                    ) for _id in request_s.data.file_ids])
+            await session.commit()
 
             response_s = chat_schemas.ChatSendForm(
                 type=request_s.type,
@@ -221,19 +239,29 @@ async def chat(
                     timestamp=now.timestamp(),
                     text=request_s.data.text,
                     history_ids=request_s.data.history_ids,
-                    file_urls=request_s.data.file_urls,
+                    file_ids=request_s.data.file_ids,
                     is_active=request_s.data.is_active))
-            await manager.broadcast(response_s.dict(), room.id)
+            await manager.broadcast(response_s.dict(), room_id)
     except WebSocketDisconnect as e:
         logger.warning(
             f"Error - room_id: {room.id}, user_profile_id: {user_profile_id}, "
             f"code: {e.code}, reason: {e.reason}")
         if e.code == status.WS_1001_GOING_AWAY:
-            await manager.disconnect(websocket, room.id, e)
+            # 유저와 대화방 연결 해제
+            await crud_room_user_mapping.delete(conditions=(
+                service_models.ChatRoomUserAssociation.room_id == room_id,
+                service_models.ChatRoomUserAssociation.user_profile_id == user_profile_id))
+            await session.commit()
+            # 유저 연결 해제 메시지 브로드캐스트
             data = {
                 "type": ChatType.MESSAGE.name.lower(),
                 "data": {
                     "text": f"{user_profile.nickname}님이 나갔습니다."
                 }
             }
+            await manager.disconnect(websocket, room.id, e)
             await manager.broadcast(data, room.id)
+    except Exception as e:
+        logger.exception(
+            f"Error - room_id: {room_id}, user_profile_id: {user_profile_id}, "
+            f"reason: {e}")
