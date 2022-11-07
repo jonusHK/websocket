@@ -1,7 +1,7 @@
 from typing import Optional, List, Dict, Any
 
 from fastapi import HTTPException
-from sqlalchemy import update, select, insert, text
+from sqlalchemy import update, select, insert, text, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette import status
 
@@ -13,10 +13,7 @@ class CRUDBase:
         self.session = session
 
     async def get(self, conditions: tuple, options: Optional[list] = None):
-        stmt = (
-            select(self.model).
-            where(*conditions)
-        )
+        stmt = select(self.model).where(*conditions)
         if options:
             for option in options:
                 stmt = stmt.options(option)
@@ -30,17 +27,15 @@ class CRUDBase:
         self,
         offset=0,
         limit=100,
-        order_by: Optional[tuple] = tuple(),
-        conditions: Optional[tuple] = tuple(),
+        order_by: Optional[tuple] = (),
+        conditions: Optional[tuple] = (),
         options: Optional[list] = None
     ):
-        stmt = (
-            select(self.model).
-            offset(offset).
-            limit(limit).
-            where(*conditions).
-            order_by(*order_by)
-        )
+        stmt = select(self.model).offset(offset).limit(limit)
+        if order_by:
+            stmt.order_by(*order_by)
+        if conditions:
+            stmt.where(*conditions)
         if options:
             for option in options:
                 stmt = stmt.options(option)
@@ -53,10 +48,7 @@ class CRUDBase:
         return instance
 
     async def bulk_create(self, values=List[Dict[str, Any]]):
-        stmt = (
-            insert(self.model).
-            values(values)
-        )
+        stmt = insert(self.model).values(values)
         await self.session.execute(stmt)
 
     async def update(self, values: dict, conditions: tuple):
@@ -68,3 +60,7 @@ class CRUDBase:
         )
         result = await self.session.execute(stmt)
         return result
+
+    async def delete(self, conditions: tuple):
+        stmt = delete(self.model).where(*conditions)
+        await self.session.execute(stmt)
