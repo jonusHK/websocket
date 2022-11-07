@@ -32,8 +32,10 @@ class ChatHistory(TimestampMixin, Base):
 
     id = Column(BigInteger, primary_key=True, index=True)
     room_id = Column(BigInteger, ForeignKey("chat_rooms.id"), nullable=False)
+    user_profile_id = Column(BigInteger, ForeignKey("user_profiles.id", ondelete="CASCADE"))
     contents = Column(Text, nullable=True)
     s3_media_id = Column(BigInteger, ForeignKey("s3_media.id"), nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
 
     room = relationship("ChatRoom", back_populates="histories", lazy="selectin")
+    user_profile = relationship("UserProfile", back_populates="histories", lazy="selectin")
