@@ -1,4 +1,4 @@
-import datetime
+from datetime import datetime
 from uuid import uuid4, UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from server.api import ExceptionHandlerRoute
 from server.core.authentications import SessionData, backend, cookie, verifier, RoleChecker
 from server.core.enums import UserType
-from server.core.utils import verify_password, get_tz
+from server.core.utils import verify_password
 from server.crud.user import UserCRUD, UserProfileCRUD
 from server.db.databases import get_async_session
 from server.models import user as user_models
@@ -53,7 +53,7 @@ async def login(data: SessionData, response: Response, session: AsyncSession = D
 
     await backend.create(session_id, data, session)
     cookie.attach_to_response(response, session_id)
-    await UserCRUD(session).update_user(user.id, last_login=datetime.datetime.now(get_tz()))
+    await UserCRUD(session).update_user(user.id, last_login=datetime.now().astimezone())
     await session.commit()
     await session.refresh(user)
     return jsonable_encoder(user)

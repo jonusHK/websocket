@@ -1,5 +1,5 @@
-import datetime
 from abc import ABC, abstractmethod
+from datetime import datetime, timedelta
 from typing import Generic, Optional, List
 from uuid import UUID
 
@@ -13,7 +13,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from server.core.authentications.constants import SESSION_AGE, COOKIE_NAME, SESSION_IDENTIFIER
 from server.core.enums import UserType
-from server.core.utils import get_tz
 from server.crud.user import UserCRUD, UserSessionCRUD
 from server.db.databases import get_async_session, settings, async_session
 from server.models import user as user_models
@@ -107,7 +106,7 @@ class DatabaseBackend(Generic[ID, SessionModel], SessionDatabaseBackend[ID, Sess
 
     async def create(self, session_id: ID, data: SessionModel, session: AsyncSession):
         user: user_models.User = await UserCRUD(session).get_user_by_uid(data.uid)
-        expiry_at = datetime.datetime.now(get_tz()) + datetime.timedelta(seconds=self.cookie_params.max_age)
+        expiry_at = datetime.now().astimezone() + timedelta(seconds=self.cookie_params.max_age)
         session_create_s = user_schemas.UserSessionCreate(
             user_id=user.id,
             session_id=str(session_id),  # 저장 되는 쿠키 값: str(cookie.signer.dumps(session_id.hex))
@@ -164,7 +163,7 @@ class BasicVerifier(SessionDatabaseVerifier[UUID, SessionData]):
         return self._auth_http_exception
 
     def verify_session(self, schema: user_schemas.UserSession) -> bool:
-        return schema.expiry_at.astimezone() >= datetime.datetime.now(get_tz())
+        return schema.expiry_at.astimezone() >= datetime.now().astimezone()
 
 
 cookie_params = CookieParameters(max_age=SESSION_AGE)
