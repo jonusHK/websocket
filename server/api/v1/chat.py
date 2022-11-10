@@ -11,16 +11,15 @@ from starlette.responses import HTMLResponse
 
 from server.api import ExceptionHandlerRoute, templates
 from server.core.authentications import cookie, RoleChecker
-from server.core.constants import CLIENT_DISCONNECT
 from server.core.enums import UserType, ChatType
 from server.core.exceptions import ExceptionHandler
-from server.core.utils import get_tz
 from server.crud.service import ChatRoomUserAssociationCRUD, ChatRoomCRUD, ChatHistoryCRUD
 from server.crud.user import UserProfileCRUD
 from server.db.databases import get_async_session
 from server.models import service as service_models
 from server.models import user as user_models
 from server.schemas import chat as chat_schemas
+from server.schemas import service as service_schemas
 
 router = APIRouter(route_class=ExceptionHandlerRoute)
 
@@ -66,19 +65,17 @@ async def index(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
 
-@router.post("/rooms/invite", dependencies=[Depends(cookie), Depends(RoleChecker([UserType.USER]))])
-async def chat_room_invite(
-    data: chat_schemas.ChatRoomRequest,
+@router.post("/rooms/create", dependencies=[Depends(cookie), Depends(RoleChecker([UserType.USER]))])
+async def chat_room_create(
+    data: chat_schemas.ChatRoomCreate,
     session: AsyncSession = Depends(get_async_session),
     request_user: user_models.User = Depends(RoleChecker([UserType.USER]))
 ):
     """
-    대화방 초대
-    1) 기존 방에서 유저 초대
-    2) 새로운 대화방 초대
+    대화방 생성
+    1) 1:1
+    2) 1:N
     """
-    now = datetime.now(get_tz())
-
     crud_user_profile = UserProfileCRUD(session)
     crud_room_user_mapping = ChatRoomUserAssociationCRUD(session)
     crud_room = ChatRoomCRUD(session)
@@ -90,7 +87,6 @@ async def chat_room_invite(
     if user_profile.user.id != request_user.id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authorized user profile.")
-
     target_profiles = await crud_user_profile.list(conditions=(
         user_models.UserProfile.id.in_(data.target_profile_ids),
         user_models.UserProfile.is_active == 1))
@@ -99,26 +95,10 @@ async def chat_room_invite(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Not exists all for target profile ids.")
 
     # 유저와 대화방 매핑
-    if not data.room_id:
-        default_room_name = ", ".join([user_profile.nickname] + [profile.nickname for profile in target_profiles])
-        room = await crud_room.create(name=default_room_name)
-        await session.flush()
-        current_room_user_mapping = None
-        current_profile_ids = set()
-    else:
-        room = await crud_room.get(conditions=(
-            service_models.ChatRoom.id == data.room_id,
-            service_models.ChatRoom.is_active == 1))
-        current_room_user_mapping = [p for p in room.user_profiles]
-        if not current_room_user_mapping:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Not exists any user for the room.")
-        if not next((m for m in current_room_user_mapping if m.user_profile_id == user_profile.id), None):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Not exist the user in the room.")
-        current_profile_ids = {m.user_profile_id for m in current_room_user_mapping}
+    default_room_name = ", ".join([user_profile.nickname] + [profile.nickname for profile in target_profiles])
+    room = await crud_room.create(name=default_room_name)
+    await session.flush()
+    current_profile_ids = set()
     add_profile_ids = set([data.user_profile_id] + data.target_profile_ids)
     profile_ids = add_profile_ids - current_profile_ids
     if not profile_ids:
@@ -127,23 +107,6 @@ async def chat_room_invite(
         dict(room_id=room.id, user_profile_id=profile_id) for profile_id in profile_ids])
     await session.commit()
     await session.refresh(room)
-
-    # 대화 초대 메시지 전송
-    target_msg = None
-    new_room_user_mapping = [m for m in room.user_profiles if m.user_profile_id in profile_ids]
-    if len(new_room_user_mapping) > 1:
-        target_msg = '님과 '.join([mapping.user_profile.nickname for mapping in new_room_user_mapping])
-    elif current_room_user_mapping:
-        target_msg = new_room_user_mapping[0].user_profile.nickname
-    if target_msg:
-        data = {
-            "type": "message",
-            "data": {
-                "text": f"{user_profile.nickname}님이 {target_msg}님을 초대했습니다.",
-                "timestamp": now.timestamp()
-            }
-        }
-        await manager.broadcast(data, room.id)
 
     return profile_ids
 
@@ -160,7 +123,7 @@ async def chat(
     """
     대화 방 입장 및 실시간 채팅
     """
-    now = datetime.now(get_tz())
+    now = datetime.now().astimezone()
 
     crud_user_profile = UserProfileCRUD(session)
     crud_room = ChatRoomCRUD(session)
@@ -222,13 +185,68 @@ async def chat(
                     user_profile_id=user_profile_id,
                     contents=request_s.data.text)
             # 파일 요청
-            else:
+            elif request_s.type == ChatType.FILE:
                 await crud_chat_history.bulk_create(values=[
                     dict(
                         room_id=room_id,
                         user_profile_id=user_profile_id,
                         s3_media_id=_id
                     ) for _id in request_s.data.file_ids])
+            # 대화내용 조회
+            elif request_s.type == ChatType.LOOKUP:
+                if not request_s.data.offset or not request_s.data.limit:
+                    raise WebSocketDisconnect(
+                        code=status.WS_1007_INVALID_FRAME_PAYLOAD_DATA,
+                        reason="Not exists offset or limit for page.")
+                chat_histories = await crud_chat_history.list(
+                    offset=request_s.data.offset,
+                    limit=request_s.data.limit,
+                    order_by=(getattr(service_models.ChatHistory, request_s.data.order_by),),
+                    conditions=(service_models.ChatHistory.is_active == 1,))
+                response_s = chat_schemas.ChatSendForm(
+                    type=ChatType.LOOKUP,
+                    data=chat_schemas.ChatSendData(
+                        user_profile_id=user_profile_id,
+                        nickname=user_profile.nickname,
+                        histories=[
+                            service_schemas.ChatHistory.from_orm(h) for h in chat_histories],
+                        timestamp=now.timestamp()))
+                await manager.broadcast(response_s.dict(), room.id)
+                continue
+            # 유저 초대
+            else:
+                current_profile_ids = {m.user_profile_id for m in room_user_mapping}
+                target_user_profile_ids = request_s.data.target_user_profile_ids
+                if not target_user_profile_ids:
+                    raise WebSocketDisconnect(
+                        code=status.WS_1007_INVALID_FRAME_PAYLOAD_DATA,
+                        reason="Not exists user profile ids for invite")
+                add_profile_ids = set(request_s.data.target_user_profile_ids)
+                profile_ids = add_profile_ids - current_profile_ids
+                if profile_ids:
+                    await crud_room_user_mapping.bulk_create([
+                        dict(
+                            room_id=room.id, user_profile_id=profile_id
+                        ) for profile_id in profile_ids])
+                    await session.commit()
+                    await session.refresh(room)
+                    # 대화방 초대 메시지 전송
+                    new_user_profiles = [m.user_profile for m in room.user_profiles if m.user_profile_id in profile_ids]
+                    if len(new_user_profiles) > 1:
+                        target_msg = '님과 '.join([profile.nickname for profile in new_user_profiles])
+                    else:
+                        target_msg = new_user_profiles[0].nickname
+                    response_s = chat_schemas.ChatSendForm(
+                        type=ChatType.MESSAGE,
+                        data=chat_schemas.ChatSendData(
+                            user_profile_id=user_profile_id,
+                            nickname=user_profile.nickname,
+                            text=f"{user_profile.nickname}님이 {target_msg}님을 초대했습니다.",
+                            timestamp=now.timestamp()
+                        ))
+                    await manager.broadcast(response_s.dict(), room.id)
+                    continue
+
             await session.commit()
 
             response_s = chat_schemas.ChatSendForm(
@@ -253,14 +271,13 @@ async def chat(
                 service_models.ChatRoomUserAssociation.user_profile_id == user_profile_id))
             await session.commit()
             # 유저 연결 해제 메시지 브로드캐스트
-            data = {
-                "type": ChatType.MESSAGE.name.lower(),
-                "data": {
-                    "text": f"{user_profile.nickname}님이 나갔습니다."
-                }
-            }
+            response_s = chat_schemas.ChatSendForm(
+                type=ChatType.MESSAGE,
+                data=chat_schemas.ChatSendData(
+                    text=f"{user_profile.nickname}님이 나갔습니다.",
+                    timestamp=now.timestamp()))
             await manager.disconnect(websocket, room.id, e)
-            await manager.broadcast(data, room.id)
+            await manager.broadcast(response_s.dict(), room.id)
     except Exception as e:
         logger.exception(
             f"Error - room_id: {room_id}, user_profile_id: {user_profile_id}, "
