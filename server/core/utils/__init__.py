@@ -26,10 +26,6 @@ class IntTypeEnum(TypeDecorator):
             return self.enum_class(value)
 
 
-def get_tz(tz='Asia/Seoul'):
-    return timezone(tz)
-
-
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 

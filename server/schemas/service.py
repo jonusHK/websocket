@@ -1,6 +1,7 @@
 from datetime import datetime
+from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Extra
 
 
 class ChatRoomBase(BaseModel):
@@ -48,8 +49,12 @@ class ChatHistoryCreate(ChatHistoryBase):
 class ChatHistory(ChatHistoryBase):
     id: int
     room_id: int
-    s3_media_id: int
+    s3_media_id: Optional[int] = None
     created: datetime
 
     class Config:
         orm_model = True
+        extra = Extra.allow
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
+        }

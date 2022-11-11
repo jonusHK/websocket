@@ -5,10 +5,9 @@ from pydantic import BaseModel, validator
 from server.core.enums import ChatType
 
 
-class ChatRoomRequest(BaseModel):
+class ChatRoomCreate(BaseModel):
     user_profile_id: int
     target_profile_ids: List[int]
-    room_id: Optional[int] = None
 
 
 class ChatDataBase(BaseModel):
@@ -19,12 +18,17 @@ class ChatDataBase(BaseModel):
 
 
 class ChatReceiveData(ChatDataBase):
-    pass
+    target_user_profile_ids: Optional[List[int]] = None
+    offset: Optional[int] = None
+    limit: Optional[int] = None
+    order_by: str = 'created'
 
 
 class ChatSendData(ChatDataBase):
-    user_profile_id: int
-    nickname: str
+    from server.schemas.service import ChatHistory
+    user_profile_id: Optional[int] = None
+    nickname: Optional[str] = None
+    histories: Optional[List[ChatHistory]] = None
     timestamp: int
 
 

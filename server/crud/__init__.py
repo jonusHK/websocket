@@ -1,7 +1,7 @@
 from typing import Optional, List, Dict, Any
 
 from fastapi import HTTPException
-from sqlalchemy import update, select, insert, text, delete
+from sqlalchemy import update, select, insert, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette import status
 
