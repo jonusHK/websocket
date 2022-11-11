@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 from collections import defaultdict
 from datetime import datetime
@@ -141,13 +142,15 @@ async def chat(
     async def producer_handler(pub: Redis, ws: WebSocket):
         try:
             while True:
-                # 동일한 유저가 여러 웹소켓을 연결한 상태에서 다른 웹소켓 연결을 끊은 경우
-                await session.refresh(room)
-                if user_profile_id not in (p.user_profile_id for p in room.user_profiles):
-                    raise WebSocketDisconnect(code=status.WS_1001_GOING_AWAY, reason="Left the chat room.")
-
                 data = await ws.receive_json()
-                if data:
+                if not data:
+                    continue
+                try:
+                    # 동일한 유저가 여러 웹소켓을 연결한 상태에서 다른 웹소켓 연결을 끊은 경우
+                    await session.refresh(room)
+                    if user_profile_id not in (p.user_profile_id for p in room.user_profiles):
+                        raise WebSocketDisconnect(code=status.WS_1001_GOING_AWAY, reason="Left the chat room.")
+
                     request_s = chat_schemas.ChatReceiveForm(**data)
                     # 업데이트 요청
                     if request_s.type == ChatType.UPDATE:
@@ -192,12 +195,10 @@ async def chat(
                         response_s = chat_schemas.ChatSendForm(
                             type=ChatType.LOOKUP,
                             data=chat_schemas.ChatSendData(
-                                user_profile_id=user_profile_id,
-                                nickname=user_profile.nickname,
                                 histories=[
                                     service_schemas.ChatHistory.from_orm(h) for h in chat_histories],
                                 timestamp=now.timestamp()))
-                        await pub.publish(f"chat:{room_id}", jsonable_encoder(response_s))
+                        await pub.publish(f"chat:{room_id}", response_s.json())
                         continue
                     # 유저 초대
                     else:
@@ -226,12 +227,10 @@ async def chat(
                             response_s = chat_schemas.ChatSendForm(
                                 type=ChatType.MESSAGE,
                                 data=chat_schemas.ChatSendData(
-                                    user_profile_id=user_profile_id,
-                                    nickname=user_profile.nickname,
                                     text=f"{user_profile.nickname}님이 {target_msg}님을 초대했습니다.",
                                     timestamp=now.timestamp()
                                 ))
-                            await pub.publish(f"chat:{room_id}", jsonable_encoder(response_s))
+                            await pub.publish(f"chat:{room_id}", response_s.json())
                             continue
 
                     await session.commit()
@@ -245,14 +244,23 @@ async def chat(
                             history_ids=request_s.data.history_ids,
                             file_ids=request_s.data.file_ids,
                             is_active=request_s.data.is_active))
-                    await pub.publish(f"chat:{room_id}", jsonable_encoder(response_s))
+                    await pub.publish(f"chat:{room_id}", response_s.json())
+                except WebSocketDisconnect as exc:
+                    raise exc
+                except Exception as exc:
+                    logger.error(get_log_error(exc))
         except WebSocketDisconnect as e:
             logger.error(get_log_error(e))
-            if e.code == status.WS_1001_GOING_AWAY:
+            delete_conditions = (
+                service_models.ChatRoomUserAssociation.room_id == room_id,
+                service_models.ChatRoomUserAssociation.user_profile_id == user_profile_id)
+            try:
+                await crud_room_user_mapping.get(conditions=delete_conditions)
+            except Exception:
+                pass
+            else:
                 # 유저와 대화방 연결 해제
-                await crud_room_user_mapping.delete(conditions=(
-                    service_models.ChatRoomUserAssociation.room_id == room_id,
-                    service_models.ChatRoomUserAssociation.user_profile_id == user_profile_id))
+                await crud_room_user_mapping.delete(conditions=delete_conditions)
                 await session.commit()
                 # 유저 연결 해제 메시지 전송
                 response_s = chat_schemas.ChatSendForm(
@@ -260,11 +268,8 @@ async def chat(
                     data=chat_schemas.ChatSendData(
                         text=f"{user_profile.nickname}님이 나갔습니다.",
                         timestamp=now.timestamp()))
-                await pub.publish(f"chat:{room_id}", jsonable_encoder(response_s))
-                await websocket.close(code=e.code)
-                raise e
-        except Exception as e:
-            logger.error(get_log_error(e))
+                await pub.publish(f"chat:{room_id}", response_s.json())
+            raise e
 
     async def consumer_handler(psub: PubSub, ws: WebSocket):
         try:
@@ -274,7 +279,7 @@ async def chat(
                     while True:
                         message = await p.get_message(ignore_subscribe_messages=True)
                         if message:
-                            await ws.send_json(message.get('data').decode('utf-8'))
+                            await ws.send_json(json.loads(message.get('data')))
                 except asyncio.CancelledError as e:
                     await p.unsubscribe()
                     raise e
