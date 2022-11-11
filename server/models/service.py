@@ -39,14 +39,3 @@ class ChatHistory(TimestampMixin, Base):
 
     room = relationship("ChatRoom", back_populates="histories", lazy="selectin")
     user_profile = relationship("UserProfile", back_populates="histories", lazy="selectin")
-
-
-class ChatHistoryUserAssociation(Base):
-    __tablename__ = "chat_history_user_association"
-
-    history_id = Column(BigInteger, ForeignKey("chat_histories.id", ondelete="CASCADE"), primary_key=True)
-    user_profile_id = Column(BigInteger, ForeignKey("user_profiles.id", ondelete="CASCADE"), primary_key=True)
-    is_read = Column(Boolean, default=False, nullable=False)
-
-    history = relationship("ChatHistory", back_populates="user_profiles", lazy="selectin")
-    user_profile = relationship("UserProfile", back_populates="histories", lazy="selectin")
