@@ -26,8 +26,8 @@ class ChatReceiveData(ChatDataBase):
 
 class ChatSendData(ChatDataBase):
     from server.schemas.service import ChatHistory
-    user_profile_id: int
-    nickname: str
+    user_profile_id: Optional[int] = None
+    nickname: Optional[str] = None
     histories: Optional[List[ChatHistory]] = None
     timestamp: int
 
