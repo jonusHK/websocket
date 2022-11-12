@@ -2,49 +2,55 @@ from typing import List, Optional
 
 from pydantic import BaseModel
 
-from server.core.externals.redis.mixin import ListCollectionMixin, StringCollectionMixin
+from server.core.externals.redis.mixin import ListCollectionMixin, StringCollectionMixin, SortedSetCollectionMixin
 
 
-class RedisUserProfileByRoom(BaseModel):
+class RedisUserProfileByRoomS(BaseModel):
     id: int
     nickname: str
     is_active: bool
 
 
-class RedisChatHistoryByRoom(BaseModel):
+class RedisFileS(BaseModel):
+    id: int
+    url: str
+
+
+class RedisChatHistoryByRoomS(BaseModel):
     id: int
     user_profile_id: int
     contents: Optional[str] = None
-    files: Optional[List[str]] = []
+    files: Optional[List[RedisFileS]] = []
     read_user_ids: List[int] = []
+    timestamp: int
     is_active: bool
 
 
-class RedisChatRoomByUserProfile(BaseModel):
+class RedisChatRoomByUserProfileS(BaseModel):
     id: int
     unread_msg_cnt: int
 
 
-class RedisChatRoomDetail(StringCollectionMixin, BaseModel):
-    format = 'room:{}'
-
+class RedisChatRoomS(BaseModel):
     name: int
     is_active: bool
 
 
-class RedisUserProfilesByRoom(ListCollectionMixin, BaseModel):
+class RedisChatRoomDetailS(StringCollectionMixin, BaseModel):
+    format = 'room:{}'
+    schema = RedisChatRoomS
+
+
+class RedisUserProfilesByRoomS(ListCollectionMixin):
     format = 'room:{}:user_profiles'
+    schema = RedisUserProfileByRoomS
 
-    data: List[RedisUserProfileByRoom]
 
-
-class RedisChatHistoriesByRoom(ListCollectionMixin, BaseModel):
+class RedisChatHistoriesByRoomS(SortedSetCollectionMixin):
     format = 'room:{}:chat_histories'
+    schema = RedisChatHistoryByRoomS
 
-    data: List[RedisChatHistoryByRoom]
 
-
-class RedisChatRoomsByUserProfile(ListCollectionMixin, BaseModel):
+class RedisChatRoomsByUserProfileS(ListCollectionMixin):
     format = 'user:{}:chat_rooms'
-
-    data: List[RedisChatRoomByUserProfile]
+    schema = RedisChatRoomByUserProfileS
