@@ -14,11 +14,13 @@ class ChatDataBase(BaseModel):
     text: Optional[str] = None
     history_ids: Optional[List[int]] = None
     file_ids: Optional[List[int]] = None
+    timestamp: float | int
     is_active: bool = True
 
 
 class ChatReceiveData(ChatDataBase):
     target_user_profile_ids: Optional[List[int]] = None
+    is_read: Optional[bool] = None
     offset: Optional[int] = None
     limit: Optional[int] = None
     order_by: str = 'created'
@@ -29,7 +31,7 @@ class ChatSendData(ChatDataBase):
     user_profile_id: Optional[int] = None
     nickname: Optional[str] = None
     histories: Optional[List[ChatHistory]] = None
-    timestamp: int
+    timestamp: float | int
 
 
 class ChatReceiveForm(BaseModel):
