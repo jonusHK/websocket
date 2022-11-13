@@ -1,6 +1,6 @@
+from fastapi import WebSocketDisconnect
 from fastapi import status, HTTPException
 from fastapi.exceptions import RequestValidationError
-from starlette.websockets import WebSocketDisconnect
 
 from server.core.enums import ResponseCode
 

@@ -1,10 +1,6 @@
-from typing import Optional
-
-from fastapi import HTTPException
 from sqlalchemy import select, update, delete
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import contains_eager, joinedload
-from starlette import status
+from sqlalchemy.orm import contains_eager
 
 from server.core.utils import hash_password
 from server.crud import CRUDBase
