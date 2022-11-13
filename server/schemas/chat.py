@@ -10,6 +10,7 @@ class ChatRoomCreate(BaseModel):
     target_profile_ids: List[int]
 
 
+# TODO ChatType 에 따라 분기 처리
 class ChatDataBase(BaseModel):
     text: Optional[str] = None
     history_ids: Optional[List[int]] = None
@@ -27,11 +28,12 @@ class ChatReceiveData(ChatDataBase):
 
 
 class ChatSendData(ChatDataBase):
-    from server.schemas.service import ChatHistory
+    from server.core.externals.redis.schemas import RedisChatHistoryByRoomS
+    from server.core.externals.redis.schemas import RedisFileS
     user_profile_id: Optional[int] = None
     nickname: Optional[str] = None
-    histories: Optional[List[ChatHistory]] = None
-    timestamp: float | int
+    histories: Optional[List[RedisChatHistoryByRoomS]] = None
+    files: Optional[List[RedisFileS]] = None
 
 
 class ChatReceiveForm(BaseModel):
