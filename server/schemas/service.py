@@ -49,7 +49,6 @@ class ChatHistoryCreate(ChatHistoryBase):
 class ChatHistory(ChatHistoryBase):
     id: int
     room_id: int
-    s3_media_id: Optional[int] = None
     created: datetime
 
     class Config:

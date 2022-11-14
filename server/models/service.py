@@ -1,8 +1,8 @@
-from sqlalchemy import Column, BigInteger, String, ForeignKey, Text, Boolean
+from sqlalchemy import Column, BigInteger, String, ForeignKey, Text, Boolean, Integer
 from sqlalchemy.orm import relationship
 
 from server.db.databases import Base
-from server.models.base import TimestampMixin
+from server.models.base import TimestampMixin, S3Media
 
 
 class ChatRoom(TimestampMixin, Base):
@@ -34,8 +34,23 @@ class ChatHistory(TimestampMixin, Base):
     room_id = Column(BigInteger, ForeignKey("chat_rooms.id"), nullable=False)
     user_profile_id = Column(BigInteger, ForeignKey("user_profiles.id", ondelete="CASCADE"))
     contents = Column(Text, nullable=True)
-    s3_media_id = Column(BigInteger, ForeignKey("s3_media.id"), nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
 
     room = relationship("ChatRoom", back_populates="histories", lazy="selectin")
     user_profile = relationship("UserProfile", back_populates="histories", lazy="selectin")
+    files = relationship("ChatHistoryFile", back_populates="chat_history", lazy="selectin")
+
+
+class ChatHistoryFile(S3Media):
+    __tablename__ = "chat_history_files"
+
+    id = Column(BigInteger, ForeignKey('s3_media.id'), primary_key=True)
+    chat_history_id = Column(BigInteger, ForeignKey("chat_histories.id", ondelete="CASCADE"), nullable=False)
+    order = Column(Integer, default=1, unique=True, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+
+    chat_history = relationship("ChatHistory", back_populates="files", lazy="selectin")
+
+    __mapper_args__ = {
+        "polymorphic_identity": "chat_history_file"
+    }
