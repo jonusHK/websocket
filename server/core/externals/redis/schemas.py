@@ -22,7 +22,7 @@ class RedisChatHistoryByRoomS(BaseModel):
     contents: Optional[str] = None
     files: Optional[List[RedisFileS]] = []
     read_user_ids: List[int] = []
-    timestamp: int
+    timestamp: float | int
     is_active: bool
 
 
@@ -32,11 +32,11 @@ class RedisChatRoomByUserProfileS(BaseModel):
 
 
 class RedisChatRoomS(BaseModel):
-    name: int
+    name: str
     is_active: bool
 
 
-class RedisChatRoomDetailS(StringCollectionMixin, BaseModel):
+class RedisChatRoomDetailS(StringCollectionMixin):
     format = 'room:{}'
     schema = RedisChatRoomS
 
@@ -49,6 +49,7 @@ class RedisUserProfilesByRoomS(ListCollectionMixin):
 class RedisChatHistoriesByRoomS(SortedSetCollectionMixin):
     format = 'room:{}:chat_histories'
     schema = RedisChatHistoryByRoomS
+    score = 'timestamp'
 
 
 class RedisChatRoomsByUserProfileS(ListCollectionMixin):

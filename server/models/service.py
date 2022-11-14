@@ -38,6 +38,7 @@ class ChatHistory(TimestampMixin, Base):
 
     room = relationship("ChatRoom", back_populates="histories", lazy="selectin")
     user_profile = relationship("UserProfile", back_populates="histories", lazy="selectin")
+    files = relationship("ChatHistoryFile", back_populates="chat_history", lazy="selectin")
 
 
 class ChatHistoryFile(S3Media):

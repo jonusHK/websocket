@@ -51,12 +51,14 @@ class ConvertFormatMixin:
             return value.decode('utf-8')
         try:
             return json.loads(value)
-        except JSONDecodeError:
+        except (JSONDecodeError, TypeError):
             return value
 
     @classmethod
     def to_schema(cls, target: Any):
-        if isinstance(target, list):
+        if target is None:
+            return target
+        elif isinstance(target, list):
             return [getattr(cls, 'schema')(**obj) for obj in target]
         elif isinstance(target, dict):
             return getattr(cls, 'schema')(**target)
@@ -107,7 +109,7 @@ class ListCollectionMixin(KeyMixin, ValueMixin, ConvertFormatMixin):
         return await redis.lset(key, index, value)
 
     @classmethod
-    async def lrem(cls, redis: Redis, key_param: Any, count: int, value: Any):
+    async def lrem(cls, redis: Redis, key_param: Any, value: Any, count: int = 0):
         key = cls.get_key(key_param)
         value = cls.get_value(value)
         return await redis.lrem(key, count, value)
@@ -217,11 +219,20 @@ class StringCollectionMixin(KeyMixin, ValueMixin, ConvertFormatMixin):
 
 class SortedSetCollectionMixin(KeyMixin, ValueMixin, ConvertFormatMixin):
     @classmethod
-    async def zadd(cls, redis: Redis, key_param: Any, mapping: Any, **kwargs):
+    async def zadd(cls, redis: Redis, key_param: Any, data: Any, **kwargs):
         key = cls.get_key(key_param)
         convert_mapping = {}
-        for pair in mapping.items():
-            convert_mapping[cls.get_value(pair[0])] = cls.get_value(pair[1])
+        if isinstance(data, Mapping):
+            for pair in data.items():
+                convert_mapping[cls.get_value(pair[0])] = cls.get_value(pair[1])
+        elif isinstance(data, list | tuple | getattr(cls, 'schema')):
+            if isinstance(data, list | tuple):
+                for obj in data:
+                    assert isinstance(obj, getattr(cls, 'schema')), \
+                        f"Should be instance of {getattr(cls, 'schema').__name__}"
+                    convert_mapping[cls.get_value(obj)] = getattr(obj, getattr(cls, 'score'))
+            else:
+                convert_mapping[cls.get_value(data)] = getattr(data, getattr(cls, 'score'))
         return await redis.zadd(key, convert_mapping, **kwargs)
 
     @classmethod

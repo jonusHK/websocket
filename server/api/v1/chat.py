@@ -164,6 +164,7 @@ async def chat(
 
     except Exception as e:
         code = e.code if isinstance(e, WebSocketDisconnect) else status.WS_1006_ABNORMAL_CLOSURE
+        logger.exception(get_log_error(e))
         await websocket.close(code=code)
         raise WebSocketDisconnect(code=code, reason=ExceptionHandler(e).error)
 
@@ -212,7 +213,7 @@ async def chat(
                                 await RedisChatHistoriesByRoomS.zrem(redis, room_id, history)
                                 for f in update_fields:
                                     setattr(history, f, getattr(request_s.data, f))
-                                await RedisChatHistoriesByRoomS.zadd(redis, room_id, {history: history.timestamp})
+                                await RedisChatHistoriesByRoomS.zadd(redis, room_id, history)
                         # DB 업데이트
                         chat_histories = await crud_chat_history.list(conditions=(
                             service_models.ChatHistory.id.in_(request_s.data.history_ids)))
@@ -243,15 +244,15 @@ async def chat(
                             user_profile_id=chat_history.user_profile_id,
                             contents=chat_history.contents,
                             read_user_ids=[user_profile_id],
-                            timestamp=now.timestamp(),
+                            timestamp=request_s.data.timestamp,
                             is_active=True)
-                        await RedisChatHistoriesByRoomS.zadd(redis, room_id, {history_s: history_s.timestamp})
+                        await RedisChatHistoriesByRoomS.zadd(redis, room_id, history_s)
                         response_s = chat_schemas.ChatSendForm(
                             type=request_s.type,
                             data=chat_schemas.ChatSendData(
                                 user_profile_id=user_profile_id,
                                 nickname=user_profile.nickname,
-                                timestamp=now.timestamp(),
+                                timestamp=request_s.data.timestamp,
                                 text=request_s.data.text,
                                 is_active=request_s.data.is_active))
                     # 파일 요청
@@ -356,7 +357,7 @@ async def chat(
                             type=ChatType.MESSAGE,
                             data=chat_schemas.ChatSendData(
                                 text=f"{user_profile.nickname}님이 {target_msg}님을 초대했습니다.",
-                                timestamp=now.timestamp()))
+                                timestamp=request_s.data.timestamp))
                     await pub.publish(f"chat:{room_id}", response_s.json())
                 except WebSocketDisconnect as exc:
                     raise exc
@@ -364,7 +365,10 @@ async def chat(
                     logger.error(get_log_error(exc))
         except WebSocketDisconnect as e:
             logger.error(get_log_error(e))
-            # TODO Redis 업데이트
+            await RedisUserProfilesByRoomS.lrem(redis, room_id, RedisUserProfilesByRoomS.schema(
+                id=user_profile_id,
+                nickname=user_profile.nickname,
+                is_active=user_profile.is_active))
             # DB 업데이트
             delete_conditions = (
                 service_models.ChatRoomUserAssociation.room_id == room_id,

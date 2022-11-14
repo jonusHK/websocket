@@ -80,9 +80,11 @@ function establishWebSocketConnection() {
             const data = {
                 'type': 'message',
                 'data': {
-                    'text': textView.value
+                    'text': textView.value,
+                    'timestamp': Date.now(),
                 }
             };
+            console.log('send data - ', data);
             socket.send(JSON.stringify(data));
         }
     }
