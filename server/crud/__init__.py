@@ -61,6 +61,9 @@ class CRUDBase:
         result = await self.session.execute(stmt)
         return result
 
+    async def bulk_update(self, values: List[Dict[str, Any]]):
+        return await self.session.execute(update(self.model), values)
+
     async def delete(self, conditions: tuple):
         stmt = delete(self.model).where(*conditions)
         await self.session.execute(stmt)

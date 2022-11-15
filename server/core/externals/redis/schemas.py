@@ -9,11 +9,14 @@ class RedisUserProfileByRoomS(BaseModel):
     id: int
     nickname: str
     is_active: bool
+    # TODO RedisFileS 추가
 
 
 class RedisFileS(BaseModel):
     id: int
     url: str
+    is_default: bool
+    is_active: bool
 
 
 class RedisChatHistoryByRoomS(BaseModel):
@@ -36,6 +39,12 @@ class RedisChatRoomS(BaseModel):
     is_active: bool
 
 
+class RedisChatHistoryToSyncS(BaseModel):
+    id: int
+    room_id: int
+    user_profile_id: int
+
+
 class RedisChatRoomDetailS(StringCollectionMixin):
     format = 'room:{}'
     schema = RedisChatRoomS
@@ -55,3 +64,9 @@ class RedisChatHistoriesByRoomS(SortedSetCollectionMixin):
 class RedisChatRoomsByUserProfileS(ListCollectionMixin):
     format = 'user:{}:chat_rooms'
     schema = RedisChatRoomByUserProfileS
+
+
+class RedisChatHistoriesToSyncS(SortedSetCollectionMixin):
+    format = 'update:chat_histories'
+    schema = RedisChatHistoryToSyncS
+    score = 'id'

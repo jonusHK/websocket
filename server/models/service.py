@@ -14,7 +14,7 @@ class ChatRoom(TimestampMixin, Base):
 
     user_profiles = relationship(
         "ChatRoomUserAssociation", back_populates="room", cascade="all, delete", passive_deletes=True, lazy="selectin")
-    histories = relationship("ChatHistory", back_populates="room", lazy="selectin")
+    chat_histories = relationship("ChatHistory", back_populates="room", lazy="selectin")
 
 
 class ChatRoomUserAssociation(TimestampMixin, Base):
@@ -36,9 +36,12 @@ class ChatHistory(TimestampMixin, Base):
     contents = Column(Text, nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
 
-    room = relationship("ChatRoom", back_populates="histories", lazy="selectin")
-    user_profile = relationship("UserProfile", back_populates="histories", lazy="selectin")
+    room = relationship("ChatRoom", back_populates="chat_histories", lazy="selectin")
+    user_profile = relationship("UserProfile", back_populates="chat_histories", lazy="selectin")
     files = relationship("ChatHistoryFile", back_populates="chat_history", lazy="selectin")
+    user_profile_mapping = relationship(
+        "ChatHistoryUserAssociation",
+        back_populates="history", cascade="all, delete", passive_deletes=True, lazy="selectin")
 
 
 class ChatHistoryFile(S3Media):
@@ -54,3 +57,14 @@ class ChatHistoryFile(S3Media):
     __mapper_args__ = {
         "polymorphic_identity": "chat_history_file"
     }
+
+
+class ChatHistoryUserAssociation(Base):
+    __tablename__ = "chat_history_user_association"
+
+    history_id = Column(BigInteger, ForeignKey("chat_histories.id", ondelete="CASCADE"), primary_key=True)
+    user_profile_id = Column(BigInteger, ForeignKey("user_profiles.id", ondelete="CASCADE"), primary_key=True)
+    is_read = Column(Boolean, default=True, nullable=False)
+
+    history = relationship("ChatHistory", back_populates="user_profile_mapping", lazy="selectin")
+    user_profile = relationship("UserProfile", back_populates="chat_history_mapping", lazy="selectin")

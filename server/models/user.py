@@ -42,8 +42,11 @@ class UserProfile(TimestampMixin, Base):
     rooms = relationship(
         "ChatRoomUserAssociation",
         back_populates="user_profile", cascade="all, delete", passive_deletes=True, lazy="selectin")
-    histories = relationship(
+    chat_histories = relationship(
         "ChatHistory",
+        back_populates="user_profile", cascade="all, delete", passive_deletes=True, lazy="selectin")
+    chat_history_mapping = relationship(
+        "ChatHistoryUserAssociation",
         back_populates="user_profile", cascade="all, delete", passive_deletes=True, lazy="selectin")
 
 
