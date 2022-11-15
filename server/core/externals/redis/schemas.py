@@ -9,11 +9,14 @@ class RedisUserProfileByRoomS(BaseModel):
     id: int
     nickname: str
     is_active: bool
+    # TODO RedisFileS 추가
 
 
 class RedisFileS(BaseModel):
     id: int
     url: str
+    is_default: bool
+    is_active: bool
 
 
 class RedisChatHistoryByRoomS(BaseModel):

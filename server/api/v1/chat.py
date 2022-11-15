@@ -369,6 +369,7 @@ async def chat(
                             type=ChatType.LOOKUP,
                             data=chat_schemas.ChatSendData(
                                 histories=chat_histories,
+                                user_profiles=await RedisUserProfilesByRoomS.lrange(redis, room_id),
                                 timestamp=request_s.data.timestamp))
                     # 유저 초대
                     else:

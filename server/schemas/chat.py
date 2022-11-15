@@ -28,11 +28,11 @@ class ChatReceiveData(ChatDataBase):
 
 
 class ChatSendData(ChatDataBase):
-    from server.core.externals.redis.schemas import RedisChatHistoryByRoomS
-    from server.core.externals.redis.schemas import RedisFileS
+    from server.core.externals.redis.schemas import RedisChatHistoryByRoomS, RedisUserProfileByRoomS, RedisFileS
     user_profile_id: Optional[int] = None
     nickname: Optional[str] = None
     histories: Optional[List[RedisChatHistoryByRoomS]] = None
+    user_profiles: Optional[List[RedisUserProfileByRoomS]] = None
     files: Optional[List[RedisFileS]] = None
 
 
