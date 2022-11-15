@@ -36,6 +36,12 @@ class RedisChatRoomS(BaseModel):
     is_active: bool
 
 
+class RedisChatHistoryToSyncS(BaseModel):
+    id: int
+    room_id: int
+    user_profile_id: int
+
+
 class RedisChatRoomDetailS(StringCollectionMixin):
     format = 'room:{}'
     schema = RedisChatRoomS
@@ -55,3 +61,9 @@ class RedisChatHistoriesByRoomS(SortedSetCollectionMixin):
 class RedisChatRoomsByUserProfileS(ListCollectionMixin):
     format = 'user:{}:chat_rooms'
     schema = RedisChatRoomByUserProfileS
+
+
+class RedisChatHistoriesToSyncS(SortedSetCollectionMixin):
+    format = 'update:chat_histories'
+    schema = RedisChatHistoryToSyncS
+    score = 'id'
