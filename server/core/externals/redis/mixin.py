@@ -1,7 +1,7 @@
 import datetime
 import json
 from json import JSONDecodeError
-from typing import Any, TypeVar, Mapping, Sequence, Dict
+from typing import Any, TypeVar, Mapping, Sequence, Dict, Optional
 
 from aioredis import Redis
 
@@ -16,8 +16,10 @@ AnyKeyT = TypeVar("AnyKeyT", bytes, str, memoryview)
 
 class KeyMixin:
     @classmethod
-    def get_key(cls, key_param: Any):
-        if isinstance(key_param, list | tuple):
+    def get_key(cls, key_param: Optional[Any] = None):
+        if not key_param:
+            return getattr(cls, 'format')
+        elif isinstance(key_param, list | tuple):
             return getattr(cls, 'format').format(*key_param)
         return getattr(cls, 'format').format(key_param)
 
