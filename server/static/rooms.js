@@ -22,7 +22,6 @@ function establishWebSocketConnection() {
     // 서버가 데이터 송신 시, OnMessage 이벤트 발생
     socket.onmessage = function (event) {
         try {
-            console.log('event --- ', event);
             const json = JSON.parse(event.data)
             console.log('json - ', json);
         } catch (e) {
