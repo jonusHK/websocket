@@ -35,7 +35,7 @@ class UserProfile(TimestampMixin, Base):
     is_default = Column(Boolean, default=False, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
 
-    user = relationship("User", back_populates="profiles", lazy="selectin")
+    user = relationship("User", back_populates="profiles", lazy="joined")
     images = relationship(
         "UserProfileImage",
         back_populates="profile", cascade="all, delete-orphan", lazy="selectin")
@@ -62,8 +62,8 @@ class UserRelationship(Base):
     is_forbidden = Column(Boolean, default=False, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
 
-    my_profile = relationship("UserProfile", foreign_keys=[my_profile_id], lazy="selectin")
-    other_profile = relationship("UserProfile", foreign_keys=[other_profile_id], lazy="selectin")
+    my_profile = relationship("UserProfile", foreign_keys=[my_profile_id], lazy="joined")
+    other_profile = relationship("UserProfile", foreign_keys=[other_profile_id], lazy="joined")
 
 
 class UserProfileImage(S3Media):
@@ -75,7 +75,7 @@ class UserProfileImage(S3Media):
     is_default = Column(Boolean, default=False, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
 
-    profile = relationship("UserProfile", back_populates="images", lazy="selectin")
+    profile = relationship("UserProfile", back_populates="images", lazy="joined")
 
     __mapper_args__ = {
         "polymorphic_identity": "user_profile_image"
@@ -90,4 +90,4 @@ class UserSession(TimestampMixin, Base):
     session_id = Column(String(150), nullable=False)
     expiry_at = Column(DateTime(timezone=True), nullable=False)
 
-    user = relationship("User", back_populates="sessions", lazy="selectin")
+    user = relationship("User", back_populates="sessions", lazy="joined")
