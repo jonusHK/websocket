@@ -31,6 +31,8 @@ class RedisChatHistoryByRoomS(BaseModel):
 
 class RedisChatRoomByUserProfileS(BaseModel):
     id: int
+    name: str
+    is_active: bool
     unread_msg_cnt: int
 
 

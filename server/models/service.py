@@ -23,8 +23,8 @@ class ChatRoomUserAssociation(TimestampMixin, Base):
     room_id = Column(BigInteger, ForeignKey("chat_rooms.id", ondelete="CASCADE"), primary_key=True)
     user_profile_id = Column(BigInteger, ForeignKey("user_profiles.id", ondelete="CASCADE"), primary_key=True)
 
-    room = relationship("ChatRoom", back_populates="user_profiles", lazy="selectin")
-    user_profile = relationship("UserProfile", back_populates="rooms", lazy="selectin")
+    room = relationship("ChatRoom", back_populates="user_profiles", lazy="joined")
+    user_profile = relationship("UserProfile", back_populates="rooms", lazy="joined")
 
 
 class ChatHistory(TimestampMixin, Base):
@@ -36,8 +36,8 @@ class ChatHistory(TimestampMixin, Base):
     contents = Column(Text, nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
 
-    room = relationship("ChatRoom", back_populates="chat_histories", lazy="selectin")
-    user_profile = relationship("UserProfile", back_populates="chat_histories", lazy="selectin")
+    room = relationship("ChatRoom", back_populates="chat_histories", lazy="joined")
+    user_profile = relationship("UserProfile", back_populates="chat_histories", lazy="joined")
     files = relationship("ChatHistoryFile", back_populates="chat_history", lazy="selectin")
     user_profile_mapping = relationship(
         "ChatHistoryUserAssociation",
@@ -52,7 +52,7 @@ class ChatHistoryFile(S3Media):
     order = Column(Integer, default=1, unique=True, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
 
-    chat_history = relationship("ChatHistory", back_populates="files", lazy="selectin")
+    chat_history = relationship("ChatHistory", back_populates="files")
 
     __mapper_args__ = {
         "polymorphic_identity": "chat_history_file"
@@ -66,5 +66,5 @@ class ChatHistoryUserAssociation(Base):
     user_profile_id = Column(BigInteger, ForeignKey("user_profiles.id", ondelete="CASCADE"), primary_key=True)
     is_read = Column(Boolean, default=True, nullable=False)
 
-    history = relationship("ChatHistory", back_populates="user_profile_mapping", lazy="selectin")
-    user_profile = relationship("UserProfile", back_populates="chat_history_mapping", lazy="selectin")
+    history = relationship("ChatHistory", back_populates="user_profile_mapping", lazy="joined")
+    user_profile = relationship("UserProfile", back_populates="chat_history_mapping", lazy="joined")
