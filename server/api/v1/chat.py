@@ -68,6 +68,7 @@ async def chat_room_create(
     crud_user_profile = UserProfileCRUD(session)
     crud_room_user_mapping = ChatRoomUserAssociationCRUD(session)
     crud_room = ChatRoomCRUD(session)
+    redis: Redis = AioRedis().redis
 
     user_profile: user_models.UserProfile = await crud_user_profile.get(
         conditions=(
@@ -96,6 +97,14 @@ async def chat_room_create(
         dict(room_id=room.id, user_profile_id=profile_id) for profile_id in profile_ids])
     await session.commit()
     await session.refresh(room)
+
+    # Redis 데이터 업데이트
+    await RedisChatRoomsByUserProfileS.lpush(
+        redis, user_profile.id, RedisChatRoomByUserProfileS(
+            id=room.id,
+            name=room.name,
+            is_active=room.is_active,
+            unread_msg_cnt=0))
 
     return profile_ids
 
