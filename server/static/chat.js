@@ -22,9 +22,11 @@ function establishWebSocketConnection() {
     const textView = document.getElementById("text-view");
     const buttonSend = document.getElementById("send-button");
     const buttonStop = document.getElementById("stop-button");
+    const userIdView = document.getElementById("invite-user-id");
+    const buttonUserInvite = document.getElementById("invite-user");
     const label = document.getElementById("status-label");
     const userProfileId = 1;
-    const roomId = 1;
+    const roomId = 5;
     const socket = new WebSocket(`ws://localhost:8000/api/v1/chats/${userProfileId}/${roomId}`);
 
     // 연결 성공
@@ -84,7 +86,7 @@ function establishWebSocketConnection() {
                     'timestamp': Date.now(),
                 }
             };
-            console.log('send data - ', data);
+            console.log('send data for message - ', data);
             socket.send(JSON.stringify(data));
         }
     }
@@ -94,6 +96,20 @@ function establishWebSocketConnection() {
             selfClosing = true;
             // 여기선 1001 코드 작동 안함 -> 추후 Vue.js 에서 1001로 사용
             socket.close(1001, 'self closing');
+        }
+    }
+
+    buttonUserInvite.onclick = function() {
+        if (socket.readyState === WebSocket.OPEN) {
+            const data = {
+                'type': 'invite',
+                'data': {
+                    'target_user_profile_ids': [userIdView.value],
+                    'timestamp': Date.now(),
+                }
+            }
+            console.log('send data for invite - ', data);
+            socket.send(JSON.stringify(data));
         }
     }
 }
