@@ -30,10 +30,7 @@ class ValueMixin:
         if isinstance(value, EncodableT):
             return value
         elif isinstance(value, list | tuple):
-            copied = [cls.get_value(v) for v in value]
-            if isinstance(value, tuple):
-                copied = tuple(copied)
-            return copied
+            return [cls.get_value(v) for v in value]
         elif isinstance(value, getattr(cls, 'schema')):
             return value.json()
         return json.dumps(value)
