@@ -78,6 +78,7 @@ class UserSessionCRUD:
         )
         results = await self.session.execute(stmt)
         session = results.scalar_one_or_none()
+        await self.session.refresh(session)
         return session
 
     async def update_session(self, target_id: int, **kwargs):

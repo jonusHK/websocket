@@ -26,7 +26,7 @@ class User(UserBase):
     last_login: Optional[datetime] = None
 
     class Config:
-        orm_model = True
+        orm_mode = True
 
 
 class UserProfileBase(BaseModel):
@@ -46,7 +46,7 @@ class UserProfile(UserProfileBase):
     created: datetime
 
     class Config:
-        orm_model = True
+        orm_mode = True
 
 
 class UserRelationshipBase(BaseModel):
@@ -67,7 +67,7 @@ class UserRelationship(UserRelationshipBase):
     id: int
 
     class Config:
-        orm_model = True
+        orm_mode = True
 
 
 class UserProfileImageBase(base_schemas.S3MediaBase):
@@ -86,7 +86,7 @@ class UserProfileImage(UserProfileImageBase):
     created: datetime
 
     class Config:
-        orm_model = True
+        orm_mode = True
 
 
 class UserSessionBase(BaseModel):
@@ -103,4 +103,4 @@ class UserSession(UserSessionBase):
     id: int
 
     class Config:
-        orm_model = True
+        orm_mode = True

@@ -17,4 +17,4 @@ class S3Media(S3MediaBase):
     use_type: str
 
     class Config:
-        orm_model = True
+        orm_mode = True

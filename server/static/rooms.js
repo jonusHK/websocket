@@ -9,7 +9,6 @@ function establishWebSocketConnection() {
     const label = document.getElementById("status-label");
     const userProfileId = 1;
     const socket = new WebSocket(`ws://localhost:8000/api/v1/chats/rooms/${userProfileId}`);
-
     // 연결 성공
     socket.onopen = function (event) {
         label.innerHTML = "연결 성공";

@@ -35,7 +35,7 @@ async def signup(user_s: user_schemas.UserCreate, session: AsyncSession = Depend
     await user_profile_crud.create(user=user, nickname=user.name, is_default=True)
     await session.commit()
 
-    return jsonable_encoder(user)
+    return user_schemas.User.from_orm(user)
 
 
 @router.post(
@@ -55,13 +55,12 @@ async def login(data: SessionData, response: Response, session: AsyncSession = D
     cookie.attach_to_response(response, session_id)
     await UserCRUD(session).update_user(user.id, last_login=datetime.now().astimezone())
     await session.commit()
-    await session.refresh(user)
-    return jsonable_encoder(user)
+    return user_schemas.User.from_orm(user)
 
 
 @router.get("/whoami", dependencies=[Depends(cookie)])
 async def whoami(user_session: user_models.UserSession = Depends(verifier)):
-    return user_schemas.UserSession(**jsonable_encoder(user_session))
+    return user_schemas.UserSession.from_orm(user_session)
 
 
 @router.get("/permission", dependencies=[Depends(cookie), Depends(RoleChecker([UserType.USER]))])
