@@ -91,7 +91,7 @@ class SessionDatabaseVerifier(Generic[ID, SessionModel]):
             return
 
         user_session: user_models.UserSession = await self.backend.read(session_id, session)
-        session_data = user_schemas.UserSession(**jsonable_encoder(user_session))
+        session_data = user_schemas.UserSession.from_orm(user_session)
         if not self.verify_session(session_data):
             if self.auto_error:
                 raise self.auth_http_exception

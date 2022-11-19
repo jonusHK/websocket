@@ -21,6 +21,7 @@ class CRUDBase:
         instance = results.scalars().one_or_none()
         if instance is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Not found {self.model.__name__}.")
+        await self.session.refresh(instance)
         return instance
 
     async def list(
@@ -33,9 +34,9 @@ class CRUDBase:
     ):
         stmt = select(self.model).offset(offset).limit(limit)
         if order_by:
-            stmt.order_by(*order_by)
+            stmt = stmt.order_by(*order_by)
         if conditions:
-            stmt.where(*conditions)
+            stmt = stmt.where(*conditions)
         if options:
             for option in options:
                 stmt = stmt.options(option)

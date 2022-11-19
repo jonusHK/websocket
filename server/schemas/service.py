@@ -18,7 +18,7 @@ class ChatRoom(ChatRoomBase):
     created: datetime
 
     class Config:
-        orm_model = True
+        orm_mode = True
 
 
 class ChatRoomUserAssociationBase(BaseModel):
@@ -34,7 +34,7 @@ class ChatRoomUserAssociation(ChatRoomUserAssociationBase):
     created: datetime
 
     class Config:
-        orm_model = True
+        orm_mode = True
 
 
 class ChatHistoryBase(BaseModel):
@@ -52,7 +52,7 @@ class ChatHistory(ChatHistoryBase):
     created: datetime
 
     class Config:
-        orm_model = True
+        orm_mode = True
         extra = Extra.allow
         json_encoders = {
             datetime: lambda v: v.isoformat()
