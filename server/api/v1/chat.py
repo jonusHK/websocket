@@ -6,7 +6,7 @@ from typing import List, Set, Coroutine, Dict, Any
 
 from aioredis import Redis
 from aioredis.client import PubSub
-from fastapi import APIRouter, Depends, HTTPException, Cookie, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Cookie, Request
 from fastapi import WebSocket, WebSocketDisconnect
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,9 +18,9 @@ from server.core.authentications import cookie, RoleChecker
 from server.core.enums import UserType, ChatType
 from server.core.exceptions import ExceptionHandler
 from server.core.externals.redis import AioRedis
-from server.core.externals.redis.schemas import RedisChatRoomDetailS, RedisUserProfilesByRoomS, \
+from server.core.externals.redis.schemas import RedisUserProfilesByRoomS, \
     RedisChatHistoriesByRoomS, RedisChatHistoriesToSyncS, RedisUserProfileByRoomS, RedisChatHistoryByRoomS, \
-    RedisChatRoomS, RedisChatRoomsByUserProfileS, RedisChatRoomByUserProfileS
+    RedisChatRoomsByUserProfileS, RedisChatRoomByUserProfileS
 from server.crud.service import ChatRoomUserAssociationCRUD, ChatRoomCRUD, ChatHistoryCRUD, ChatHistoryFileCRUD, \
     ChatHistoryUserAssociationCRUD
 from server.crud.user import UserProfileCRUD
@@ -36,12 +36,11 @@ logger = logging.getLogger("chat")
 
 async def get_cookie(
     websocket: WebSocket,
-    session: str | None = Cookie(default=None),
-    token: str | None = Query(default=None)
+    session: str | None = Cookie(default=None)
 ):
-    if not session and not token:
+    if not session:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-    return session or token
+    return session
 
 
 @router.get("", response_class=HTMLResponse)
@@ -88,9 +87,7 @@ async def chat_room_create(
     default_room_name: str = ", ".join([user_profile.nickname] + [profile.nickname for profile in target_profiles])
     room: service_models.ChatRoom = await crud_room.create(name=default_room_name)
     await session.flush()
-    current_profile_ids: Set[int] = set()
-    add_profile_ids: Set[int] = set([data.user_profile_id] + data.target_profile_ids)
-    profile_ids: Set[int] = add_profile_ids - current_profile_ids
+    profile_ids: Set[int] = set([data.user_profile_id] + data.target_profile_ids)
     if not profile_ids:
         return []
     await crud_room_user_mapping.bulk_create([
@@ -99,12 +96,16 @@ async def chat_room_create(
     await session.refresh(room)
 
     # Redis 데이터 업데이트
-    await RedisChatRoomsByUserProfileS.lpush(
-        redis, user_profile.id, RedisChatRoomByUserProfileS(
-            id=room.id,
-            name=room.name,
-            is_active=room.is_active,
-            unread_msg_cnt=0))
+    for _id in profile_ids:
+        await RedisUserProfilesByRoomS.sadd(
+            redis, room.id, RedisUserProfilesByRoomS.schema(
+                id=_id,
+                nickname=user_profile.nickname))
+        await RedisChatRoomsByUserProfileS.sadd(
+            redis, _id, RedisChatRoomsByUserProfileS.schema(
+                id=room.id,
+                name=room.name,
+                unread_msg_cnt=0))
 
     return profile_ids
 
@@ -127,7 +128,7 @@ async def chat_room(
     while True:
         try:
             while True:
-                rooms_redis: List[RedisChatRoomByUserProfileS] = await RedisChatRoomsByUserProfileS.lrange(
+                rooms_redis: List[RedisChatRoomByUserProfileS] = await RedisChatRoomsByUserProfileS.smembers(
                     redis, user_profile_id)
                 if rooms_redis:
                     break
@@ -140,27 +141,25 @@ async def chat_room(
                 if not user_profile.rooms:
                     rooms_redis = []
                     break
-                await RedisChatRoomsByUserProfileS.lpush(redis, user_profile_id, *[
-                    RedisChatRoomByUserProfileS(
+                await RedisChatRoomsByUserProfileS.sadd(redis, user_profile_id, *[
+                    RedisChatRoomsByUserProfileS.schema(
                         id=m.room.id,
                         name=m.room.name,
-                        is_active=m.room.is_active,
                         unread_msg_cnt=0) for m in user_profile.rooms])
 
             result = []
             if rooms_redis:
                 for room_redis in rooms_redis:
-                    if room_redis.is_active:
-                        obj: Dict[str, Any] = jsonable_encoder(room_redis)
-                        # TODO 방에 연동되어 있는 유저 프로필 files 적용
-                        # 마지막 대화 내역 업데이트
-                        chat_histories: List[RedisChatHistoryByRoomS] = await RedisChatHistoriesByRoomS.zrevrange(
-                            redis, room_redis.id, 0, 1)
-                        if chat_histories:
-                            obj.update({
-                                'last_chat_history': jsonable_encoder(chat_histories[0])
-                            })
-                        result.append(obj)
+                    obj: Dict[str, Any] = jsonable_encoder(room_redis)
+                    # TODO 방에 연동되어 있는 유저 프로필 files 적용
+                    # 마지막 대화 내역 업데이트
+                    chat_histories: List[RedisChatHistoryByRoomS] = await RedisChatHistoriesByRoomS.zrevrange(
+                        redis, room_redis.id, 0, 1)
+                    if chat_histories:
+                        obj.update({
+                            'last_chat_history': jsonable_encoder(chat_histories[0])
+                        })
+                    result.append(obj)
 
             await websocket.send_json(result)
         except WebSocketDisconnect as e:
@@ -184,7 +183,7 @@ async def chat(
     """
     def get_log_error(exc: Exception):
         return f"Chat Error - room_id: {room_id}, user_profile_id: {user_profile_id}, "\
-               f"reason: {exc}"
+               f"reason: {ExceptionHandler(exc).error}"
 
     now = datetime.now().astimezone()
     redis: Redis = AioRedis().redis
@@ -193,20 +192,27 @@ async def chat(
     crud_room_user_mapping = ChatRoomUserAssociationCRUD(session)
     crud_chat_history = ChatHistoryCRUD(session)
     crud_history_user_mapping = ChatHistoryUserAssociationCRUD(session)
+    crud_user_profile = UserProfileCRUD(session)
 
     try:
         # 방 존재 여부 확인
         try:
             while True:
-                room_redis: RedisChatRoomS = await RedisChatRoomDetailS.get(redis, room_id)
+                rooms_redis: List[RedisChatRoomByUserProfileS] = await RedisChatRoomsByUserProfileS.smembers(
+                    redis, user_profile_id)
+                room_redis = next((r for r in rooms_redis if r.id == room_id), None) if rooms_redis else None
                 if room_redis:
                     break
                 room_db: service_models.ChatRoom = await crud_room.get(conditions=(
                     service_models.ChatRoom.id == room_id,
                     service_models.ChatRoom.is_active == 1))
-                await RedisChatRoomDetailS.set(redis, room_id, RedisChatRoomDetailS.schema(
-                    name=room_db.name,
-                    is_active=room_db.is_active))
+                if not room_db.user_profiles:
+                    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No users for room')
+                await RedisChatRoomsByUserProfileS.sadd(redis, user_profile_id, *[
+                    RedisChatRoomsByUserProfileS.schema(
+                        id=m.room_id,
+                        name=m.room.name,
+                        unread_msg_cnt=0) for m in room_db.user_profiles])
         except Exception as e:
             raise WebSocketDisconnect(
                 code=status.WS_1007_INVALID_FRAME_PAYLOAD_DATA,
@@ -214,7 +220,7 @@ async def chat(
 
         while True:
             user_profiles_redis: List[
-                RedisUserProfileByRoomS] = await RedisUserProfilesByRoomS.lrange(redis, room_id)
+                RedisUserProfileByRoomS] = await RedisUserProfilesByRoomS.smembers(redis, room_id)
             if user_profiles_redis:
                 break
             room_user_mapping: List[
@@ -225,12 +231,10 @@ async def chat(
             if not room_user_mapping:
                 user_profiles_redis = []
                 break
-            await RedisUserProfilesByRoomS.rpush(redis, room_id, *[
+            await RedisUserProfilesByRoomS.sadd(redis, room_id, *[
                 RedisUserProfilesByRoomS.schema(
                     id=p.user_profile.id,
-                    nickname=p.user_profile.nickname,
-                    is_active=p.user_profile.is_active
-                ) for p in room_user_mapping])
+                    nickname=p.user_profile.nickname) for p in room_user_mapping])
 
         # 방에 유저들이 접속되어 있는지 확인
         if not user_profiles_redis:
@@ -260,13 +264,15 @@ async def chat(
                     continue
                 try:
                     user_profiles_redis: List[
-                        RedisUserProfileByRoomS] = await RedisUserProfilesByRoomS.lrange(redis, room_id)
+                        RedisUserProfileByRoomS] = await RedisUserProfilesByRoomS.smembers(redis, room_id)
                     if not user_profiles_redis:
                         raise WebSocketDisconnect(
-                            code=status.WS_1001_GOING_AWAY, reason="Not exist any user in the room.")
+                            code=status.WS_1001_GOING_AWAY,
+                            reason="Not exist any user in the room.")
                     if not next((p for p in user_profiles_redis if p.id == user_profile_id), None):
                         raise WebSocketDisconnect(
-                            code=status.WS_1001_GOING_AWAY, reason="Left the chat room.")
+                            code=status.WS_1001_GOING_AWAY,
+                            reason="Left the chat room.")
 
                     request_s = chat_schemas.ChatReceiveForm(**data)
                     # 업데이트 요청
@@ -335,16 +341,24 @@ async def chat(
                             is_active=True)
                         await RedisChatHistoriesByRoomS.zadd(redis, room_id, history_s)
                         # unread_msg_cnt 업데이트
-                        unread_msg_cnt = 1
-                        rooms_by_profile = await RedisChatRoomsByUserProfileS.lrange(redis, user_profile_id)
-                        if rooms_by_profile:
-                            _r = next((r for r in rooms_by_profile if r.id == room_id), None)
-                            if _r:
-                                await RedisChatRoomsByUserProfileS.lrem(redis, user_profile_id, _r)
-                                unread_msg_cnt = _r.unread_msg_cnt + 1
-                        await RedisChatRoomsByUserProfileS.lpush(
-                            redis, user_profile_id,
-                            RedisChatRoomsByUserProfileS.schema(id=room_id, unread_msg_cnt=unread_msg_cnt))
+                        _user_profiles_redis: List[RedisUserProfileByRoomS] = await RedisUserProfilesByRoomS.smembers(
+                            redis, room_id)
+                        if _user_profiles_redis:
+                            for _user_profile in _user_profiles_redis:
+                                unread_msg_cnt = 1
+                                _rooms_redis: List[
+                                    RedisChatRoomByUserProfileS] = await RedisChatRoomsByUserProfileS.smembers(
+                                    redis, _user_profile.id)
+                                _room_redis = next(
+                                    (_r for _r in _rooms_redis if _r.id == room_id), None) if _rooms_redis else None
+                                if _room_redis:
+                                    await RedisChatRoomsByUserProfileS.srem(redis, _user_profile.id, _room_redis)
+                                    unread_msg_cnt = _room_redis.unread_msg_cnt + 1
+                                await RedisChatRoomsByUserProfileS.sadd(
+                                    redis, _user_profile.id, RedisChatRoomsByUserProfileS.schema(
+                                        id=room_id,
+                                        name=room_redis.name,
+                                        unread_msg_cnt=unread_msg_cnt))
 
                         response_s = chat_schemas.ChatSendForm(
                             type=request_s.type,
@@ -388,15 +402,18 @@ async def chat(
                                 reason="Not exists offset or limit for page.")
 
                         # 해당 방의 unread_msg_cnt = 0 설정
-                        rooms_by_profile = await RedisChatRoomsByUserProfileS.lrange(redis, user_profile)
+                        rooms_by_profile: List[
+                            RedisChatRoomByUserProfileS] = await RedisChatRoomsByUserProfileS.smembers(
+                            redis, user_profile)
                         if rooms_by_profile:
                             _r = next((r for r in rooms_by_profile if r.id == room_id), None)
                             if _r:
-                                await RedisChatRoomsByUserProfileS.lrem(redis, user_profile_id, _r)
-                        await RedisChatRoomsByUserProfileS.lpush(
-                            redis, user_profile_id,
-                            RedisChatRoomsByUserProfileS.schema(id=room_id, unread_msg_cnt=0))
-
+                                await RedisChatRoomsByUserProfileS.srem(redis, user_profile_id, _r)
+                        await RedisChatRoomsByUserProfileS.sadd(
+                            redis, user_profile_id, RedisChatRoomsByUserProfileS.schema(
+                                id=room_id,
+                                name=room_redis.name,
+                                unread_msg_cnt=0))
                         # TODO histories에 files 처리하여 전달
                         # Redis 에서 대화 내용 조회
                         chat_histories_redis: List[
@@ -447,8 +464,8 @@ async def chat(
                                 if _create_target_db:
                                     await crud_history_user_mapping.bulk_create([
                                         dict(
-                                            history_id=h.id, user_profile_id=user_profile_id
-                                        ) for h in _create_target_db])
+                                            history_id=h.id,
+                                            user_profile_id=user_profile_id) for h in _create_target_db])
                                     await session.commit()
                                 if _update_target_db:
                                     await crud_history_user_mapping.bulk_update([
@@ -469,40 +486,61 @@ async def chat(
                             type=ChatType.LOOKUP,
                             data=chat_schemas.ChatSendData(
                                 histories=chat_histories,
-                                user_profiles=await RedisUserProfilesByRoomS.lrange(redis, room_id),
+                                user_profiles=await RedisUserProfilesByRoomS.smembers(redis, room_id),
                                 timestamp=request_s.data.timestamp))
                     # 유저 초대
                     else:
-                        current_profile_ids: Set[id] = {
-                            p.id for p in user_profiles_redis} if user_profiles_redis else {user_profile_id}
-                        target_user_profile_ids: List[id] = request_s.data.target_user_profile_ids
+                        while True:
+                            _user_profiles_redis: List[
+                                RedisUserProfileByRoomS] = await RedisUserProfilesByRoomS.smembers(redis, room_id)
+                            if _user_profiles_redis:
+                                break
+                            _room_user_mapping: List[
+                                service_models.ChatRoomUserAssociation
+                            ] = await crud_room_user_mapping.list(conditions=(
+                                service_models.ChatRoomUserAssociation.room_id == room_id,
+                                service_models.ChatRoomUserAssociation.user_profile_id == user_profile_id))
+                            if not _room_user_mapping:
+                                _user_profiles_redis = []
+                                break
+                            await RedisUserProfilesByRoomS.sadd(redis, room_id, *[
+                                RedisUserProfilesByRoomS.schema(
+                                    id=p.user_profile.id,
+                                    nickname=p.user_profile.nickname) for p in _room_user_mapping])
+                        current_profile_ids: Set[int] = {
+                            p.id for p in _user_profiles_redis} if _user_profiles_redis else {user_profile_id}
+                        target_user_profile_ids: List[int] = request_s.data.target_user_profile_ids
                         if not target_user_profile_ids:
                             raise WebSocketDisconnect(
                                 code=status.WS_1007_INVALID_FRAME_PAYLOAD_DATA,
-                                reason="Not exists user profile ids for invite")
-                        add_profile_ids: Set[id] = set(target_user_profile_ids)
-                        profile_ids: Set[id] = add_profile_ids - current_profile_ids
+                                reason="Not exists user profile ids for invite.")
+                        add_profile_ids: Set[int] = set(target_user_profile_ids)
+                        profile_ids: Set[int] = add_profile_ids - current_profile_ids
                         if not profile_ids:
                             continue
-                        profiles: List[
-                            RedisUserProfileByRoomS] = [p for p in user_profiles_redis if p.id in profile_ids]
+                        profiles = await crud_user_profile.list(conditions=(
+                            user_models.UserProfile.id.in_(profile_ids),
+                            user_models.UserProfile.is_active == 1))
+                        if len(profiles) != len(target_user_profile_ids):
+                            raise WebSocketDisconnect(
+                                code=status.WS_1007_INVALID_FRAME_PAYLOAD_DATA,
+                                reason="Invalid user profile ids for invite.")
                         # Redis 업데이트
-                        await RedisUserProfilesByRoomS.rpush(redis, room_id, *profiles)
+                        await RedisUserProfilesByRoomS.sadd(redis, room_id, *[
+                            RedisUserProfilesByRoomS.schema(
+                                id=p.id,
+                                nickname=p.nickname) for p in profiles if p.id in profile_ids])
                         # DB 업데이트
                         await crud_room_user_mapping.bulk_create([
                             dict(
-                                room_id=room_id, user_profile_id=profile_id
-                            ) for profile_id in profile_ids])
+                                room_id=room_id,
+                                user_profile_id=profile_id) for profile_id in profile_ids])
                         await session.commit()
                         # 대화방 초대 메시지 전송
-                        user_profiles_redis: List[
-                            RedisUserProfileByRoomS] = await RedisUserProfilesByRoomS.lrange(redis, room_id)
-                        new_user_profiles: List[
-                            RedisUserProfileByRoomS] = [p for p in user_profiles_redis if p.id in profile_ids]
-                        if len(new_user_profiles) > 1:
-                            target_msg = '님과 '.join([p.nickname for p in new_user_profiles])
+                        if len(profile_ids) > 1:
+                            target_msg = '님과 '.join([p.nickname for p in profiles])
                         else:
-                            target_msg = new_user_profiles[0].nickname
+                            target_msg = profiles[0].nickname
                         response_s = chat_schemas.ChatSendForm(
                             type=ChatType.MESSAGE,
                             data=chat_schemas.ChatSendData(
@@ -514,31 +552,44 @@ async def chat(
                 except Exception as exc:
                     logger.error(get_log_error(exc))
         except WebSocketDisconnect as exc:
-            logger.error(get_log_error(exc))
-            await RedisUserProfilesByRoomS.lrem(redis, room_id, RedisUserProfilesByRoomS.schema(
-                id=user_profile_id,
-                nickname=user_profile.nickname,
-                is_active=user_profile.is_active))
-            # DB 업데이트
-            delete_conditions = (
-                service_models.ChatRoomUserAssociation.room_id == room_id,
-                service_models.ChatRoomUserAssociation.user_profile_id == user_profile_id)
-            try:
-                await crud_room_user_mapping.get(conditions=delete_conditions)
-            except Exception:
-                pass
-            else:
-                # 유저와 대화방 연결 해제
-                await crud_room_user_mapping.delete(conditions=delete_conditions)
-                await session.commit()
-                # 유저 연결 해제 메시지 전송
-                response_s = chat_schemas.ChatSendForm(
-                    type=ChatType.MESSAGE,
-                    data=chat_schemas.ChatSendData(
-                        text=f"{user_profile.nickname}님이 나갔습니다.",
-                        timestamp=now.timestamp()))
-                await pub.publish(f"chat:{room_id}", response_s.json())
-            raise e
+            if exc.code == status.WS_1001_GOING_AWAY:
+                try:
+                    await RedisUserProfilesByRoomS.srem(redis, room_id, RedisUserProfilesByRoomS.schema(
+                        id=user_profile_id,
+                        nickname=user_profile.nickname))
+                    _rooms_redis = await RedisChatRoomsByUserProfileS.smembers(redis, user_profile_id)
+                    _room_redis = next((_r for _r in _rooms_redis if _r.id == room_id), None) if _rooms_redis else None
+                    if _room_redis:
+                        await RedisChatRoomsByUserProfileS.srem(redis, user_profile_id, _room_redis)
+                    delete_conditions = (
+                        service_models.ChatRoomUserAssociation.room_id == room_id,
+                        service_models.ChatRoomUserAssociation.user_profile_id == user_profile_id)
+                    try:
+                        room_user_mapping_db = await crud_room_user_mapping.get(conditions=delete_conditions)
+                    except HTTPException:
+                        pass
+                    else:
+                        # 유저와 대화방 연결 해제
+                        _room_db = room_user_mapping_db.room
+                        await crud_room_user_mapping.delete(conditions=delete_conditions)
+                        await session.flush()
+                        await session.refresh(_room_db)
+                        if not _room_db.user_profiles:
+                            await crud_room.update(values={'is_active': False}, conditions=(
+                                service_models.ChatRoom.id == _room_db.id,
+                                service_models.ChatRoom.is_active == 1))
+                        await session.commit()
+                        # 유저 연결 해제 메시지 전송
+                        response_s = chat_schemas.ChatSendForm(
+                            type=ChatType.MESSAGE,
+                            data=chat_schemas.ChatSendData(
+                                text=f"{user_profile.nickname}님이 나갔습니다.",
+                                timestamp=now.timestamp()))
+                        await pub.publish(f"chat:{room_id}", response_s.json())
+                except Exception as _exc:
+                    logger.error(_exc)
+            logger.exception(get_log_error(exc))
+            raise exc
 
     async def consumer_handler(psub: PubSub, ws: WebSocket):
         try:
