@@ -2,13 +2,13 @@ from typing import List, Optional
 
 from pydantic import BaseModel
 
-from server.core.externals.redis.mixin import ListCollectionMixin, StringCollectionMixin, SortedSetCollectionMixin
+from server.core.externals.redis.mixin import SortedSetCollectionMixin, \
+    SetCollectionMixin
 
 
 class RedisUserProfileByRoomS(BaseModel):
     id: int
     nickname: str
-    is_active: bool
     # TODO RedisFileS 추가
 
 
@@ -16,7 +16,6 @@ class RedisFileS(BaseModel):
     id: int
     url: str
     is_default: bool
-    is_active: bool
 
 
 class RedisChatHistoryByRoomS(BaseModel):
@@ -32,13 +31,7 @@ class RedisChatHistoryByRoomS(BaseModel):
 class RedisChatRoomByUserProfileS(BaseModel):
     id: int
     name: str
-    is_active: bool
     unread_msg_cnt: int
-
-
-class RedisChatRoomS(BaseModel):
-    name: str
-    is_active: bool
 
 
 class RedisChatHistoryToSyncS(BaseModel):
@@ -47,12 +40,7 @@ class RedisChatHistoryToSyncS(BaseModel):
     user_profile_id: int
 
 
-class RedisChatRoomDetailS(StringCollectionMixin):
-    format = 'room:{}'
-    schema = RedisChatRoomS
-
-
-class RedisUserProfilesByRoomS(ListCollectionMixin):
+class RedisUserProfilesByRoomS(SetCollectionMixin):
     format = 'room:{}:user_profiles'
     schema = RedisUserProfileByRoomS
 
@@ -63,7 +51,7 @@ class RedisChatHistoriesByRoomS(SortedSetCollectionMixin):
     score = 'timestamp'
 
 
-class RedisChatRoomsByUserProfileS(ListCollectionMixin):
+class RedisChatRoomsByUserProfileS(SetCollectionMixin):
     format = 'user:{}:chat_rooms'
     schema = RedisChatRoomByUserProfileS
 

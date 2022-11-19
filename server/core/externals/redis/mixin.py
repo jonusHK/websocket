@@ -42,12 +42,10 @@ class ValueMixin:
 class ConvertFormatMixin:
     @classmethod
     def decode(cls, value: Any):
-        if isinstance(value, list | tuple | set):
+        if not value:
+            return value
+        elif isinstance(value, list | tuple | set):
             decoded = [cls.decode(v) for v in value]
-            if isinstance(value, tuple):
-                decoded = tuple(decoded)
-            elif isinstance(value, set):
-                decoded = set(decoded)
             return decoded
         elif isinstance(value, bytes):
             return value.decode('utf-8')
@@ -58,13 +56,39 @@ class ConvertFormatMixin:
 
     @classmethod
     def to_schema(cls, target: Any):
-        if target is None:
+        if not target:
             return target
         elif isinstance(target, list):
             return [getattr(cls, 'schema')(**obj) for obj in target]
         elif isinstance(target, dict):
             return getattr(cls, 'schema')(**target)
         raise AssertionError('Type should be `list` or `dict`.')
+
+
+class SetCollectionMixin(KeyMixin, ValueMixin, ConvertFormatMixin):
+    @classmethod
+    async def sadd(cls, redis: Redis, key_param: Any, *args):
+        key = cls.get_key(key_param)
+        args = cls.get_value(args)
+        return await redis.sadd(key, *args)
+
+    @classmethod
+    async def smembers(cls, redis: Redis, key_param: Any):
+        key = cls.get_key(key_param)
+        result = await redis.smembers(key)
+        result = cls.decode(result)
+        return cls.to_schema(result) or []
+
+    @classmethod
+    async def srem(cls, redis: Redis, key_param: Any, *args):
+        key = cls.get_key(key_param)
+        args = cls.get_value(args)
+        return await redis.srem(key, *args)
+
+    @classmethod
+    async def scard(cls, redis: Redis, key_param: Any):
+        key = cls.get_key(key_param)
+        await redis.scard(key)
 
 
 class ListCollectionMixin(KeyMixin, ValueMixin, ConvertFormatMixin):
