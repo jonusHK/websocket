@@ -1,18 +1,18 @@
 from pydantic import BaseModel
 
 
-class S3MediaBase(BaseModel):
+class S3MediaBaseS(BaseModel):
     bucket_name: str
     file_key: str
     file_path: str
     content_type: str
 
 
-class S3MediaCreate(S3MediaBase):
+class S3MediaCreateS(S3MediaBaseS):
     pass
 
 
-class S3Media(S3MediaBase):
+class S3MediaS(S3MediaBaseS):
     id: int
     use_type: str
 

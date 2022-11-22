@@ -17,6 +17,7 @@ from server.crud.user import UserCRUD, UserSessionCRUD
 from server.db.databases import get_async_session, settings, async_session
 from server.models import user as user_models
 from server.schemas import user as user_schemas
+from server.schemas.user import UserSessionCreateS, UserSessionS
 
 
 class SessionData(BaseModel):
@@ -91,7 +92,7 @@ class SessionDatabaseVerifier(Generic[ID, SessionModel]):
             return
 
         user_session: user_models.UserSession = await self.backend.read(session_id, session)
-        session_data = user_schemas.UserSession.from_orm(user_session)
+        session_data = UserSessionS.from_orm(user_session)
         if not self.verify_session(session_data):
             if self.auto_error:
                 raise self.auth_http_exception
@@ -107,9 +108,9 @@ class DatabaseBackend(Generic[ID, SessionModel], SessionDatabaseBackend[ID, Sess
     async def create(self, session_id: ID, data: SessionModel, session: AsyncSession):
         user: user_models.User = await UserCRUD(session).get_user_by_uid(data.uid)
         expiry_at = datetime.now().astimezone() + timedelta(seconds=self.cookie_params.max_age)
-        session_create_s = user_schemas.UserSessionCreate(
+        session_create_s = UserSessionCreateS(
             user_id=user.id,
-            session_id=str(session_id),  # 저장 되는 쿠키 값: str(cookie.signer.dumps(session_id.hex))
+            session_id=str(session_id),
             expiry_at=expiry_at)
         await UserSessionCRUD(session).create_session(session_create_s)
 
@@ -162,7 +163,7 @@ class BasicVerifier(SessionDatabaseVerifier[UUID, SessionData]):
     def auth_http_exception(self):
         return self._auth_http_exception
 
-    def verify_session(self, schema: user_schemas.UserSession) -> bool:
+    def verify_session(self, schema: UserSessionS) -> bool:
         return schema.expiry_at.astimezone() >= datetime.now().astimezone()
 
 
