@@ -1,19 +1,18 @@
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel, Extra
 
 
-class ChatRoomBase(BaseModel):
+class ChatRoomBaseS(BaseModel):
     name: str
     is_active: bool = True
 
 
-class ChatRoomCreate(ChatRoomBase):
+class ChatRoomCreateS(ChatRoomBaseS):
     pass
 
 
-class ChatRoom(ChatRoomBase):
+class ChatRoomS(ChatRoomBaseS):
     id: int
     created: datetime
 
@@ -21,32 +20,32 @@ class ChatRoom(ChatRoomBase):
         orm_mode = True
 
 
-class ChatRoomUserAssociationBase(BaseModel):
+class ChatRoomUserAssociationBaseS(BaseModel):
     room_id: int
     user_profile_id: int
 
 
-class ChatRoomUserAssociationCreate(ChatRoomUserAssociationBase):
+class ChatRoomUserAssociationCreateS(ChatRoomUserAssociationBaseS):
     pass
 
 
-class ChatRoomUserAssociation(ChatRoomUserAssociationBase):
+class ChatRoomUserAssociationS(ChatRoomUserAssociationBaseS):
     created: datetime
 
     class Config:
         orm_mode = True
 
 
-class ChatHistoryBase(BaseModel):
+class ChatHistoryBaseS(BaseModel):
     contents: str
     is_active: bool = True
 
 
-class ChatHistoryCreate(ChatHistoryBase):
+class ChatHistoryCreateS(ChatHistoryBaseS):
     pass
 
 
-class ChatHistory(ChatHistoryBase):
+class ChatHistoryS(ChatHistoryBaseS):
     id: int
     room_id: int
     created: datetime

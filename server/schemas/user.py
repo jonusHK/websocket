@@ -3,7 +3,7 @@ from typing import Optional
 
 from pydantic import BaseModel
 
-from server.schemas import base as base_schemas
+from server.schemas.base import S3MediaBaseS
 
 
 class UserBase(BaseModel):
@@ -16,12 +16,12 @@ class UserBase(BaseModel):
     is_active: bool = True
 
 
-class UserCreate(UserBase):
+class UserCreateS(UserBase):
     uid: Optional[str] = None
     password: str
 
 
-class User(UserBase):
+class UserS(UserBase):
     id: int
     last_login: Optional[datetime] = None
 
@@ -29,7 +29,7 @@ class User(UserBase):
         orm_mode = True
 
 
-class UserProfileBase(BaseModel):
+class UserProfileBaseS(BaseModel):
     user_id: int
     nickname: str
     status_message: Optional[str] = None
@@ -37,11 +37,11 @@ class UserProfileBase(BaseModel):
     is_active: int = True
 
 
-class UserProfileCreate(UserProfileBase):
+class UserProfileCreateS(UserProfileBaseS):
     pass
 
 
-class UserProfile(UserProfileBase):
+class UserProfileS(UserProfileBaseS):
     id: int
     created: datetime
 
@@ -49,7 +49,7 @@ class UserProfile(UserProfileBase):
         orm_mode = True
 
 
-class UserRelationshipBase(BaseModel):
+class UserRelationshipBaseS(BaseModel):
     my_profile_id: int
     other_profile_id: int
     type: int
@@ -59,29 +59,29 @@ class UserRelationshipBase(BaseModel):
     is_active: int = True
 
 
-class UserRelationshipCreate(UserRelationshipBase):
+class UserRelationshipCreateS(UserRelationshipBaseS):
     pass
 
 
-class UserRelationship(UserRelationshipBase):
+class UserRelationshipS(UserRelationshipBaseS):
     id: int
 
     class Config:
         orm_mode = True
 
 
-class UserProfileImageBase(base_schemas.S3MediaBase):
+class UserProfileImageBaseS(S3MediaBaseS):
     type: int
     user_profile_id: int
     is_default: int = False
     is_active: int = True
 
 
-class UserProfileImageCreate(UserProfileImageBase):
+class UserProfileImageCreateS(UserProfileImageBaseS):
     pass
 
 
-class UserProfileImage(UserProfileImageBase):
+class UserProfileImageS(UserProfileImageBaseS):
     id: int
     created: datetime
 
@@ -89,17 +89,17 @@ class UserProfileImage(UserProfileImageBase):
         orm_mode = True
 
 
-class UserSessionBase(BaseModel):
+class UserSessionBaseS(BaseModel):
     user_id: int
     session_id: str
     expiry_at: datetime
 
 
-class UserSessionCreate(UserSessionBase):
+class UserSessionCreateS(UserSessionBaseS):
     pass
 
 
-class UserSession(UserSessionBase):
+class UserSessionS(UserSessionBaseS):
     id: int
 
     class Config:

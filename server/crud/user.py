@@ -5,7 +5,7 @@ from sqlalchemy.orm import contains_eager
 from server.core.utils import hash_password
 from server.crud import CRUDBase
 from server.models.user import User, UserSession, UserProfile
-from server.schemas.user import UserSessionCreate
+from server.schemas.user import UserSessionCreateS
 
 
 # TODO CRUDBase 상속
@@ -62,7 +62,7 @@ class UserSessionCRUD:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def create_session(self, create_s: UserSessionCreate):
+    async def create_session(self, create_s: UserSessionCreateS):
         user_session = UserSession(**create_s.dict())
         self.session.add(user_session)
         return user_session

@@ -5,13 +5,13 @@ from pydantic import BaseModel, validator
 from server.core.enums import ChatType
 
 
-class ChatRoomCreate(BaseModel):
+class ChatRoomCreateParamS(BaseModel):
     user_profile_id: int
     target_profile_ids: List[int]
 
 
 # TODO ChatType 에 따라 분기 처리
-class ChatDataBase(BaseModel):
+class ChatDataBaseS(BaseModel):
     text: Optional[str] = None
     history_ids: Optional[List[int]] = None
     file_ids: Optional[List[int]] = None
@@ -19,7 +19,7 @@ class ChatDataBase(BaseModel):
     is_active: bool = True
 
 
-class ChatReceiveData(ChatDataBase):
+class ChatSReceiveDataS(ChatDataBaseS):
     target_user_profile_ids: Optional[List[int]] = None
     is_read: Optional[bool] = None
     offset: Optional[int] = None
@@ -27,7 +27,7 @@ class ChatReceiveData(ChatDataBase):
     order_by: str = 'created'
 
 
-class ChatSendData(ChatDataBase):
+class ChatSSendDataS(ChatDataBaseS):
     from server.core.externals.redis.schemas import RedisChatHistoryByRoomS, RedisUserProfileByRoomS, RedisFileS
     user_profile_id: Optional[int] = None
     nickname: Optional[str] = None
@@ -36,9 +36,9 @@ class ChatSendData(ChatDataBase):
     files: Optional[List[RedisFileS]] = None
 
 
-class ChatReceiveForm(BaseModel):
+class ChatReceiveFormS(BaseModel):
     type: str
-    data: ChatReceiveData
+    data: ChatSReceiveDataS
 
     @validator("type")
     def get_type(cls, v):
@@ -47,9 +47,9 @@ class ChatReceiveForm(BaseModel):
         return ChatType.get_by_name(v)
 
 
-class ChatSendForm(BaseModel):
+class ChatSendFormS(BaseModel):
     type: ChatType
-    data: ChatSendData
+    data: ChatSSendDataS
 
     @validator("type")
     def get_type(cls, v):
