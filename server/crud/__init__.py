@@ -1,8 +1,10 @@
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 
 from fastapi import HTTPException
 from sqlalchemy import update, select, insert, delete
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql import ColumnElement
+from sqlalchemy.sql.elements import BooleanClauseList, BinaryExpression
 from starlette import status
 
 
@@ -28,8 +30,13 @@ class CRUDBase:
         self,
         offset=0,
         limit=100,
-        order_by: Optional[tuple] = (),
-        conditions: Optional[tuple] = (),
+        order_by: Optional[tuple] = None,
+        join: Optional[List[tuple]] = None,
+        outerjoin: Optional[List[tuple]] = None,
+        conditions: Optional[tuple] = None,
+        with_only_columns: Optional[tuple] = None,
+        group_by: Optional[tuple] = None,
+        having: Optional[BooleanClauseList | BinaryExpression] = None,
         options: Optional[list] = None
     ):
         stmt = select(self.model).offset(offset).limit(limit)
@@ -37,9 +44,22 @@ class CRUDBase:
             stmt = stmt.order_by(*order_by)
         if conditions:
             stmt = stmt.where(*conditions)
+        if with_only_columns:
+            stmt = stmt.with_only_columns(*with_only_columns)
+        if group_by:
+            stmt = stmt.group_by(*group_by)
+        if having is not None:
+            stmt = stmt.having(having)
+        if join:
+            for j in join:
+                stmt = stmt.join(*j)
+        if outerjoin:
+            for j in outerjoin:
+                stmt = stmt.outerjoin(*j)
         if options:
-            for option in options:
-                stmt = stmt.options(option)
+            for o in options:
+                stmt = stmt.options(o)
+
         results = await self.session.execute(stmt)
         return results.scalars().all()
 
