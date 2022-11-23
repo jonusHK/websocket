@@ -7,15 +7,19 @@ from server.core.authentications import COOKIE_NAME, cookie, backend
 from server.models import User
 
 
-async def get_user_by_websocket(websocket: WebSocket, session: AsyncSession) -> User:
-    signed_session_id = websocket.cookies[COOKIE_NAME]
-    session_id = UUID(
-        cookie.signer.loads(
-            signed_session_id,
-            max_age=cookie.cookie_params.max_age,
-            return_timestamp=False,
+class AuthValidator:
+    def __init__(self, session: AsyncSession):
+        self.session = session
+
+    async def get_user_by_websocket(self, websocket: WebSocket) -> User:
+        signed_session_id = websocket.cookies[COOKIE_NAME]
+        session_id = UUID(
+            cookie.signer.loads(
+                signed_session_id,
+                max_age=cookie.cookie_params.max_age,
+                return_timestamp=False,
+            )
         )
-    )
-    user_session = await backend.read(session_id, session)
-    user = user_session.user
-    return user
+        user_session = await backend.read(session_id, self.session)
+        user = user_session.user
+        return user
