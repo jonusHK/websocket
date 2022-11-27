@@ -17,6 +17,10 @@ class Settings(BaseSettings):
     redis_host: str
     redis_port: int
     redis_database: int
+    aws_access_key: str
+    aws_secret_access_key: str
+    aws_default_region: str = 'ap-northeast-2'
+    aws_storage_bucket_name: str
 
     @validator("backend_cors_origins", pre=True)
     def assemble_cors_origins(cls, v: str | List[str]) -> List[str] | str:
