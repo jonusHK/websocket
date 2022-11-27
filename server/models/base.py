@@ -28,6 +28,7 @@ class S3Media(TimestampMixin, Base):
 
     _file: Optional[IOBase | UploadFile | Image.Image] = None
     thumbnail_size = 300
+    chunk_size = 1024 * 1024
 
     id = Column(BigInteger, primary_key=True, index=True)
     uid = Column(String(32), nullable=False, unique=True)
@@ -58,7 +59,7 @@ class S3Media(TimestampMixin, Base):
             s3 = s3_session.resource('s3')
             obj = s3.Object(self.bucket_name, self.filepath)
             with BytesIO() as f:
-                while contents := obj.get()['Body'].read(1024 * 1024):
+                while contents := obj.get()['Body'].read(self.chunk_size):
                     f.write(contents)
             self._file = f
         return self._file
@@ -214,7 +215,7 @@ class S3Media(TimestampMixin, Base):
         elif isinstance(file, UploadFile):
             await file.seek(0)
             io = BytesIO()
-            while contents := await file.read(1024 * 1024):
+            while contents := await file.read(cls.chunk_size):
                 io.write(contents)
         elif isinstance(file, Image.Image):
             io = BytesIO()
