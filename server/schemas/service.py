@@ -15,9 +15,13 @@ class ChatRoomCreateS(ChatRoomBaseS):
 class ChatRoomS(ChatRoomBaseS):
     id: int
     created: datetime
+    updated: datetime
 
     class Config:
         orm_mode = True
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
+        }
 
 
 class ChatRoomUserAssociationBaseS(BaseModel):
@@ -31,9 +35,13 @@ class ChatRoomUserAssociationCreateS(ChatRoomUserAssociationBaseS):
 
 class ChatRoomUserAssociationS(ChatRoomUserAssociationBaseS):
     created: datetime
+    updated: datetime
 
     class Config:
         orm_mode = True
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
+        }
 
 
 class ChatHistoryBaseS(BaseModel):
