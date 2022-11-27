@@ -26,8 +26,9 @@ class TimestampMixin(object):
 class S3Media(TimestampMixin, Base):
     __tablename__ = "s3_media"
 
-    _file: Optional[UploadFile] = None
+    _file: Optional[IOBase | UploadFile | Image.Image] = None
     thumbnail_size = 300
+    chunk_size = 1024 * 1024
 
     id = Column(BigInteger, primary_key=True, index=True)
     uid = Column(String(32), nullable=False, unique=True)
@@ -54,8 +55,13 @@ class S3Media(TimestampMixin, Base):
         aws_secret_access_key: str = settings.aws_secret_access_key
     ):
         if self._file is None:
-            s3 = self.get_s3_client(aws_access_key_id, aws_secret_access_key)
-            self._file = s3.download_file(self.bucket_name, self.filename, self.filepath)
+            s3_session = boto3.Session(aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key)
+            s3 = s3_session.resource('s3')
+            obj = s3.Object(self.bucket_name, self.filepath)
+            with BytesIO() as f:
+                while contents := obj.get()['Body'].read(self.chunk_size):
+                    f.write(contents)
+            self._file = f
         return self._file
 
     def file_exists(
@@ -209,7 +215,7 @@ class S3Media(TimestampMixin, Base):
         elif isinstance(file, UploadFile):
             await file.seek(0)
             io = BytesIO()
-            while contents := await file.read(1024 * 1024):
+            while contents := await file.read(cls.chunk_size):
                 io.write(contents)
         elif isinstance(file, Image.Image):
             io = BytesIO()
