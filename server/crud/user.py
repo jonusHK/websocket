@@ -4,7 +4,7 @@ from sqlalchemy.orm import contains_eager
 
 from server.core.utils import hash_password
 from server.crud import CRUDBase
-from server.models.user import User, UserSession, UserProfile
+from server.models.user import User, UserSession, UserProfile, UserProfileImage
 from server.schemas.user import UserSessionCreateS
 
 
@@ -101,3 +101,7 @@ class UserSessionCRUD:
 
 class UserProfileCRUD(CRUDBase):
     model = UserProfile
+
+
+class UserProfileImageCRUD(CRUDBase):
+    model = UserProfileImage

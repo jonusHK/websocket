@@ -55,7 +55,8 @@ class ChatHistoryFile(S3Media):
     chat_history = relationship("ChatHistory", back_populates="files")
 
     __mapper_args__ = {
-        "polymorphic_identity": "chat_history_file"
+        "polymorphic_load": "selectin",
+        "polymorphic_identity": "chat_history"
     }
 
 

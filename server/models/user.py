@@ -23,6 +23,7 @@ class User(TimestampMixin, Base):
 
     profiles = relationship("UserProfile", back_populates="user", lazy="selectin")
     sessions = relationship("UserSession", back_populates="user", lazy="selectin")
+    s3_medias = relationship('S3Media', back_populates='uploaded_by', lazy='selectin')
 
 
 class UserProfile(TimestampMixin, Base):
@@ -78,6 +79,7 @@ class UserProfileImage(S3Media):
     profile = relationship("UserProfile", back_populates="images", lazy="joined")
 
     __mapper_args__ = {
+        "polymorphic_load": "selectin",
         "polymorphic_identity": "user_profile_image"
     }
 
