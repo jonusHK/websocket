@@ -4,7 +4,6 @@ from typing import Generic, Optional, List
 from uuid import UUID
 
 from fastapi import HTTPException, Request, Depends, status
-from fastapi.encoders import jsonable_encoder
 from fastapi_sessions.backends.session_backend import SessionModel, BackendError
 from fastapi_sessions.frontends.implementations import SessionCookie, CookieParameters
 from fastapi_sessions.frontends.session_frontend import ID, FrontendError
@@ -16,7 +15,6 @@ from server.core.enums import UserType
 from server.crud.user import UserCRUD, UserSessionCRUD
 from server.db.databases import get_async_session, settings, async_session
 from server.models import user as user_models
-from server.schemas import user as user_schemas
 from server.schemas.user import UserSessionCreateS, UserSessionS
 
 

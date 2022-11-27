@@ -15,7 +15,7 @@ from starlette import status
 from starlette.responses import HTMLResponse
 
 from server.api import ExceptionHandlerRoute, templates
-from server.api.common import get_user_by_websocket
+from server.api.common import AuthValidator
 from server.core.authentications import cookie, RoleChecker
 from server.core.enums import UserType, ChatType
 from server.core.exceptions import ExceptionHandler
@@ -134,7 +134,7 @@ async def chat_room(
     crud_user_profile = UserProfileCRUD(session)
     redis: Redis = AioRedis().redis
 
-    user: User = await get_user_by_websocket(websocket, session)
+    user: User = await AuthValidator(session).get_user_by_websocket(websocket)
     if not next((p for p in user.profiles if p.id == user_profile_id), None):
         raise WebSocketDisconnect(code=status.WS_1008_POLICY_VIOLATION)
 
@@ -198,7 +198,7 @@ async def chat(
         return f"Chat Error - room_id: {room_id}, user_profile_id: {user_profile_id}, "\
                f"reason: {ExceptionHandler(exc).error}"
 
-    user: User = await get_user_by_websocket(websocket, session)
+    user: User = await AuthValidator(session).get_user_by_websocket(websocket)
     if not next((p for p in user.profiles if p.id == user_profile_id), None):
         raise WebSocketDisconnect(code=status.WS_1008_POLICY_VIOLATION)
 

@@ -1,10 +1,12 @@
+from datetime import datetime
+
 from pydantic import BaseModel
 
 
 class S3MediaBaseS(BaseModel):
     bucket_name: str
-    file_key: str
-    file_path: str
+    filename: str
+    filepath: str
     content_type: str
 
 
@@ -15,6 +17,8 @@ class S3MediaCreateS(S3MediaBaseS):
 class S3MediaS(S3MediaBaseS):
     id: int
     use_type: str
+    created: datetime
+    updated: datetime
 
     class Config:
         orm_mode = True

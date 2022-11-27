@@ -3,6 +3,7 @@ from typing import Optional
 
 from pydantic import BaseModel
 
+from server.core.enums import ProfileImageType, RelationshipType
 from server.schemas.base import S3MediaBaseS
 
 
@@ -24,17 +25,22 @@ class UserCreateS(UserBase):
 class UserS(UserBase):
     id: int
     last_login: Optional[datetime] = None
+    created: datetime
+    updated: datetime
 
     class Config:
         orm_mode = True
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
+        }
 
 
 class UserProfileBaseS(BaseModel):
     user_id: int
     nickname: str
     status_message: Optional[str] = None
-    is_default: int = False
-    is_active: int = True
+    is_default: bool = False
+    is_active: bool = True
 
 
 class UserProfileCreateS(UserProfileBaseS):
@@ -44,19 +50,23 @@ class UserProfileCreateS(UserProfileBaseS):
 class UserProfileS(UserProfileBaseS):
     id: int
     created: datetime
+    updated: datetime
 
     class Config:
         orm_mode = True
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
+        }
 
 
 class UserRelationshipBaseS(BaseModel):
     my_profile_id: int
     other_profile_id: int
-    type: int
+    type: RelationshipType
     favorites: int = False
     is_hidden: int = False
     is_forbidden: int = False
-    is_active: int = True
+    is_active: bool = True
 
 
 class UserRelationshipCreateS(UserRelationshipBaseS):
@@ -71,10 +81,10 @@ class UserRelationshipS(UserRelationshipBaseS):
 
 
 class UserProfileImageBaseS(S3MediaBaseS):
-    type: int
+    type: ProfileImageType
     user_profile_id: int
-    is_default: int = False
-    is_active: int = True
+    is_default: bool = False
+    is_active: bool = True
 
 
 class UserProfileImageCreateS(UserProfileImageBaseS):
@@ -84,9 +94,13 @@ class UserProfileImageCreateS(UserProfileImageBaseS):
 class UserProfileImageS(UserProfileImageBaseS):
     id: int
     created: datetime
+    updated: datetime
 
     class Config:
         orm_mode = True
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
+        }
 
 
 class UserSessionBaseS(BaseModel):
@@ -101,6 +115,11 @@ class UserSessionCreateS(UserSessionBaseS):
 
 class UserSessionS(UserSessionBaseS):
     id: int
+    created: datetime
+    updated: datetime
 
     class Config:
         orm_mode = True
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
+        }

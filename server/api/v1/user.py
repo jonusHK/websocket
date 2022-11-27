@@ -1,17 +1,18 @@
 from datetime import datetime
+from typing import List
 from uuid import uuid4, UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from server.api import ExceptionHandlerRoute
 from server.core.authentications import SessionData, backend, cookie, verifier, RoleChecker
-from server.core.enums import UserType
+from server.core.enums import UserType, ProfileImageType
 from server.core.utils import verify_password
 from server.crud.user import UserCRUD, UserProfileCRUD
-from server.db.databases import get_async_session
-from server.models import UserSession
-from server.schemas.user import UserS, UserSessionS, UserCreateS
+from server.db.databases import get_async_session, settings
+from server.models import UserSession, UserProfileImage
+from server.schemas.user import UserS, UserSessionS, UserCreateS, UserProfileImageS
 
 router = APIRouter(route_class=ExceptionHandlerRoute)
 
@@ -74,3 +75,42 @@ async def logout(
     cookie.delete_from_response(response)
     await session.commit()
     return
+
+
+# 유저 프로필, 배경 이미지 업로드
+@router.post("/profile/image/upload", dependencies=[Depends(cookie)])
+async def user_profile_image_upload(
+    files: List[UploadFile],
+    user_profile_id: int,
+    image_type: str,
+    user_session: UserSession = Depends(verifier),
+    session=Depends(get_async_session)
+):
+    objects: List[UserProfileImage] = []
+    async for o in UserProfileImage.files_to_models(
+        session,
+        files,
+        root='user/profile/',
+        user=user_session.user,
+        user_profile_id=user_profile_id,
+        type=ProfileImageType.get_by_name(image_type),
+        bucket_name=settings.aws_storage_bucket_name,
+        thumbnail=True
+    ):
+        objects.append(o)
+
+    try:
+        session.add_all(objects)
+        await session.commit()
+        for o in objects:
+            await session.refresh(o)
+
+        if len(objects) == 1:
+            await objects[0].upload()
+        else:
+            await UserProfileImage.asynchronous_upload(*objects)
+    finally:
+        for o in objects:
+            o.close()
+
+    return [UserProfileImageS.from_orm(o) for o in objects]
