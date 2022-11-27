@@ -15,7 +15,7 @@ from starlette import status
 from starlette.responses import HTMLResponse
 
 from server.api import ExceptionHandlerRoute, templates
-from server.api.common import get_user_by_websocket, AuthValidator
+from server.api.common import AuthValidator
 from server.core.authentications import cookie, RoleChecker
 from server.core.enums import UserType, ChatType
 from server.core.exceptions import ExceptionHandler

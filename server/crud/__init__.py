@@ -1,9 +1,8 @@
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Optional, List, Dict, Any
 
 from fastapi import HTTPException
 from sqlalchemy import update, select, insert, delete
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.sql import ColumnElement
 from sqlalchemy.sql.elements import BooleanClauseList, BinaryExpression
 from starlette import status
 
