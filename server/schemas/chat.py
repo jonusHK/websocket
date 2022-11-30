@@ -19,7 +19,7 @@ class ChatDataBaseS(BaseModel):
     is_active: bool = True
 
 
-class ChatSReceiveDataS(ChatDataBaseS):
+class ChatReceiveDataS(ChatDataBaseS):
     target_user_profile_ids: Optional[List[int]] = None
     is_read: Optional[bool] = None
     offset: Optional[int] = None
@@ -27,7 +27,7 @@ class ChatSReceiveDataS(ChatDataBaseS):
     order_by: str = 'created'
 
 
-class ChatSSendDataS(ChatDataBaseS):
+class ChatSendDataS(ChatDataBaseS):
     from server.core.externals.redis.schemas import RedisChatHistoryByRoomS, RedisUserProfileByRoomS, RedisFileS
     user_profile_id: Optional[int] = None
     nickname: Optional[str] = None
@@ -38,7 +38,7 @@ class ChatSSendDataS(ChatDataBaseS):
 
 class ChatReceiveFormS(BaseModel):
     type: str
-    data: ChatSReceiveDataS
+    data: ChatReceiveDataS
 
     @validator("type")
     def get_type(cls, v):
@@ -49,7 +49,7 @@ class ChatReceiveFormS(BaseModel):
 
 class ChatSendFormS(BaseModel):
     type: ChatType
-    data: ChatSSendDataS
+    data: ChatSendDataS
 
     @validator("type")
     def get_type(cls, v):

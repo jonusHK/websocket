@@ -29,7 +29,7 @@ from server.crud.user import UserProfileCRUD
 from server.db.databases import get_async_session
 from server.models import User, UserProfile, ChatRoom, ChatRoomUserAssociation, ChatHistory, \
     ChatHistoryUserAssociation
-from server.schemas.chat import ChatSendFormS, ChatSSendDataS, ChatReceiveFormS, ChatRoomCreateParamS
+from server.schemas.chat import ChatSendFormS, ChatSendDataS, ChatReceiveFormS, ChatRoomCreateParamS
 from server.schemas.service import ChatRoomS
 
 router = APIRouter(route_class=ExceptionHandlerRoute)
@@ -336,7 +336,7 @@ async def chat(
                             await session.commit()
                         response_s = ChatSendFormS(
                             type=request_s.type,
-                            data=ChatSSendDataS(
+                            data=ChatSendDataS(
                                 history_ids=request_s.data.history_ids,
                                 is_active=request_s.data.is_active))
                     # 메시지 요청
@@ -379,7 +379,7 @@ async def chat(
 
                         response_s = ChatSendFormS(
                             type=request_s.type,
-                            data=ChatSSendDataS(
+                            data=ChatSendDataS(
                                 user_profile_id=user_profile_id,
                                 nickname=user_profile.nickname,
                                 timestamp=request_s.data.timestamp,
@@ -405,7 +405,7 @@ async def chat(
                         # TODO Redis 생성 및 response_s 생성
                         response_s = ChatSendFormS(
                             type=request_s.type,
-                            data=ChatSSendDataS(
+                            data=ChatSendDataS(
                                 user_profile_id=user_profile_id,
                                 nickname=user_profile.nickname,
                                 timestamp=request_s.data.timestamp,
@@ -501,7 +501,7 @@ async def chat(
                             await RedisChatHistoriesToSyncS.zadd(redis, room_id, history)
                         response_s = ChatSendFormS(
                             type=ChatType.LOOKUP,
-                            data=ChatSSendDataS(
+                            data=ChatSendDataS(
                                 histories=chat_histories,
                                 user_profiles=await RedisUserProfilesByRoomS.smembers(redis, room_id),
                                 timestamp=request_s.data.timestamp))
@@ -560,7 +560,7 @@ async def chat(
                             target_msg = profiles[0].nickname
                         response_s = ChatSendFormS(
                             type=ChatType.MESSAGE,
-                            data=ChatSSendDataS(
+                            data=ChatSendDataS(
                                 text=f"{user_profile.nickname}님이 {target_msg}님을 초대했습니다.",
                                 timestamp=request_s.data.timestamp))
                     await pub.publish(f"chat:{room_id}", response_s.json())
@@ -599,7 +599,7 @@ async def chat(
                         # 유저 연결 해제 메시지 전송
                         response_s = ChatSendFormS(
                             type=ChatType.MESSAGE,
-                            data=ChatSSendDataS(
+                            data=ChatSendDataS(
                                 text=f"{user_profile.nickname}님이 나갔습니다.",
                                 timestamp=now.timestamp()))
                         await pub.publish(f"chat:{room_id}", response_s.json())
