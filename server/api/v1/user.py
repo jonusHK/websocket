@@ -80,22 +80,23 @@ async def logout(
 # 유저 프로필, 배경 이미지 업로드
 @router.post("/profile/image/upload", dependencies=[Depends(cookie)])
 async def user_profile_image_upload(
-    files: List[UploadFile],
+    file: UploadFile,
     user_profile_id: int,
     image_type: str,
+    is_default: bool,
     user_session: UserSession = Depends(verifier),
     session=Depends(get_async_session)
 ):
     objects: List[UserProfileImage] = []
     async for o in UserProfileImage.files_to_models(
         session,
-        files,
-        root='user/profile/',
+        [file],
+        root='user_profile/',
         user=user_session.user,
         user_profile_id=user_profile_id,
         type=ProfileImageType.get_by_name(image_type),
-        bucket_name=settings.aws_storage_bucket_name,
-        thumbnail=True
+        is_default=is_default,
+        bucket_name=settings.aws_storage_bucket_name
     ):
         objects.append(o)
 
