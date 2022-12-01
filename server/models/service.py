@@ -60,6 +60,7 @@ class ChatHistoryFile(S3Media):
     }
 
 
+# 채팅 내역을 읽을 유저들 간의 관계
 class ChatHistoryUserAssociation(Base):
     __tablename__ = "chat_history_user_association"
 
