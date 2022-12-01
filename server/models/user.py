@@ -23,7 +23,6 @@ class User(TimestampMixin, Base):
 
     profiles = relationship("UserProfile", back_populates="user", lazy="selectin")
     sessions = relationship("UserSession", back_populates="user", lazy="selectin")
-    s3_medias = relationship('S3Media', back_populates='uploaded_by', lazy='selectin')
 
 
 class UserProfile(TimestampMixin, Base):
@@ -37,6 +36,7 @@ class UserProfile(TimestampMixin, Base):
     is_active = Column(Boolean, default=True, nullable=False)
 
     user = relationship("User", back_populates="profiles", lazy="joined")
+    s3_medias = relationship('S3Media', back_populates='uploaded_by', lazy='selectin')
     images = relationship(
         "UserProfileImage",
         back_populates="profile", cascade="all, delete-orphan", lazy="selectin")

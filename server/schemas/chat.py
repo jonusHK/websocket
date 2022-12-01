@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 
 from pydantic import BaseModel, validator
 
@@ -14,13 +14,13 @@ class ChatRoomCreateParamS(BaseModel):
 class ChatDataBaseS(BaseModel):
     text: Optional[str] = None
     history_ids: Optional[List[int]] = None
-    file_ids: Optional[List[int]] = None
     timestamp: float | int
     is_active: bool = True
 
 
 class ChatReceiveDataS(ChatDataBaseS):
     target_user_profile_ids: Optional[List[int]] = None
+    files: list[Dict[str, Any]] = None
     is_read: Optional[bool] = None
     offset: Optional[int] = None
     limit: Optional[int] = None
