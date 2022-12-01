@@ -6,16 +6,19 @@ from server.core.externals.redis.mixin import SortedSetCollectionMixin, \
     SetCollectionMixin
 
 
+class RedisFileS(BaseModel):
+    id: int
+    user_profile_id: int
+    url: str
+    type: str
+    is_default: bool
+    is_active: bool
+
+
 class RedisUserProfileByRoomS(BaseModel):
     id: int
     nickname: str
-    # TODO RedisFileS 추가
-
-
-class RedisFileS(BaseModel):
-    id: int
-    url: str
-    is_default: bool
+    files: Optional[List[RedisFileS]] = []
 
 
 class RedisChatHistoryByRoomS(BaseModel):
@@ -31,6 +34,7 @@ class RedisChatHistoryByRoomS(BaseModel):
 class RedisChatRoomByUserProfileS(BaseModel):
     id: int
     name: str
+    user_profile_files: Optional[List[RedisFileS]] = []
     unread_msg_cnt: int
 
 
@@ -48,7 +52,7 @@ class RedisUserProfilesByRoomS(SetCollectionMixin):
 class RedisChatHistoriesByRoomS(SortedSetCollectionMixin):
     format = 'room:{}:chat_histories'
     schema = RedisChatHistoryByRoomS
-    score = 'timestamp'
+    score = 'timestamp'  # schema 내부 필드여야 함
 
 
 class RedisChatRoomsByUserProfileS(SetCollectionMixin):
@@ -59,4 +63,4 @@ class RedisChatRoomsByUserProfileS(SetCollectionMixin):
 class RedisChatHistoriesToSyncS(SortedSetCollectionMixin):
     format = 'update:chat_histories'
     schema = RedisChatHistoryToSyncS
-    score = 'id'
+    score = 'id'  # schema 내부 필드여야 함
