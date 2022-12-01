@@ -4,7 +4,7 @@ import os
 import uuid
 import warnings
 from io import IOBase, BytesIO
-from typing import List, Optional
+from typing import List, Optional, Dict, Any, Tuple
 
 import boto3
 from PIL import Image
@@ -28,12 +28,12 @@ class S3Media(TimestampMixin, Base):
 
     _file: Optional[IOBase | UploadFile | Image.Image] = None
     thumbnail_size = 300
-    chunk_size = 1024 * 1024
+    chunk_size = 1024 * 1024 * 10
 
     id = Column(BigInteger, primary_key=True, index=True)
     uid = Column(String(32), nullable=False, unique=True)
     origin_uid = Column(String(32), ForeignKey('s3_media.uid'), nullable=True)
-    uploaded_by_id = Column(BigInteger, ForeignKey('users.id'), nullable=True)
+    uploaded_by_id = Column(BigInteger, ForeignKey('user_profiles.id'), nullable=True)
     bucket_name = Column(String(50), nullable=False)
     filename = Column(String(45), nullable=False)
     filepath = Column(String(250), nullable=False)
@@ -41,7 +41,7 @@ class S3Media(TimestampMixin, Base):
     use_type = Column(String(50), nullable=True)
 
     origin = relationship('S3Media', remote_side=[uid], backref=backref('thumbnail', uselist=False))
-    uploaded_by = relationship('User', back_populates='s3_medias', lazy='joined')
+    uploaded_by = relationship('UserProfile', back_populates='s3_medias', lazy='joined')
 
     __mapper_args__ = {
         'polymorphic_identity': 's3_media',
@@ -94,6 +94,42 @@ class S3Media(TimestampMixin, Base):
             self._file = None
 
     @classmethod
+    async def asynchronous_presigned_url(
+        cls,
+        *media: 'S3Media',
+        aws_access_key_id: str = settings.aws_access_key,
+        aws_secret_access_key: str = settings.aws_secret_access_key,
+        expiration=31 * 24 * 60 * 60  # 31일
+    ):
+        s3 = cls.get_s3_client(aws_access_key_id, aws_secret_access_key)
+
+        async def _generate(attr):
+            _media = attr.pop('media')
+            _media.update({
+                'url': s3.generate_presigned_url('get_object', **attr)
+            })
+            return _media
+
+        async def _kwargs():
+            for m in media:
+                yield {
+                    'media': {
+                        'id': m.id,
+                        'user_profile_id': m.user_profile_id,
+                        'type': m.type,
+                        'is_default': m.is_default,
+                        'is_active': m.is_active
+                    },
+                    'Params': {
+                        'Bucket': m.bucket_name,
+                        'Key': m.filepath
+                    },
+                    'ExpiresIn': expiration
+                }
+
+        return await asyncio.wait([_generate(attr) async for attr in _kwargs()])
+
+    @classmethod
     async def is_exists(
         cls, session: AsyncSession, filepath: str,
         bucket_name: str = settings.aws_storage_bucket_name, **kwargs
@@ -109,8 +145,8 @@ class S3Media(TimestampMixin, Base):
 
     @classmethod
     async def new(
-        cls, session: AsyncSession, file: UploadFile, root: str = None,
-        uploaded_by=None, upload=False, thumbnail=False, **kwargs
+        cls, session: AsyncSession, file: UploadFile | Tuple[IOBase, str], root: str = None,
+        uploaded_by_id=None, upload=False, thumbnail=False, **kwargs
     ):
         uid = uuid.uuid4().hex
 
@@ -118,31 +154,34 @@ class S3Media(TimestampMixin, Base):
         if not root.endswith('/'):
             root += '/'
 
-        if uploaded_by is not None:
-            path_prefix = uploaded_by.id
+        if uploaded_by_id is not None:
+            path_prefix = uploaded_by_id
         else:
             path_prefix = 'anonymous'
 
         root = os.path.join(root, f'{path_prefix}/{uid}/')
 
-        filepath = f'{root}{file.filename}'
+        filename = file.filename if isinstance(file, UploadFile) else "unknown"
+        filepath = f'{root}{filename}'
         if await cls.is_exists(session, filepath, **kwargs):
             raise FileExistsError(f'이미 파일이 존재합니다. {filepath}')
+        content_type = file.content_type if isinstance(file, UploadFile) else file[1]
+        _file = file if isinstance(file, UploadFile) else file[0]
 
         instance = cls(
             uid=uid,
-            filename=file.filename,
+            filename=filename,
             filepath=filepath,
-            content_type=file.content_type,
-            uploaded_by=uploaded_by,
+            content_type=content_type,
+            uploaded_by_id=uploaded_by_id,
             **kwargs)
-        instance._file = file
+        instance._file = _file
         if upload:
             await instance.upload()
 
         if thumbnail:
-            if file.content_type.startswith('image/'):
-                im_origin = Image.open(file.file)
+            if content_type.startswith('image/'):
+                im_origin = Image.open(_file.file if hasattr(_file, 'file') else file)
                 w, h = im_origin.size
                 if max(w, h) <= cls.thumbnail_size:
                     return instance, None
@@ -150,10 +189,10 @@ class S3Media(TimestampMixin, Base):
                 thumbnail = cls(
                     uid=uuid.uuid4().hex,
                     origin_uid=instance.uid,
-                    filename=file.filename,
-                    filepath=f'{root}thumbnail/{file.filename}',
-                    content_type=file.content_type,
-                    uploaded_by=uploaded_by,
+                    filename=filename,
+                    filepath=f'{root}thumbnail/{filename}',
+                    content_type=content_type,
+                    uploaded_by_id=uploaded_by_id,
                     **kwargs)
                 im = im_origin
 
@@ -177,15 +216,15 @@ class S3Media(TimestampMixin, Base):
 
                 return instance, thumbnail
 
-            elif file.content_type == 'application/pdf':
+            elif content_type == 'application/pdf':
                 for im in convert_from_bytes(await cls.file_to_io(instance)):
                     thumbnail = cls(
                         uid=uuid.uuid4().hex,
                         origin_uid=instance.uid,
-                        filename=file.filename,
-                        filepath=f'{root}thumbnail/{file.filename}',
-                        content_type=file.content_type,
-                        uploaded_by=uploaded_by,
+                        filename=filename,
+                        filepath=f'{root}thumbnail/{filename}',
+                        content_type=content_type,
+                        uploaded_by_id=uploaded_by_id,
                         **kwargs)
                     w, h = im.size
                     if max(w, h) > cls.thumbnail_size:
@@ -221,23 +260,23 @@ class S3Media(TimestampMixin, Base):
             io = BytesIO()
             file.save(io, format=m.content_type.split('/')[-1].lower())
         else:
-            warnings.warn(f'{file.filename}({m.id}) seems to be an invalid type: {type(file)}')
+            warnings.warn(f'File seems to be an invalid type: {type(file)}')
             return None
         return io
 
     @classmethod
     async def files_to_models(
-        cls, session: AsyncSession, files: List[UploadFile], root: str = None,
-        user=None, upload=False, thumbnail=False, **kwargs
+        cls, session: AsyncSession, files: List[UploadFile | Tuple[IOBase, str]], root: str = None,
+        user_profile_id=None, upload=False, thumbnail=False, **kwargs
     ):
-        uploaded_by = None
-        if user:
-            uploaded_by = user
+        uploaded_by_id = None
+        if user_profile_id:
+            uploaded_by_id = user_profile_id
 
         for file in files:
             origin, thumb = await cls.new(
                 session, file,
-                root=root, uploaded_by=uploaded_by, upload=upload, thumbnail=thumbnail, **kwargs)
+                root=root, uploaded_by_id=uploaded_by_id, upload=upload, thumbnail=thumbnail, **kwargs)
             yield origin
             if thumb is not None:
                 yield thumb
