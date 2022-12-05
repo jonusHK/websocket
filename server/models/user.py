@@ -4,10 +4,10 @@ from sqlalchemy.orm import relationship
 from server.core.enums import RelationshipType, ProfileImageType
 from server.core.utils import IntTypeEnum
 from server.db.databases import Base
-from server.models.base import TimestampMixin, S3Media
+from server.models.base import TimestampMixin, S3Media, ConvertMixin
 
 
-class User(TimestampMixin, Base):
+class User(TimestampMixin, ConvertMixin, Base):
     __tablename__ = "users"
 
     id = Column(BigInteger, primary_key=True, index=True)
@@ -25,7 +25,7 @@ class User(TimestampMixin, Base):
     sessions = relationship("UserSession", back_populates="user", lazy="selectin")
 
 
-class UserProfile(TimestampMixin, Base):
+class UserProfile(TimestampMixin, ConvertMixin, Base):
     __tablename__ = "user_profiles"
 
     id = Column(BigInteger, primary_key=True, index=True)
@@ -33,10 +33,8 @@ class UserProfile(TimestampMixin, Base):
     nickname = Column(String(30), nullable=False)
     status_message = Column(Text, nullable=True)
     is_default = Column(Boolean, default=False, nullable=False)
-    is_active = Column(Boolean, default=True, nullable=False)
 
     user = relationship("User", back_populates="profiles", lazy="joined")
-    s3_medias = relationship('S3Media', back_populates='uploaded_by', lazy='selectin')
     images = relationship(
         "UserProfileImage",
         back_populates="profile", cascade="all, delete-orphan", lazy="selectin")
@@ -51,7 +49,7 @@ class UserProfile(TimestampMixin, Base):
         back_populates="user_profile", cascade="all, delete", passive_deletes=True, lazy="selectin")
 
 
-class UserRelationship(Base):
+class UserRelationship(ConvertMixin, Base):
     __tablename__ = "user_relationships"
 
     id = Column(BigInteger, primary_key=True, index=True)
@@ -74,7 +72,6 @@ class UserProfileImage(S3Media):
     user_profile_id = Column(BigInteger, ForeignKey("user_profiles.id", ondelete="CASCADE"), nullable=False)
     type = Column(IntTypeEnum(enum_class=ProfileImageType), nullable=False)
     is_default = Column(Boolean, default=False, nullable=False)
-    is_active = Column(Boolean, default=True, nullable=False)
 
     profile = relationship("UserProfile", back_populates="images", lazy="joined")
 
@@ -84,7 +81,7 @@ class UserProfileImage(S3Media):
     }
 
 
-class UserSession(TimestampMixin, Base):
+class UserSession(TimestampMixin, ConvertMixin, Base):
     __tablename__ = "user_sessions"
 
     id = Column(BigInteger, primary_key=True, index=True)

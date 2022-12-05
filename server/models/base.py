@@ -4,18 +4,20 @@ import os
 import uuid
 import warnings
 from io import IOBase, BytesIO
-from typing import List, Optional, Dict, Any, Tuple
+from typing import List, Optional
 
 import boto3
 from PIL import Image
+from botocore.config import Config
 from botocore.exceptions import ClientError
 from pdf2image import convert_from_bytes
-from sqlalchemy import BigInteger, Column, String, DateTime, func, ForeignKey
+from sqlalchemy import BigInteger, Column, String, DateTime, func, ForeignKey, Boolean, inspect
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import relationship, backref
 from starlette.datastructures import UploadFile
 
 from server.db.databases import Base, settings
+from server.schemas.base import WebSocketFileS
 
 
 class TimestampMixin(object):
@@ -23,7 +25,14 @@ class TimestampMixin(object):
     updated = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
 
 
-class S3Media(TimestampMixin, Base):
+class ConvertMixin(object):
+    def to_dict(self):
+        return {
+            c.key: getattr(self, c.key) for c in inspect(self).mapper.column_attrs
+        }
+
+
+class S3Media(TimestampMixin, ConvertMixin, Base):
     __tablename__ = "s3_media"
 
     _file: Optional[IOBase | UploadFile | Image.Image] = None
@@ -33,15 +42,15 @@ class S3Media(TimestampMixin, Base):
     id = Column(BigInteger, primary_key=True, index=True)
     uid = Column(String(32), nullable=False, unique=True)
     origin_uid = Column(String(32), ForeignKey('s3_media.uid'), nullable=True)
-    uploaded_by_id = Column(BigInteger, ForeignKey('user_profiles.id'), nullable=True)
+    uploaded_by_id = Column(BigInteger, nullable=True)
     bucket_name = Column(String(50), nullable=False)
     filename = Column(String(45), nullable=False)
     filepath = Column(String(250), nullable=False)
     content_type = Column(String(45), nullable=False)
     use_type = Column(String(50), nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
 
     origin = relationship('S3Media', remote_side=[uid], backref=backref('thumbnail', uselist=False))
-    uploaded_by = relationship('UserProfile', back_populates='s3_medias', lazy='joined')
 
     __mapper_args__ = {
         'polymorphic_identity': 's3_media',
@@ -81,12 +90,16 @@ class S3Media(TimestampMixin, Base):
     def get_s3_client(
         cls,
         aws_access_key_id: str = settings.aws_access_key,
-        aws_secret_access_key: str = settings.aws_secret_access_key
+        aws_secret_access_key: str = settings.aws_secret_access_key,
+        config=Config(
+            region_name='ap-northeast-2',
+            signature_version='s3v4')
     ):
         return boto3.client(
             's3',
             aws_access_key_id=aws_access_key_id,
-            aws_secret_access_key=aws_secret_access_key)
+            aws_secret_access_key=aws_secret_access_key,
+            config=config)
 
     def close(self):
         if self._file is not None:
@@ -99,27 +112,21 @@ class S3Media(TimestampMixin, Base):
         *media: 'S3Media',
         aws_access_key_id: str = settings.aws_access_key,
         aws_secret_access_key: str = settings.aws_secret_access_key,
-        expiration=31 * 24 * 60 * 60  # 31일
+        expiration=7 * 24 * 60 * 60  # 7일
     ):
         s3 = cls.get_s3_client(aws_access_key_id, aws_secret_access_key)
 
         async def _generate(attr):
-            _media = attr.pop('media')
-            _media.update({
+            media_id = attr.pop('id')
+            return {
+                'id': media_id,
                 'url': s3.generate_presigned_url('get_object', **attr)
-            })
-            return _media
+            }
 
         async def _kwargs():
             for m in media:
                 yield {
-                    'media': {
-                        'id': m.id,
-                        'user_profile_id': m.user_profile_id,
-                        'type': m.type,
-                        'is_default': m.is_default,
-                        'is_active': m.is_active
-                    },
+                    'id': m.id,
                     'Params': {
                         'Bucket': m.bucket_name,
                         'Key': m.filepath
@@ -127,7 +134,8 @@ class S3Media(TimestampMixin, Base):
                     'ExpiresIn': expiration
                 }
 
-        return await asyncio.wait([_generate(attr) async for attr in _kwargs()])
+        done, _ = await asyncio.wait([_generate(attr) async for attr in _kwargs()])
+        return done
 
     @classmethod
     async def is_exists(
@@ -145,7 +153,7 @@ class S3Media(TimestampMixin, Base):
 
     @classmethod
     async def new(
-        cls, session: AsyncSession, file: UploadFile | Tuple[IOBase, str], root: str = None,
+        cls, session: AsyncSession, file: UploadFile | WebSocketFileS, root: str = None,
         uploaded_by_id=None, upload=False, thumbnail=False, **kwargs
     ):
         uid = uuid.uuid4().hex
@@ -161,12 +169,11 @@ class S3Media(TimestampMixin, Base):
 
         root = os.path.join(root, f'{path_prefix}/{uid}/')
 
-        filename = file.filename if isinstance(file, UploadFile) else "unknown"
+        filename = file.filename
         filepath = f'{root}{filename}'
         if await cls.is_exists(session, filepath, **kwargs):
             raise FileExistsError(f'이미 파일이 존재합니다. {filepath}')
-        content_type = file.content_type if isinstance(file, UploadFile) else file[1]
-        _file = file if isinstance(file, UploadFile) else file[0]
+        content_type = file.content_type
 
         instance = cls(
             uid=uid,
@@ -175,13 +182,13 @@ class S3Media(TimestampMixin, Base):
             content_type=content_type,
             uploaded_by_id=uploaded_by_id,
             **kwargs)
-        instance._file = _file
+        instance._file = file if isinstance(file, UploadFile) else file.content
         if upload:
             await instance.upload()
 
         if thumbnail:
             if content_type.startswith('image/'):
-                im_origin = Image.open(_file.file if hasattr(_file, 'file') else file)
+                im_origin = Image.open(await cls.file_to_io(instance))
                 w, h = im_origin.size
                 if max(w, h) <= cls.thumbnail_size:
                     return instance, None
@@ -266,7 +273,7 @@ class S3Media(TimestampMixin, Base):
 
     @classmethod
     async def files_to_models(
-        cls, session: AsyncSession, files: List[UploadFile | Tuple[IOBase, str]], root: str = None,
+        cls, session: AsyncSession, files: List[UploadFile | WebSocketFileS], root: str = None,
         user_profile_id=None, upload=False, thumbnail=False, **kwargs
     ):
         uploaded_by_id = None
