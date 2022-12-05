@@ -3,15 +3,16 @@ from typing import List
 from uuid import uuid4, UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status, UploadFile
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from server.api import ExceptionHandlerRoute
 from server.core.authentications import SessionData, backend, cookie, verifier, RoleChecker
 from server.core.enums import UserType, ProfileImageType
 from server.core.utils import verify_password
-from server.crud.user import UserCRUD, UserProfileCRUD
+from server.crud.user import UserCRUD
 from server.db.databases import get_async_session, settings
-from server.models import UserSession, UserProfileImage, User
+from server.models import UserSession, UserProfileImage, User, UserProfile
 from server.schemas.user import UserS, UserSessionS, UserCreateS, UserProfileImageS, UserProfileImageUploadS
 
 router = APIRouter(route_class=ExceptionHandlerRoute)
@@ -25,13 +26,17 @@ router = APIRouter(route_class=ExceptionHandlerRoute)
 )
 async def signup(user_s: UserCreateS, session: AsyncSession = Depends(get_async_session)):
     user_crud = UserCRUD(session)
-    user_profile_crud = UserProfileCRUD(session)
 
-    await user_crud.get(conditions=(User.uid == user_s.uid,))
-    user = await user_crud.create(**user_s.dict())
-
-    await user_profile_crud.create(user=user, nickname=user.name, is_default=True)
+    try:
+        await user_crud.get(conditions=(User.uid == user_s.uid,))
+    except HTTPException:
+        pass
+    else:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Already signed up.')
+    user = await user_crud.create(**jsonable_encoder(user_s))
+    user.profiles.append(UserProfile(user=user, nickname=user.name, is_default=True))
     await session.commit()
+    await session.refresh(user)
 
     return UserS.from_orm(user)
 

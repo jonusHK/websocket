@@ -10,6 +10,7 @@ from fastapi_sessions.frontends.implementations import SessionCookie, CookiePara
 from fastapi_sessions.frontends.session_frontend import ID, FrontendError
 from pydantic.main import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
 from server.core.authentications.constants import SESSION_AGE, COOKIE_NAME, SESSION_IDENTIFIER
 from server.core.enums import UserType
@@ -117,7 +118,8 @@ class DatabaseBackend(Generic[ID, SessionModel], SessionDatabaseBackend[ID, Sess
         crud = UserSessionCRUD(session)
         try:
             user_session: UserSession = await crud.get(
-                conditions=(UserSession.session_id == session_id,))
+                conditions=(UserSession.session_id == session_id,),
+                options=[joinedload(UserSession.user).selectinload(User.profiles)])
         except HTTPException:
             raise BackendError("Session does not exist.")
         return user_session
