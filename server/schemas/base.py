@@ -1,4 +1,5 @@
 from datetime import datetime
+from io import BytesIO
 
 from pydantic import BaseModel
 
@@ -22,3 +23,12 @@ class S3MediaS(S3MediaBaseS):
 
     class Config:
         orm_mode = True
+
+
+class WebSocketFileS(BaseModel):
+    content: BytesIO
+    content_type: str
+    filename: str
+
+    class Config:
+        arbitrary_types_allowed = True

@@ -1,4 +1,4 @@
-from typing import Optional, List, Dict, Any
+from typing import Optional, List
 
 from pydantic import BaseModel, validator
 
@@ -18,9 +18,15 @@ class ChatDataBaseS(BaseModel):
     is_active: bool = True
 
 
+class ChatReceiveFileS(BaseModel):
+    content: str
+    content_type: str
+    filename: str
+
+
 class ChatReceiveDataS(ChatDataBaseS):
     target_user_profile_ids: Optional[List[int]] = None
-    files: list[Dict[str, Any]] = None
+    files: list[ChatReceiveFileS] = None
     is_read: Optional[bool] = None
     offset: Optional[int] = None
     limit: Optional[int] = None
@@ -28,12 +34,12 @@ class ChatReceiveDataS(ChatDataBaseS):
 
 
 class ChatSendDataS(ChatDataBaseS):
-    from server.core.externals.redis.schemas import RedisChatHistoryByRoomS, RedisUserProfileByRoomS, RedisFileS
+    from server.core.externals.redis.schemas import RedisChatHistoryByRoomS, RedisUserProfileByRoomS, RedisUserImageFileS, RedisChatHistoryFileS
     user_profile_id: Optional[int] = None
     nickname: Optional[str] = None
     histories: Optional[List[RedisChatHistoryByRoomS]] = None
     user_profiles: Optional[List[RedisUserProfileByRoomS]] = None
-    files: Optional[List[RedisFileS]] = None
+    files: Optional[List[RedisChatHistoryFileS | RedisUserImageFileS]] = None
 
 
 class ChatReceiveFormS(BaseModel):
