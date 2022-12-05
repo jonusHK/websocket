@@ -22,7 +22,6 @@ class CRUDBase:
         instance = results.scalars().one_or_none()
         if instance is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Not found {self.model.__name__}.")
-        await self.session.refresh(instance)
         return instance
 
     async def list(
