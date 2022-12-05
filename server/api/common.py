@@ -33,7 +33,7 @@ class RedisHandler:
         self.redis = redis
 
     @classmethod
-    def generate_presigned_files(cls, model, schema, iterable: Iterable):
+    async def generate_presigned_files(cls, model, schema, iterable: Iterable):
         assert issubclass(model, S3Media), 'Invalid model type.'
         assert issubclass(schema, RedisFileBaseS), 'Invalid schema type.'
 

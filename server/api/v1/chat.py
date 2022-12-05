@@ -119,13 +119,13 @@ async def chat_room_create(
             redis, room.id, RedisUserProfilesByRoomS.schema(
                 id=o.user_profile_id,
                 nickname=o.user_profile.nickname,
-                files=redis_handler.generate_presigned_files(
+                files=await redis_handler.generate_presigned_files(
                     UserProfileImage, RedisUserImageFileS, o.user_profile.images)))
 
         files: List[RedisUserImageFileS] = []
         for m in room.user_profiles:
             files.extend(
-                redis_handler.generate_presigned_files(
+                await redis_handler.generate_presigned_files(
                     UserProfileImage, RedisUserImageFileS,
                     [im for im in m.user_profile.images if im.is_default]))
         await RedisChatRoomsByUserProfileS.sadd(
@@ -179,7 +179,7 @@ async def chat_room(
                     files: List[RedisUserImageFileS] = []
                     for p in m.room.user_profiles:
                         files.extend(
-                            redis_handler.generate_presigned_files(
+                            await redis_handler.generate_presigned_files(
                                 UserProfileImage, RedisUserImageFileS, p.images)
                         )
                     rooms_redis.append(
@@ -254,7 +254,7 @@ async def chat(
                     RedisChatRoomsByUserProfileS.schema(
                         id=m.room_id,
                         name=m.room.name,
-                        user_profile_files=redis_handler.generate_presigned_files(
+                        user_profile_files=await redis_handler.generate_presigned_files(
                             UserProfileImage, RedisUserImageFileS, m.user_profile.images),
                         unread_msg_cnt=0) for m in room_db.user_profiles])
         except Exception as e:
@@ -278,7 +278,7 @@ async def chat(
                 RedisUserProfilesByRoomS.schema(
                     id=p.user_profile.id,
                     nickname=p.user_profile.nickname,
-                    files=redis_handler.generate_presigned_files(UserProfileImage, RedisUserImageFileS, p.user_profile.images)
+                    files=await redis_handler.generate_presigned_files(UserProfileImage, RedisUserImageFileS, p.user_profile.images)
                 ) for p in room_user_mapping])
 
         # 방에 유저들이 접속되어 있는지 확인
@@ -463,7 +463,7 @@ async def chat(
                                 o.close()
                                 await session.refresh(o)
 
-                        files_s: List[RedisChatHistoryFileS] = redis_handler.generate_presigned_files(
+                        files_s: List[RedisChatHistoryFileS] = await redis_handler.generate_presigned_files(
                             ChatHistoryFile, RedisChatHistoryFileS, chat_files_db)
                         await RedisChatHistoriesByRoomS.zadd(redis, room_id, RedisChatHistoriesByRoomS.schema(
                             id=chat_history_db.id,
@@ -523,7 +523,7 @@ async def chat(
                                         id=h.id,
                                         user_profile_id=h.user_profile_id,
                                         contents=h.contents,
-                                        files=redis_handler.generate_presigned_files(
+                                        files=await redis_handler.generate_presigned_files(
                                             UserProfileImage, RedisUserImageFileS, h.user_profile.images),
                                         read_user_ids=[
                                             m.user_profile_id for m in h.user_profile_mapping if m.is_read
@@ -597,7 +597,7 @@ async def chat(
                                 RedisUserProfilesByRoomS.schema(
                                     id=p.user_profile.id,
                                     nickname=p.user_profile.nickname,
-                                    files=redis_handler.generate_presigned_files(
+                                    files=await redis_handler.generate_presigned_files(
                                         UserProfileImage, RedisUserImageFileS, p.user_profile.images)
                                 ) for p in _room_user_mapping])
 
@@ -624,7 +624,7 @@ async def chat(
                             RedisUserProfilesByRoomS.schema(
                                 id=p.id,
                                 nickname=p.nickname,
-                                files=redis_handler.generate_presigned_files(
+                                files=await redis_handler.generate_presigned_files(
                                     UserProfileImage, RedisUserImageFileS, p.images)
                             ) for p in profiles if p.id in profile_ids
                         ])
