@@ -6,26 +6,41 @@ from server.core.externals.redis.mixin import SortedSetCollectionMixin, \
     SetCollectionMixin
 
 
-class RedisFileS(BaseModel):
+class RedisFileBaseS(BaseModel):
     id: int
-    user_profile_id: int
     url: str
+    uid: str
+    origin_uid: Optional[str] = None
+    uploaded_by_id: Optional[int] = None
+    filename: str
+    filepath: str
+    content_type: str
+    use_type: str
+    is_active: bool
+
+
+class RedisUserImageFileS(RedisFileBaseS):
+    user_profile_id: int
     type: str
     is_default: bool
-    is_active: bool
+
+
+class RedisChatHistoryFileS(RedisFileBaseS):
+    chat_history_id: int
+    order: int
 
 
 class RedisUserProfileByRoomS(BaseModel):
     id: int
     nickname: str
-    files: Optional[List[RedisFileS]] = []
+    files: Optional[List[RedisUserImageFileS]] = []
 
 
 class RedisChatHistoryByRoomS(BaseModel):
     id: int
     user_profile_id: int
     contents: Optional[str] = None
-    files: Optional[List[RedisFileS]] = []
+    files: Optional[List[RedisChatHistoryFileS]] = []
     read_user_ids: List[int] = []
     timestamp: float | int
     is_active: bool
@@ -34,7 +49,7 @@ class RedisChatHistoryByRoomS(BaseModel):
 class RedisChatRoomByUserProfileS(BaseModel):
     id: int
     name: str
-    user_profile_files: Optional[List[RedisFileS]] = []
+    user_profile_files: Optional[List[RedisUserImageFileS]] = []
     unread_msg_cnt: int
 
 

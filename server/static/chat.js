@@ -18,15 +18,19 @@ function startAttemptingToEstablishConnection() {
   reconnectTimeout = setTimeout(() => establishWebSocketConnection(), 5000);
 }
 
+let uploadedFileStorage = [];
+
 function establishWebSocketConnection() {
     const textView = document.getElementById("text-view");
     const buttonSend = document.getElementById("send-button");
     const buttonStop = document.getElementById("stop-button");
     const userIdView = document.getElementById("invite-user-id");
     const buttonUserInvite = document.getElementById("invite-user");
+    const fileInput = document.getElementById("fileUpload");
+    const buttonFileSend = document.getElementById("send-files-button");
     const label = document.getElementById("status-label");
     const userProfileId = 1;
-    const roomId = 5;
+    const roomId = 7;
     const socket = new WebSocket(`ws://localhost:8000/api/v1/chats/${userProfileId}/${roomId}`);
 
     // 연결 성공
@@ -99,6 +103,24 @@ function establishWebSocketConnection() {
         }
     }
 
+    buttonFileSend.onclick = function() {
+        if (socket.readyState === WebSocket.OPEN && uploadedFileStorage.length > 0) {
+            const data = {
+                'type': 'file',
+                'data': {
+                    'files': uploadedFileStorage.map(elem => {
+                        elem.content = elem.content.split(',')[1]
+                        return elem
+                    }),
+                    'timestamp': Date.now()
+                }
+            }
+            console.log('send data for message - ', data);
+            socket.send(JSON.stringify(data));
+        }
+    }
+
+
     buttonUserInvite.onclick = function() {
         if (socket.readyState === WebSocket.OPEN) {
             const data = {
@@ -112,6 +134,40 @@ function establishWebSocketConnection() {
             socket.send(JSON.stringify(data));
         }
     }
+
+    const handleFiles = function() {
+        const selectedFiles = [...fileInput.files];
+
+        for (let each of selectedFiles) {
+            const fileReader = new FileReader();
+            fileReader.onload = function(event) {
+                const appendElem = document.createElement('div');
+                const previewElem = document.createElement('img');
+                previewElem.setAttribute('src', event.target.result);
+                appendElem.classList.add('preview-image-wrapper');
+                appendElem.appendChild(previewElem);
+                $('#imagePreviewArea').append(appendElem);
+                uploadedFileStorage.push({
+                    content: event.target.result,
+                    filename: each.name,
+                    content_type: each.type
+                });
+            }
+            fileReader.readAsDataURL(each);
+        }
+
+        const len = selectedFiles.length;
+        const filePreviewElem = $('#imagePreviewArea');
+        if (len > 0 && filePreviewElem.hasClass('display-none')) {
+            filePreviewElem.removeClass('display-none');
+            filePreviewElem.addClass('display-flex');
+        } else if (len === 0) {
+            filePreviewElem.removeClass('display-flex');
+            filePreviewElem.addClass('display-none');
+        }
+    }
+
+    fileInput.addEventListener("change", handleFiles);
 }
 
 window.onload = function() {

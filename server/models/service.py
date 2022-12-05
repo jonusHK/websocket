@@ -1,11 +1,11 @@
-from sqlalchemy import Column, BigInteger, String, ForeignKey, Text, Boolean, Integer
+from sqlalchemy import Column, BigInteger, String, ForeignKey, Text, Boolean, Integer, UniqueConstraint
 from sqlalchemy.orm import relationship
 
 from server.db.databases import Base
-from server.models.base import TimestampMixin, S3Media
+from server.models.base import TimestampMixin, S3Media, ConvertMixin
 
 
-class ChatRoom(TimestampMixin, Base):
+class ChatRoom(TimestampMixin, ConvertMixin, Base):
     __tablename__ = "chat_rooms"
 
     id = Column(BigInteger, primary_key=True, index=True)
@@ -17,7 +17,7 @@ class ChatRoom(TimestampMixin, Base):
     chat_histories = relationship("ChatHistory", back_populates="room", lazy="selectin")
 
 
-class ChatRoomUserAssociation(TimestampMixin, Base):
+class ChatRoomUserAssociation(TimestampMixin, ConvertMixin, Base):
     __tablename__ = "chat_room_user_association"
 
     room_id = Column(BigInteger, ForeignKey("chat_rooms.id", ondelete="CASCADE"), primary_key=True)
@@ -27,7 +27,7 @@ class ChatRoomUserAssociation(TimestampMixin, Base):
     user_profile = relationship("UserProfile", back_populates="rooms", lazy="joined")
 
 
-class ChatHistory(TimestampMixin, Base):
+class ChatHistory(TimestampMixin, ConvertMixin, Base):
     __tablename__ = "chat_histories"
 
     id = Column(BigInteger, primary_key=True, index=True)
@@ -46,11 +46,11 @@ class ChatHistory(TimestampMixin, Base):
 
 class ChatHistoryFile(S3Media):
     __tablename__ = "chat_history_files"
+    __table_args__ = (UniqueConstraint('chat_history_id', 'order', name='unique order for chat_history_id'),)
 
     id = Column(BigInteger, ForeignKey('s3_media.id'), primary_key=True)
     chat_history_id = Column(BigInteger, ForeignKey("chat_histories.id", ondelete="CASCADE"), nullable=False)
-    order = Column(Integer, default=1, unique=True, nullable=False)
-    is_active = Column(Boolean, default=True, nullable=False)
+    order = Column(Integer, default=1, nullable=False)
 
     chat_history = relationship("ChatHistory", back_populates="files")
 
@@ -61,7 +61,7 @@ class ChatHistoryFile(S3Media):
 
 
 # 채팅 내역을 읽을 유저들 간의 관계
-class ChatHistoryUserAssociation(Base):
+class ChatHistoryUserAssociation(ConvertMixin, Base):
     __tablename__ = "chat_history_user_association"
 
     history_id = Column(BigInteger, ForeignKey("chat_histories.id", ondelete="CASCADE"), primary_key=True)
