@@ -12,7 +12,7 @@ from server.core.utils import verify_password
 from server.crud.user import UserCRUD, UserProfileCRUD
 from server.db.databases import get_async_session, settings
 from server.models import UserSession, UserProfileImage
-from server.schemas.user import UserS, UserSessionS, UserCreateS, UserProfileImageS
+from server.schemas.user import UserS, UserSessionS, UserCreateS, UserProfileImageS, UserProfileImageUploadS
 
 router = APIRouter(route_class=ExceptionHandlerRoute)
 
@@ -81,21 +81,21 @@ async def logout(
 @router.post("/profile/image/upload", dependencies=[Depends(cookie)])
 async def user_profile_image_upload(
     file: UploadFile,
-    user_profile_id: int,
-    image_type: str,
-    is_default: bool,
+    upload_s: UserProfileImageUploadS = Depends(),
     user_session: UserSession = Depends(verifier),
     session=Depends(get_async_session)
 ):
+    if upload_s.user_profile_id not in [p.id for p in user_session.user.profiles]:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+
     objects: List[UserProfileImage] = []
     async for o in UserProfileImage.files_to_models(
         session,
         [file],
         root='user_profile/',
-        user=user_session.user,
-        user_profile_id=user_profile_id,
-        type=ProfileImageType.get_by_name(image_type),
-        is_default=is_default,
+        user_profile_id=upload_s.user_profile_id,
+        type=ProfileImageType.get_by_name(upload_s.image_type),
+        is_default=upload_s.is_default,
         bucket_name=settings.aws_storage_bucket_name
     ):
         objects.append(o)

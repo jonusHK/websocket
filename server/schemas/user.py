@@ -103,6 +103,12 @@ class UserProfileImageS(UserProfileImageBaseS):
         }
 
 
+class UserProfileImageUploadS(BaseModel):
+    user_profile_id: int
+    image_type: str
+    is_default: bool
+
+
 class UserSessionBaseS(BaseModel):
     user_id: int
     session_id: str
