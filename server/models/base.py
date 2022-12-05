@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import relationship, backref
 from starlette.datastructures import UploadFile
 
+from server.core.utils import IntTypeEnum
 from server.db.databases import Base, settings
 from server.schemas.base import WebSocketFileS
 
@@ -27,9 +28,11 @@ class TimestampMixin(object):
 
 class ConvertMixin(object):
     def to_dict(self):
-        return {
-            c.key: getattr(self, c.key) for c in inspect(self).mapper.column_attrs
-        }
+        mapping = {}
+        for c in inspect(self).mapper.column_attrs:
+            mapping[c.key] = getattr(self, c.key)
+
+        return mapping
 
 
 class S3Media(TimestampMixin, ConvertMixin, Base):

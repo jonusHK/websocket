@@ -13,8 +13,8 @@ class ChatRoom(TimestampMixin, ConvertMixin, Base):
     is_active = Column(Boolean, default=True, nullable=False)
 
     user_profiles = relationship(
-        "ChatRoomUserAssociation", back_populates="room", cascade="all, delete", passive_deletes=True, lazy="selectin")
-    chat_histories = relationship("ChatHistory", back_populates="room", lazy="selectin")
+        "ChatRoomUserAssociation", back_populates="room", cascade="all, delete", passive_deletes=True)
+    chat_histories = relationship("ChatHistory", back_populates="room")
 
 
 class ChatRoomUserAssociation(TimestampMixin, ConvertMixin, Base):
@@ -23,8 +23,8 @@ class ChatRoomUserAssociation(TimestampMixin, ConvertMixin, Base):
     room_id = Column(BigInteger, ForeignKey("chat_rooms.id", ondelete="CASCADE"), primary_key=True)
     user_profile_id = Column(BigInteger, ForeignKey("user_profiles.id", ondelete="CASCADE"), primary_key=True)
 
-    room = relationship("ChatRoom", back_populates="user_profiles", lazy="joined")
-    user_profile = relationship("UserProfile", back_populates="rooms", lazy="joined")
+    room = relationship("ChatRoom", back_populates="user_profiles")
+    user_profile = relationship("UserProfile", back_populates="rooms")
 
 
 class ChatHistory(TimestampMixin, ConvertMixin, Base):
@@ -36,12 +36,12 @@ class ChatHistory(TimestampMixin, ConvertMixin, Base):
     contents = Column(Text, nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
 
-    room = relationship("ChatRoom", back_populates="chat_histories", lazy="joined")
-    user_profile = relationship("UserProfile", back_populates="chat_histories", lazy="joined")
-    files = relationship("ChatHistoryFile", back_populates="chat_history", lazy="selectin")
+    room = relationship("ChatRoom", back_populates="chat_histories")
+    user_profile = relationship("UserProfile", back_populates="chat_histories")
+    files = relationship("ChatHistoryFile", back_populates="chat_history")
     user_profile_mapping = relationship(
         "ChatHistoryUserAssociation",
-        back_populates="history", cascade="all, delete", passive_deletes=True, lazy="selectin")
+        back_populates="history", cascade="all, delete", passive_deletes=True)
 
 
 class ChatHistoryFile(S3Media):
@@ -68,5 +68,5 @@ class ChatHistoryUserAssociation(ConvertMixin, Base):
     user_profile_id = Column(BigInteger, ForeignKey("user_profiles.id", ondelete="CASCADE"), primary_key=True)
     is_read = Column(Boolean, default=True, nullable=False)
 
-    history = relationship("ChatHistory", back_populates="user_profile_mapping", lazy="joined")
-    user_profile = relationship("UserProfile", back_populates="chat_history_mapping", lazy="joined")
+    history = relationship("ChatHistory", back_populates="user_profile_mapping")
+    user_profile = relationship("UserProfile", back_populates="chat_history_mapping")
