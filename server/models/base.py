@@ -21,7 +21,7 @@ from server.schemas.base import WebSocketFileS
 
 
 class TimestampMixin(object):
-    created = Column(DateTime(timezone=True), default=func.now(), nullable=False)
+    created = Column(DateTime(timezone=True), default=func.now(), nullable=False, index=True)
     updated = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
 
 
