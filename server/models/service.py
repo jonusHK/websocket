@@ -16,12 +16,18 @@ class ChatRoom(TimestampMixin, ConvertMixin, Base):
         "ChatRoomUserAssociation", back_populates="room", cascade="all, delete", passive_deletes=True)
     chat_histories = relationship("ChatHistory", back_populates="room")
 
+    def get_name_by_user_profile(self, user_profile_id: int):
+        assert hasattr(self, 'user_profiles'), 'Must have `user_profiles` attr.'
+        mapping = next((m for m in self.user_profiles if m.user_profile_id == user_profile_id), None)
+        return (mapping.room_name or self.name) if mapping else self.name
+
 
 class ChatRoomUserAssociation(TimestampMixin, ConvertMixin, Base):
     __tablename__ = "chat_room_user_association"
 
     room_id = Column(BigInteger, ForeignKey("chat_rooms.id", ondelete="CASCADE"), primary_key=True)
     user_profile_id = Column(BigInteger, ForeignKey("user_profiles.id", ondelete="CASCADE"), primary_key=True)
+    room_name = Column(String(30), nullable=True)
 
     room = relationship("ChatRoom", back_populates="user_profiles")
     user_profile = relationship("UserProfile", back_populates="rooms")

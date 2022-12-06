@@ -49,6 +49,17 @@ class UserProfile(TimestampMixin, ConvertMixin, Base):
         "ChatHistoryUserAssociation",
         back_populates="user_profile", cascade="all, delete", passive_deletes=True)
 
+    def get_nickname_by_other(self, other_profile_id: int):
+        nickname = self.nickname
+        if self.id != other_profile_id:
+            assert hasattr(self, 'followers'), 'Must have `followers` attr.'
+            followers = self.followers
+            if followers:
+                relation = next((f for f in followers if f.my_profile_id == other_profile_id), None)
+                if relation:
+                    nickname = relation.other_profile_nickname or nickname
+        return nickname
+
 
 class UserRelationship(ConvertMixin, Base):
     __tablename__ = "user_relationships"
@@ -56,14 +67,15 @@ class UserRelationship(ConvertMixin, Base):
     id = Column(BigInteger, primary_key=True, index=True)
     my_profile_id = Column(BigInteger, ForeignKey("user_profiles.id"), nullable=False)
     other_profile_id = Column(BigInteger, ForeignKey("user_profiles.id"), nullable=False)
+    other_profile_nickname = Column(String(30), nullable=True)
     type = Column(IntTypeEnum(enum_class=RelationshipType), default=RelationshipType.FRIEND, nullable=False)
     favorites = Column(Boolean, default=False, nullable=False)
     is_hidden = Column(Boolean, default=False, nullable=False)
     is_forbidden = Column(Boolean, default=False, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
 
-    my_profile = relationship("UserProfile", foreign_keys=[my_profile_id])
-    other_profile = relationship("UserProfile", foreign_keys=[other_profile_id])
+    my_profile = relationship("UserProfile", foreign_keys=[my_profile_id], backref='followings')
+    other_profile = relationship("UserProfile", foreign_keys=[other_profile_id], backref='followers')
 
 
 class UserProfileImage(S3Media):
