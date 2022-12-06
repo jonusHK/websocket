@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.websockets import WebSocket
 
 from server.core.authentications import COOKIE_NAME, cookie, backend
+from server.core.enums import IntValueEnum
 from server.core.externals.redis.schemas import RedisFileBaseS
 from server.models import User, S3Media
 
@@ -38,14 +39,23 @@ class RedisHandler:
         assert issubclass(schema, RedisFileBaseS), 'Invalid schema type.'
 
         files_s: List[schema] = []
-        urls: List[Dict[str, Any]] = [
-            r.result() for r in await model.asynchronous_presigned_url(*iterable)
-        ]
-        for m in iterable:
-            model_to_dict = m.to_dict()
-            model_to_dict.update({
-                'url': next((u['url'] for u in urls if u['id'] == m.id), None)
-            })
-            files_s.append(schema(**model_to_dict))
+        if iterable:
+            urls: List[Dict[str, Any]] = [
+                r.result() for r in await model.asynchronous_presigned_url(*iterable)
+            ]
+            for m in iterable:
+                model_to_dict = m.to_dict()
+                model_to_dict.update({
+                    'url': next((u['url'] for u in urls if u['id'] == m.id), None)
+                })
+
+                for k, v in schema.__annotations__.items():
+                    if type(model_to_dict[k]) is not v:
+                        if isinstance(model_to_dict[k], IntValueEnum):
+                            if v is str:
+                                model_to_dict[k] = model_to_dict[k].name
+                            elif v is int:
+                                model_to_dict[k] = model_to_dict[k].value
+                files_s.append(schema(**model_to_dict))
 
         return files_s

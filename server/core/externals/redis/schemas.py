@@ -60,7 +60,7 @@ class RedisChatHistoryToSyncS(BaseModel):
 
 
 class RedisUserProfilesByRoomS(SetCollectionMixin):
-    format = 'room:{}:user_profiles'
+    format = 'room:{}:user_profile:{}:user_profiles'
     schema = RedisUserProfileByRoomS
 
 

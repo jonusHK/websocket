@@ -5,13 +5,13 @@ from server.db.databases import settings
 
 class AioRedis:
     def __init__(
-            self,
-            host=settings.redis_host,
-            port=settings.redis_port,
-            db=settings.redis_database,
-            encoding="utf-8",
-            max_connections=10,
-            decode_responses=True
+        self,
+        host=settings.redis_host,
+        port=settings.redis_port,
+        db=settings.redis_database,
+        encoding="utf-8",
+        max_connections=10,
+        decode_responses=True
     ):
         self.host = host
         self.port = port

@@ -21,8 +21,8 @@ class User(TimestampMixin, ConvertMixin, Base):
     is_staff = Column(Boolean, default=False, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
 
-    profiles = relationship("UserProfile", back_populates="user", lazy="selectin")
-    sessions = relationship("UserSession", back_populates="user", lazy="selectin")
+    profiles = relationship("UserProfile", back_populates="user")
+    sessions = relationship("UserSession", back_populates="user")
 
 
 class UserProfile(TimestampMixin, ConvertMixin, Base):
@@ -33,20 +33,32 @@ class UserProfile(TimestampMixin, ConvertMixin, Base):
     nickname = Column(String(30), nullable=False)
     status_message = Column(Text, nullable=True)
     is_default = Column(Boolean, default=False, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
 
-    user = relationship("User", back_populates="profiles", lazy="joined")
+    user = relationship("User", back_populates="profiles")
     images = relationship(
         "UserProfileImage",
-        back_populates="profile", cascade="all, delete-orphan", lazy="selectin")
+        back_populates="profile", cascade="all, delete-orphan")
     rooms = relationship(
         "ChatRoomUserAssociation",
-        back_populates="user_profile", cascade="all, delete", passive_deletes=True, lazy="selectin")
+        back_populates="user_profile", cascade="all, delete", passive_deletes=True)
     chat_histories = relationship(
         "ChatHistory",
-        back_populates="user_profile", cascade="all, delete", passive_deletes=True, lazy="selectin")
+        back_populates="user_profile", cascade="all, delete", passive_deletes=True)
     chat_history_mapping = relationship(
         "ChatHistoryUserAssociation",
-        back_populates="user_profile", cascade="all, delete", passive_deletes=True, lazy="selectin")
+        back_populates="user_profile", cascade="all, delete", passive_deletes=True)
+
+    def get_nickname_by_other(self, other_profile_id: int):
+        nickname = self.nickname
+        if self.id != other_profile_id:
+            assert hasattr(self, 'followers'), 'Must have `followers` attr.'
+            followers = self.followers
+            if followers:
+                relation = next((f for f in followers if f.my_profile_id == other_profile_id), None)
+                if relation:
+                    nickname = relation.other_profile_nickname or nickname
+        return nickname
 
 
 class UserRelationship(ConvertMixin, Base):
@@ -55,14 +67,15 @@ class UserRelationship(ConvertMixin, Base):
     id = Column(BigInteger, primary_key=True, index=True)
     my_profile_id = Column(BigInteger, ForeignKey("user_profiles.id"), nullable=False)
     other_profile_id = Column(BigInteger, ForeignKey("user_profiles.id"), nullable=False)
+    other_profile_nickname = Column(String(30), nullable=True)
     type = Column(IntTypeEnum(enum_class=RelationshipType), default=RelationshipType.FRIEND, nullable=False)
     favorites = Column(Boolean, default=False, nullable=False)
     is_hidden = Column(Boolean, default=False, nullable=False)
     is_forbidden = Column(Boolean, default=False, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
 
-    my_profile = relationship("UserProfile", foreign_keys=[my_profile_id], lazy="joined")
-    other_profile = relationship("UserProfile", foreign_keys=[other_profile_id], lazy="joined")
+    my_profile = relationship("UserProfile", foreign_keys=[my_profile_id], backref='followings')
+    other_profile = relationship("UserProfile", foreign_keys=[other_profile_id], backref='followers')
 
 
 class UserProfileImage(S3Media):
@@ -73,7 +86,7 @@ class UserProfileImage(S3Media):
     type = Column(IntTypeEnum(enum_class=ProfileImageType), nullable=False)
     is_default = Column(Boolean, default=False, nullable=False)
 
-    profile = relationship("UserProfile", back_populates="images", lazy="joined")
+    profile = relationship("UserProfile", back_populates="images")
 
     __mapper_args__ = {
         "polymorphic_load": "selectin",
@@ -89,4 +102,4 @@ class UserSession(TimestampMixin, ConvertMixin, Base):
     session_id = Column(String(150), nullable=False)
     expiry_at = Column(DateTime(timezone=True), nullable=False)
 
-    user = relationship("User", back_populates="sessions", lazy="joined")
+    user = relationship("User", back_populates="sessions")

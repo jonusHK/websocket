@@ -16,20 +16,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import relationship, backref
 from starlette.datastructures import UploadFile
 
+from server.core.utils import IntTypeEnum
 from server.db.databases import Base, settings
 from server.schemas.base import WebSocketFileS
 
 
 class TimestampMixin(object):
-    created = Column(DateTime(timezone=True), default=func.now(), nullable=False)
+    created = Column(DateTime(timezone=True), default=func.now(), nullable=False, index=True)
     updated = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now(), nullable=False)
 
 
 class ConvertMixin(object):
     def to_dict(self):
-        return {
-            c.key: getattr(self, c.key) for c in inspect(self).mapper.column_attrs
-        }
+        mapping = {}
+        for c in inspect(self).mapper.column_attrs:
+            mapping[c.key] = getattr(self, c.key)
+
+        return mapping
 
 
 class S3Media(TimestampMixin, ConvertMixin, Base):
@@ -283,8 +286,7 @@ class S3Media(TimestampMixin, ConvertMixin, Base):
         for file in files:
             origin, thumb = await cls.new(
                 session, file,
-                root=root, uploaded_by_id=uploaded_by_id, upload=upload,
-                user_profile_id=user_profile_id, thumbnail=thumbnail, **kwargs)
+                root=root, uploaded_by_id=uploaded_by_id, upload=upload, thumbnail=thumbnail, **kwargs)
             yield origin
             if thumb is not None:
                 yield thumb
