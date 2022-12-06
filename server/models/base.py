@@ -286,8 +286,7 @@ class S3Media(TimestampMixin, ConvertMixin, Base):
         for file in files:
             origin, thumb = await cls.new(
                 session, file,
-                root=root, uploaded_by_id=uploaded_by_id, upload=upload,
-                user_profile_id=user_profile_id, thumbnail=thumbnail, **kwargs)
+                root=root, uploaded_by_id=uploaded_by_id, upload=upload, thumbnail=thumbnail, **kwargs)
             yield origin
             if thumb is not None:
                 yield thumb

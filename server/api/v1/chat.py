@@ -229,7 +229,7 @@ async def chat(
 
     user: User = await AuthValidator(session).get_user_by_websocket(websocket)
     if not next((p for p in user.profiles if p.id == user_profile_id), None):
-        raise WebSocketDisconnect(code=status.WS_1008_POLICY_VIOLATION)
+        raise WebSocketDisconnect(code=status.WS_1008_POLICY_VIOLATION, reason='Unauthorized user.')
 
     now = datetime.now().astimezone()
     redis: Redis = AioRedis().redis
@@ -457,11 +457,11 @@ async def chat(
                             ) for f in request_s.data.files
                         ]
                         async for o in ChatHistoryFile.files_to_models(
-                                session,
-                                converted_files,
-                                root='chat_upload/',
-                                user_profile_id=user_profile_id,
-                                bucket_name=settings.aws_storage_bucket_name,
+                            session,
+                            converted_files,
+                            root='chat_upload/',
+                            user_profile_id=user_profile_id,
+                            bucket_name=settings.aws_storage_bucket_name,
                         ):
                             o.chat_history_id = chat_history_db.id
                             o.order = _idx
