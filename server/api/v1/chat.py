@@ -2,6 +2,7 @@ import asyncio
 import base64
 import json
 import logging
+from datetime import datetime
 from io import BytesIO
 from typing import List, Set, Coroutine, Dict, Any
 
@@ -685,6 +686,7 @@ async def chat(
                 except Exception as exc:
                     logger.error(get_log_error(exc))
         except WebSocketDisconnect as exc:
+            now = datetime.now().astimezone()
             if exc.code == status.WS_1001_GOING_AWAY:
                 try:
                     for s in await RedisUserProfilesByRoomS.smembers(redis, (room_id, user_profile_id)):
