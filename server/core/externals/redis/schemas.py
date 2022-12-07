@@ -55,8 +55,6 @@ class RedisChatRoomByUserProfileS(BaseModel):
 
 class RedisChatHistoryToSyncS(BaseModel):
     id: int
-    room_id: int
-    user_profile_id: int
 
 
 class RedisUserProfilesByRoomS(SetCollectionMixin):
