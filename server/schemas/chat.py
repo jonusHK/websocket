@@ -30,7 +30,7 @@ class ChatReceiveDataS(ChatDataBaseS):
     is_read: Optional[bool] = None
     offset: Optional[int] = None
     limit: Optional[int] = None
-    order_by: str = 'created'
+    order_by: List[str] = ['-created']
 
 
 class ChatSendDataS(ChatDataBaseS):

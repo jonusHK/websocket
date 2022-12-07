@@ -4,7 +4,7 @@ import os
 import uuid
 import warnings
 from io import IOBase, BytesIO
-from typing import List, Optional
+from typing import List, Optional, Iterable
 
 import boto3
 from PIL import Image
@@ -16,7 +16,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import relationship, backref
 from starlette.datastructures import UploadFile
 
-from server.core.utils import IntTypeEnum
 from server.db.databases import Base, settings
 from server.schemas.base import WebSocketFileS
 
@@ -27,6 +26,18 @@ class TimestampMixin(object):
 
 
 class ConvertMixin(object):
+    @classmethod
+    def generate_order_by_from_str(cls, order_by: Iterable[str]) -> tuple:
+        array = []
+        for o in order_by:
+            if o.startswith('-'):
+                assert hasattr(cls, o[1:]), f'{cls.__name__} not have {o[1:]} column.'
+                array.append(getattr(cls, o[1:]).desc())
+            else:
+                assert hasattr(cls, o), f'{cls.__name__} not have {o} column.'
+                array.append(getattr(cls, o))
+        return tuple(array)
+
     def to_dict(self):
         mapping = {}
         for c in inspect(self).mapper.column_attrs:
