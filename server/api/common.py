@@ -1,4 +1,4 @@
-from typing import Iterable, List, Dict, Any
+from typing import Iterable, List, Dict, Any, Optional
 from uuid import UUID
 
 from aioredis import Redis
@@ -10,11 +10,11 @@ from starlette.websockets import WebSocket
 
 from server.core.authentications import COOKIE_NAME, cookie, backend
 from server.core.enums import IntValueEnum
-from server.core.externals.redis.schemas import RedisFileBaseS, RedisChatRoomByUserProfileS, \
+from server.core.externals.redis.schemas import RedisChatRoomByUserProfileS, \
     RedisChatRoomsByUserProfileS, RedisUserProfilesByRoomS, RedisChatHistoriesByRoomS, RedisChatHistoriesToSyncS, \
     RedisUserImageFileS, RedisChatHistoryFileS, RedisUserProfileByRoomS, RedisChatHistoryByRoomS
 from server.crud.service import ChatRoomCRUD, ChatRoomUserAssociationCRUD
-from server.models import User, S3Media, ChatRoom, ChatRoomUserAssociation, UserProfile, UserProfileImage, \
+from server.models import User, ChatRoom, ChatRoomUserAssociation, UserProfile, UserProfileImage, \
     ChatHistoryFile
 
 
@@ -73,12 +73,15 @@ class RedisHandler:
         return files_s
 
     async def get_room_with_user_profile(
-        self, room_id: int, user_profile_id: int, crud: ChatRoomCRUD
+        self, room_id: int, user_profile_id: int, crud: Optional[ChatRoomCRUD] = None, sync=False
     ) -> RedisChatRoomByUserProfileS:
         while True:
-            rooms_redis: List[RedisChatRoomByUserProfileS] = await RedisChatRoomsByUserProfileS.smembers(self.redis, user_profile_id)
+            rooms_redis: List[RedisChatRoomByUserProfileS] = \
+                await RedisChatRoomsByUserProfileS.smembers(self.redis, user_profile_id)
             room_redis: RedisChatRoomByUserProfileS = next((
                 r for r in rooms_redis if r.id == room_id), None) if rooms_redis else None
+            if not sync:
+                break
             if room_redis:
                 break
             room_db: ChatRoom = await crud.get(
@@ -86,7 +89,8 @@ class RedisHandler:
                 options=[
                     selectinload(ChatRoom.user_profiles)
                     .joinedload(ChatRoomUserAssociation.user_profile)
-                    .selectinload(UserProfile.images)
+                    .selectinload(UserProfile.images),
+                    joinedload(ChatRoomUserAssociation.room)
                 ]
             )
             if (
@@ -98,17 +102,20 @@ class RedisHandler:
                 RedisChatRoomsByUserProfileS.schema(
                     id=m.room_id,
                     name=m.room.get_name_by_user_profile(user_profile_id),
+                    type=m.room.type,
                     user_profile_files=await self.generate_presigned_files(UserProfileImage, m.user_profile.images),
                     unread_msg_cnt=0) for m in room_db.user_profiles])
 
         return room_redis
 
     async def get_user_profiles_in_room(
-        self, room_id: int, user_profile_id: int, crud: ChatRoomUserAssociationCRUD
+        self, room_id: int, user_profile_id: int, crud: Optional[ChatRoomUserAssociationCRUD] = None, sync=False
     ) -> List[RedisUserProfileByRoomS]:
         while True:
             user_profiles_redis: List[RedisUserProfileByRoomS] = \
                 await RedisUserProfilesByRoomS.smembers(self.redis, (room_id, user_profile_id))
+            if not sync:
+                break
             if user_profiles_redis:
                 break
             room_user_mapping: List[ChatRoomUserAssociation] = \
