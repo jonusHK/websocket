@@ -83,3 +83,8 @@ class ChatType(IntValueEnum):
     UPDATE = "변경"
     INVITE = "초대"
     LOOKUP = "조회"
+
+
+class ChatRoomType(IntValueEnum):
+    ONE_TO_ONE = "개인"
+    GROUP = "단체"

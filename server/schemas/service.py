@@ -1,10 +1,14 @@
 from datetime import datetime
+from typing import Optional
 
 from pydantic import BaseModel, Extra
 
+from server.core.enums import ChatRoomType
+
 
 class ChatRoomBaseS(BaseModel):
-    name: str
+    name: Optional[str] = None
+    type: ChatRoomType
     is_active: bool = True
 
 
@@ -20,7 +24,8 @@ class ChatRoomS(ChatRoomBaseS):
     class Config:
         orm_mode = True
         json_encoders = {
-            datetime: lambda v: v.isoformat()
+            datetime: lambda v: v.isoformat(),
+            ChatRoomType: lambda v: v.name.lower()
         }
 
 
