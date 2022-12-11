@@ -41,12 +41,12 @@ logger = logging.getLogger("chat")
 
 
 @router.get("", response_class=HTMLResponse)
-async def index(request: Request):
+def index(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
 
 @router.get("/rooms", response_class=HTMLResponse)
-async def rooms(request: Request):
+def rooms(request: Request):
     return templates.TemplateResponse("rooms.html", {"request": request})
 
 
