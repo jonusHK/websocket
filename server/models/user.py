@@ -49,6 +49,7 @@ class UserProfile(TimestampMixin, ConvertMixin, Base):
         "ChatHistoryUserAssociation",
         back_populates="user_profile", cascade="all, delete", passive_deletes=True)
 
+    # 상대방에게 보여지는 닉네임 추출
     def get_nickname_by_other(self, other_profile_id: int):
         nickname = self.nickname
         if self.id != other_profile_id:

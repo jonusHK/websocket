@@ -30,7 +30,7 @@ function establishWebSocketConnection() {
     const buttonFileSend = document.getElementById("send-files-button");
     const label = document.getElementById("status-label");
     const userProfileId = 1;
-    const roomId = 6;
+    const roomId = 44;
     const socket = new WebSocket(`ws://localhost:8000/api/v1/chats/${userProfileId}/${roomId}`);
 
     // 연결 성공
