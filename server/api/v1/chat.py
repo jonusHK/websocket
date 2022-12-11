@@ -5,7 +5,7 @@ import logging
 from copy import deepcopy
 from datetime import datetime
 from io import BytesIO
-from typing import List, Set, Coroutine, Dict, Any
+from typing import List, Set, Dict, Any
 
 from aioredis import Redis
 from aioredis.client import PubSub
@@ -26,7 +26,7 @@ from server.core.exceptions import ExceptionHandler
 from server.core.externals.redis import AioRedis
 from server.core.externals.redis.schemas import RedisUserProfilesByRoomS, \
     RedisChatHistoriesByRoomS, RedisUserProfileByRoomS, RedisChatHistoryByRoomS, \
-    RedisChatRoomsByUserProfileS, RedisChatRoomByUserProfileS, RedisChatHistoryFileS, RedisUserImageFileS
+    RedisChatRoomsByUserProfileS, RedisChatRoomByUserProfileS, RedisChatHistoryFileS
 from server.crud.service import ChatRoomUserAssociationCRUD, ChatRoomCRUD, ChatHistoryCRUD, \
     ChatHistoryUserAssociationCRUD
 from server.crud.user import UserProfileCRUD
@@ -91,7 +91,7 @@ async def chat_room_create(
 
     # 1:1 방 생성 시, 기존 방 있다면 리턴
     if data.type == ChatRoomType.ONE_TO_ONE:
-        room_mapping = await crud_room_user_mapping.list(
+        _rooms: List[ChatRoom] = await crud_room_user_mapping.list(
             join=[(ChatRoom, ChatRoomUserAssociation.room_id == ChatRoom.id)],
             with_only_columns=(
                 ChatRoom,
@@ -101,8 +101,12 @@ async def chat_room_create(
                 ChatRoomUserAssociation.user_profile_id.in_(mapping_profile_ids)),
             group_by=(ChatRoomUserAssociation.room_id,),
             having=(func.count(ChatRoomUserAssociation.user_profile_id) == len(mapping_profile_ids)))
-        if room_mapping:
-            return ChatRoomS.from_orm(room_mapping[-1])
+        if _rooms:
+            _room = _rooms[-1]
+            for profile_id in mapping_profile_ids:
+                await redis_handler.get_room_with_user_profile(_room.id, profile_id, crud_room, sync=True)
+                await redis_handler.get_user_profiles_in_room(_room.id, profile_id, crud_room_user_mapping, sync=True)
+            return ChatRoomS.from_orm(_room)
 
     # 유저와 대화방 매핑
     default_room_name: str | None = None
@@ -132,13 +136,32 @@ async def chat_room_create(
             .joinedload(ChatRoomUserAssociation.user_profile)
             .selectinload(UserProfile.followers)
         ])
-    for profile_id in profile_ids:
-        for m in room.user_profiles:
-            await RedisUserProfilesByRoomS.sadd(
-                redis, (room.id, profile_id), RedisUserProfilesByRoomS.schema(
-                    id=m.user_profile_id,
-                    nickname=m.user_profile.get_nickname_by_other(profile_id),
-                    files=await redis_handler.generate_presigned_files(UserProfileImage, m.user_profile.images)))
+
+    profile_images = {}
+    for m in room.user_profiles:
+        default_images = await redis_handler.generate_presigned_files(
+            UserProfileImage, [i for i in m.user_profile.images if i.is_default])
+        other_images = await redis_handler.generate_presigned_files(
+            UserProfileImage, [i for i in m.user_profile.images if not i.is_default])
+        profile_images.update({
+            m.user_profile_id: (default_images + other_images, default_images)
+        })
+
+    for m in room.user_profiles:
+        await RedisChatRoomsByUserProfileS.sadd(redis, m.user_profile_id, RedisChatRoomsByUserProfileS.schema(
+            id=room.id,
+            name=room.get_name_by_user_profile(m.user_profile_id),
+            type=room.type.name.lower(),
+            user_profile_files=profile_images[m.user_profile_id][1],
+            unread_msg_cnt=0))
+        await RedisUserProfilesByRoomS.sadd(
+            redis, (room.id, m.user_profile_id), *[
+                RedisUserProfilesByRoomS.schema(
+                    id=n.user_profile_id,
+                    nickname=n.user_profile.get_nickname_by_other(m.user_profile_id),
+                    files=profile_images[n.user_profile_id][0]
+                ) for n in room.user_profiles
+            ])
 
     return ChatRoomS.from_orm(room)
 
@@ -152,55 +175,27 @@ async def chat_room(
     """
     대화 방 목록 조회
     """
-    crud_user_profile = UserProfileCRUD(session)
+    def get_log_error(exc: Exception):
+        return f"Chat Room Error - user_profile_id: {user_profile_id}, " \
+               f"reason: {ExceptionHandler(exc).error}"
+
+    crud_room_user_mapping = ChatRoomUserAssociationCRUD(session)
     redis: Redis = AioRedis().redis
     redis_handler = RedisHandler(redis)
 
     user: User = await AuthValidator(session).get_user_by_websocket(websocket)
     if not next((p for p in user.profiles if p.id == user_profile_id), None):
-        raise WebSocketDisconnect(code=status.WS_1008_POLICY_VIOLATION)
+        raise WebSocketDisconnect(code=status.WS_1007_INVALID_FRAME_PAYLOAD_DATA)
 
     await websocket.accept()
 
-    while True:
-        try:
-            while True:
+    async def producer_handler(pub: Redis, ws: WebSocket):
+        while True:
+            try:
                 rooms_redis: List[RedisChatRoomByUserProfileS] = \
-                    await RedisChatRoomsByUserProfileS.smembers(redis, user_profile_id)
-                if rooms_redis:
-                    break
-                try:
-                    user_profile: UserProfile = await crud_user_profile.get(
-                        conditions=(UserProfile.id == user_profile_id,),
-                        options=[
-                            selectinload(UserProfile.rooms)
-                            .joinedload(ChatRoomUserAssociation.room)
-                            .selectinload(ChatRoom.user_profiles)
-                            .selectinload(UserProfile.images)
-                        ]
-                    )
-                except HTTPException:
-                    raise WebSocketDisconnect(
-                        code=status.WS_1007_INVALID_FRAME_PAYLOAD_DATA,
-                        reason=f"Not exist user profile.")
-                if not user_profile.rooms:
-                    break
-
-                for m in user_profile.rooms:
-                    files: List[RedisUserImageFileS] = []
-                    for p in m.room.user_profiles:
-                        if p.images:
-                            files.extend(
-                                await redis_handler.generate_presigned_files(
-                                    UserProfileImage, [p for p in p.images if p.is_default]))
-                    rooms_redis.append(
-                        RedisChatRoomsByUserProfileS.schema(
-                            id=m.room.id, name=m.room.get_name_by_user_profile(user_profile_id),
-                            type=m.room.name.lower(), user_profile_files=files, unread_msg_cnt=0))
-                await RedisChatRoomsByUserProfileS.sadd(redis, user_profile_id, *rooms_redis)
-
-            result = []
-            if rooms_redis:
+                    await redis_handler.get_rooms_with_user_profile(
+                        user_profile_id=user_profile_id, crud=crud_room_user_mapping, sync=True)
+                result = []
                 for room_redis in rooms_redis:
                     obj: Dict[str, Any] = jsonable_encoder(room_redis)
                     # 마지막 대화 내역 업데이트
@@ -211,12 +206,32 @@ async def chat_room(
                             'last_chat_history': jsonable_encoder(chat_histories[0])
                         })
                     result.append(obj)
-            await websocket.send_json(result)
-        except WebSocketDisconnect as e:
-            logger.exception(e)
-            raise e
-        except Exception as e:
-            logger.exception(e)
+                await pub.publish(f"pubsub:user:{user_profile_id}:chat_room", json.dumps(result))
+                await websocket.send_json(result)
+            except WebSocketDisconnect as e:
+                logger.exception(e)
+                raise e
+            except Exception as e:
+                logger.exception(e)
+
+    async def consumer_handler(psub: PubSub, ws: WebSocket):
+        try:
+            async with psub as p:
+                await p.subscribe(f"pubsub:user:{user_profile_id}:chat_room")
+                try:
+                    while True:
+                        message: dict = await p.get_message(ignore_subscribe_messages=True)
+                        if message:
+                            await ws.send_json(json.loads(message.get('data')))
+                except asyncio.CancelledError as exc:
+                    await p.unsubscribe()
+                    raise exc
+                except Exception as exc:
+                    logger.error(get_log_error(exc))
+        except asyncio.CancelledError:
+            await psub.close()
+
+    await redis_handler.handle_pubsub(websocket, producer_handler, consumer_handler, logger)
 
 
 @router.websocket("/{user_profile_id}/{room_id}")
@@ -390,7 +405,7 @@ async def chat(
                                 _unread_msg_cnt += _room_redis.unread_msg_cnt
                             await RedisChatRoomsByUserProfileS.sadd(
                                 redis, _user_profile.id, RedisChatRoomsByUserProfileS.schema(
-                                    id=_room_redis.id,
+                                    id=room_id,
                                     name=_room_redis.name,
                                     type=_room_redis.type,
                                     user_profile_files=_room_redis.user_profile_files,
@@ -550,6 +565,11 @@ async def chat(
                             )
                         # 방에 속한 유저 데이터 -> Redis, DB 동기화
                         current_profile_ids: Set[int] = {m.user_profile_id for m in _room_user_mapping}
+                        profile_images = {
+                            m.user_profile_id: await redis_handler.generate_presigned_files(
+                                UserProfileImage, m.user_profile.images
+                            ) for m in _room_user_mapping
+                        }
                         for current_id in current_profile_ids:
                             _user_profiles_redis = await RedisUserProfilesByRoomS.smembers(redis, (room_id, current_id))
                             if len(_user_profiles_redis) != len(_room_user_mapping):
@@ -559,8 +579,7 @@ async def chat(
                                     RedisUserProfilesByRoomS.schema(
                                         id=p.user_profile.id,
                                         nickname=p.user_profile.get_nickname_by_other(current_id),
-                                        files=await redis_handler.generate_presigned_files(
-                                            UserProfileImage, p.user_profile.images)
+                                        files=profile_images[p.user_profile_id]
                                     ) for p in _room_user_mapping])
 
                         add_profile_ids: Set[int] = set(target_user_profile_ids)
@@ -587,14 +606,18 @@ async def chat(
                         await session.commit()
 
                         total_profiles = [m.user_profile for m in _room_user_mapping] + profiles
+                        profile_images = {
+                            p.id: await redis_handler.generate_presigned_files(
+                                UserProfileImage, p.images
+                            ) for p in total_profiles
+                        }
                         for target_profile in total_profiles:
                             # 각 방에 있는 유저 기준으로 데이터 업데이트
                             await RedisUserProfilesByRoomS.sadd(redis, (room_id, target_profile.id), *[
                                 RedisUserProfilesByRoomS.schema(
                                     id=p.id,
                                     nickname=p.get_nickname_by_other(target_profile.id),
-                                    files=await redis_handler.generate_presigned_files(
-                                        UserProfileImage, p.images)
+                                    files=profile_images[p.id]
                                 ) for p in (total_profiles if target_profile in profiles else profiles)
                             ])
                             # 각 방에 있는 유저의 방 정보 업데이트
@@ -625,7 +648,7 @@ async def chat(
                             data=ChatSendDataS(
                                 text=f"{user_profile_redis.nickname}님이 {target_msg}님을 초대했습니다.",
                                 timestamp=request_s.data.timestamp))
-                    await pub.publish(f"chat:{room_id}", response_s.json())
+                    await pub.publish(f"pubsub:room:{room_id}:chat", response_s.json())
                 except WebSocketDisconnect as exc:
                     raise exc
                 except Exception as exc:
@@ -671,7 +694,7 @@ async def chat(
                             data=ChatSendDataS(
                                 text=f"{room_user_mapping_db.user_profile.nickname}님이 나갔습니다.",
                                 timestamp=now.timestamp()))
-                        await pub.publish(f"chat:{room_id}", response_s.json())
+                        await pub.publish(f"pubsub:room:{room_id}:chat", response_s.json())
                 except Exception as _exc:
                     logger.error(_exc)
             logger.exception(get_log_error(exc))
@@ -680,7 +703,7 @@ async def chat(
     async def consumer_handler(psub: PubSub, ws: WebSocket):
         try:
             async with psub as p:
-                await p.subscribe(f"chat:{room_id}")
+                await p.subscribe(f"pubsub:room:{room_id}:chat")
                 try:
                     while True:
                         message: dict = await p.get_message(ignore_subscribe_messages=True)
@@ -694,14 +717,4 @@ async def chat(
         except asyncio.CancelledError:
             await psub.close()
 
-    redis: Redis = AioRedis().redis
-    pubsub: PubSub = redis.pubsub()
-
-    producer_task: Coroutine = producer_handler(pub=redis, ws=websocket)
-    consumer_task: Coroutine = consumer_handler(psub=pubsub, ws=websocket)
-    done, pending = await asyncio.wait(
-        [producer_task, consumer_task], return_when=asyncio.FIRST_COMPLETED)
-    logger.info(f"Done task: {done}")
-    for task in pending:
-        logger.info(f"Canceling task: {task}")
-        task.cancel()
+    await redis_handler.handle_pubsub(websocket, producer_handler, consumer_handler, logger)
