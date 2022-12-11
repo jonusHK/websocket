@@ -1,13 +1,36 @@
 from typing import Optional, List
 
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, validator, root_validator
 
-from server.core.enums import ChatType
+from server.core.enums import ChatType, ChatRoomType
 
 
 class ChatRoomCreateParamS(BaseModel):
     user_profile_id: int
     target_profile_ids: List[int]
+    type: ChatRoomType
+
+    @classmethod
+    def convert_type(cls, value):
+        if isinstance(value, ChatRoomType):
+            return value
+        elif isinstance(value, str):
+            return ChatRoomType.get_by_name(value)
+        elif isinstance(value, int):
+            return ChatRoomType(value)
+        raise ValueError('Invalid type.')
+
+    @root_validator
+    def validate_all(cls, values):
+        room_type, target_profile_ids = cls.convert_type(values['type']), values['target_profile_ids']
+        if room_type == ChatRoomType.ONE_TO_ONE:
+            if len(target_profile_ids) != 1:
+                raise ValueError('The size for `target_profile_ids` should be 1 for private room.')
+        elif room_type == ChatRoomType.GROUP:
+            if len(target_profile_ids) <= 1:
+                raise ValueError('The size for `target_profile_ids` should be bigger than 1 for group room.')
+        values.update({'type': room_type})
+        return values
 
 
 # TODO ChatType 에 따라 분기 처리

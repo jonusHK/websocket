@@ -2,6 +2,7 @@ from typing import List, Optional
 
 from pydantic import BaseModel
 
+from server.core.enums import ChatRoomType
 from server.core.externals.redis.mixin import SortedSetCollectionMixin, \
     SetCollectionMixin
 
@@ -49,6 +50,7 @@ class RedisChatHistoryByRoomS(BaseModel):
 class RedisChatRoomByUserProfileS(BaseModel):
     id: int
     name: str
+    type: str
     user_profile_files: Optional[List[RedisUserImageFileS]] = []
     unread_msg_cnt: int
 
