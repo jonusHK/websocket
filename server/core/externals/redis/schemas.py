@@ -2,7 +2,6 @@ from typing import List, Optional
 
 from pydantic import BaseModel
 
-from server.core.enums import ChatRoomType
 from server.core.externals.redis.mixin import SortedSetCollectionMixin, \
     SetCollectionMixin
 
@@ -31,10 +30,14 @@ class RedisChatHistoryFileS(RedisFileBaseS):
     order: int
 
 
-class RedisUserProfileByRoomS(BaseModel):
+class RedisUserProfileS(BaseModel):
     id: int
     nickname: str
     files: Optional[List[RedisUserImageFileS]] = []
+
+
+class RedisUserProfileByRoomS(RedisUserProfileS):
+    ...
 
 
 class RedisChatHistoryByRoomS(BaseModel):
@@ -59,6 +62,10 @@ class RedisChatHistoryToSyncS(BaseModel):
     id: int
 
 
+class RedisFollowingByUserProfileS(RedisUserProfileS):
+    ...
+
+
 class RedisUserProfilesByRoomS(SetCollectionMixin):
     format = 'room:{}:user_profile:{}:user_profiles'
     schema = RedisUserProfileByRoomS
@@ -79,3 +86,9 @@ class RedisChatHistoriesToSyncS(SortedSetCollectionMixin):
     format = 'update:chat_histories'
     schema = RedisChatHistoryToSyncS
     score = 'id'  # schema 내부 필드여야 함
+
+
+class RedisFollowingsByUserProfileS(SortedSetCollectionMixin):
+    format = 'user:{}:followings'
+    schema = RedisFollowingByUserProfileS
+    score = 'nickname'  # schema 내부 필드여야 함
