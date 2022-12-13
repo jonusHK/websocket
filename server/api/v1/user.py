@@ -18,8 +18,6 @@ from server.schemas.user import UserS, UserSessionS, UserCreateS, UserProfileIma
 
 router = APIRouter(route_class=ExceptionHandlerRoute)
 
-logger = logging.getLogger("websocket")
-
 
 @router.post(
     "/signup",
