@@ -26,13 +26,14 @@ from server.core.exceptions import ExceptionHandler
 from server.core.externals.redis import AioRedis
 from server.core.externals.redis.schemas import RedisUserProfilesByRoomS, \
     RedisChatHistoriesByRoomS, RedisUserProfileByRoomS, RedisChatHistoryByRoomS, \
-    RedisChatRoomsByUserProfileS, RedisChatRoomByUserProfileS, RedisChatHistoryFileS
+    RedisChatRoomsByUserProfileS, RedisChatRoomByUserProfileS, RedisChatHistoryFileS, RedisFollowingsByUserProfileS, \
+    RedisFollowingByUserProfileS
 from server.crud.service import ChatRoomUserAssociationCRUD, ChatRoomCRUD, ChatHistoryCRUD, \
     ChatHistoryUserAssociationCRUD
 from server.crud.user import UserProfileCRUD
-from server.db.databases import get_async_session, settings
+from server.db.databases import get_async_session, settings, async_session
 from server.models import User, UserProfile, ChatRoom, ChatRoomUserAssociation, ChatHistory, \
-    ChatHistoryUserAssociation, ChatHistoryFile, UserProfileImage
+    ChatHistoryUserAssociation, ChatHistoryFile, UserProfileImage, UserRelationship
 from server.schemas.base import WebSocketFileS
 from server.schemas.chat import ChatSendFormS, ChatSendDataS, ChatReceiveFormS, ChatRoomCreateParamS
 from server.schemas.service import ChatRoomS
@@ -50,6 +51,79 @@ def index(request: Request):
 @router.get("/rooms", response_class=HTMLResponse)
 def rooms(request: Request):
     return templates.TemplateResponse("rooms.html", {"request": request})
+
+
+@router.get("/followings", response_class=HTMLResponse)
+def followings(request: Request):
+    return templates.TemplateResponse("followings.html", {"request": request})
+
+
+@router.websocket("/rooms/{user_profile_id}")
+async def chat_room(
+    websocket: WebSocket,
+    user_profile_id: int,
+    session: AsyncSession = Depends(get_async_session)
+):
+    """
+    대화 방 목록 조회
+    """
+    def get_log_error(exc: Exception):
+        return f"Chat Room Error - user_profile_id: {user_profile_id}, " \
+               f"reason: {ExceptionHandler(exc).error}"
+
+    crud_room_user_mapping = ChatRoomUserAssociationCRUD(session)
+    redis: Redis = AioRedis().redis
+    redis_handler = RedisHandler(redis)
+
+    user: User = await AuthValidator(session).get_user_by_websocket(websocket)
+    if not next((p for p in user.profiles if p.id == user_profile_id), None):
+        raise WebSocketDisconnect(code=status.WS_1007_INVALID_FRAME_PAYLOAD_DATA)
+
+    await websocket.accept()
+
+    async def producer_handler(pub: Redis, ws: WebSocket):
+        while True:
+            try:
+                rooms_redis: List[RedisChatRoomByUserProfileS] = \
+                    await redis_handler.get_rooms_with_user_profile(
+                        user_profile_id=user_profile_id, crud=crud_room_user_mapping, sync=True)
+                result = []
+                for room_redis in rooms_redis:
+                    obj: Dict[str, Any] = jsonable_encoder(room_redis)
+                    # 마지막 대화 내역 업데이트
+                    chat_histories: List[RedisChatHistoryByRoomS] = \
+                        await RedisChatHistoriesByRoomS.zrevrange(redis, room_redis.id, 0, 1)
+                    if chat_histories:
+                        obj.update({
+                            'last_chat_history': jsonable_encoder(chat_histories[0])
+                        })
+                    result.append(obj)
+                await pub.publish(f"pubsub:user:{user_profile_id}:chat_room", json.dumps(result))
+                await websocket.send_json(result)
+            except WebSocketDisconnect as e:
+                logger.exception(e)
+                raise e
+            except Exception as e:
+                logger.exception(e)
+
+    async def consumer_handler(psub: PubSub, ws: WebSocket):
+        try:
+            async with psub as p:
+                await p.subscribe(f"pubsub:user:{user_profile_id}:chat_room")
+                try:
+                    while True:
+                        message: dict = await p.get_message(ignore_subscribe_messages=True)
+                        if message:
+                            await ws.send_json(json.loads(message.get('data')))
+                except asyncio.CancelledError as exc:
+                    await p.unsubscribe()
+                    raise exc
+                except Exception as exc:
+                    logger.error(get_log_error(exc))
+        except asyncio.CancelledError:
+            await psub.close()
+
+    await redis_handler.handle_pubsub(websocket, producer_handler, consumer_handler, logger)
 
 
 @router.post(
@@ -166,75 +240,7 @@ async def chat_room_create(
     return ChatRoomS.from_orm(room)
 
 
-@router.websocket("/rooms/{user_profile_id}")
-async def chat_room(
-    websocket: WebSocket,
-    user_profile_id: int,
-    session: AsyncSession = Depends(get_async_session)
-):
-    """
-    대화 방 목록 조회
-    """
-    def get_log_error(exc: Exception):
-        return f"Chat Room Error - user_profile_id: {user_profile_id}, " \
-               f"reason: {ExceptionHandler(exc).error}"
-
-    crud_room_user_mapping = ChatRoomUserAssociationCRUD(session)
-    redis: Redis = AioRedis().redis
-    redis_handler = RedisHandler(redis)
-
-    user: User = await AuthValidator(session).get_user_by_websocket(websocket)
-    if not next((p for p in user.profiles if p.id == user_profile_id), None):
-        raise WebSocketDisconnect(code=status.WS_1007_INVALID_FRAME_PAYLOAD_DATA)
-
-    await websocket.accept()
-
-    async def producer_handler(pub: Redis, ws: WebSocket):
-        while True:
-            try:
-                rooms_redis: List[RedisChatRoomByUserProfileS] = \
-                    await redis_handler.get_rooms_with_user_profile(
-                        user_profile_id=user_profile_id, crud=crud_room_user_mapping, sync=True)
-                result = []
-                for room_redis in rooms_redis:
-                    obj: Dict[str, Any] = jsonable_encoder(room_redis)
-                    # 마지막 대화 내역 업데이트
-                    chat_histories: List[RedisChatHistoryByRoomS] = \
-                        await RedisChatHistoriesByRoomS.zrevrange(redis, room_redis.id, 0, 1)
-                    if chat_histories:
-                        obj.update({
-                            'last_chat_history': jsonable_encoder(chat_histories[0])
-                        })
-                    result.append(obj)
-                await pub.publish(f"pubsub:user:{user_profile_id}:chat_room", json.dumps(result))
-                await websocket.send_json(result)
-            except WebSocketDisconnect as e:
-                logger.exception(e)
-                raise e
-            except Exception as e:
-                logger.exception(e)
-
-    async def consumer_handler(psub: PubSub, ws: WebSocket):
-        try:
-            async with psub as p:
-                await p.subscribe(f"pubsub:user:{user_profile_id}:chat_room")
-                try:
-                    while True:
-                        message: dict = await p.get_message(ignore_subscribe_messages=True)
-                        if message:
-                            await ws.send_json(json.loads(message.get('data')))
-                except asyncio.CancelledError as exc:
-                    await p.unsubscribe()
-                    raise exc
-                except Exception as exc:
-                    logger.error(get_log_error(exc))
-        except asyncio.CancelledError:
-            await psub.close()
-
-    await redis_handler.handle_pubsub(websocket, producer_handler, consumer_handler, logger)
-
-
-@router.websocket("/{user_profile_id}/{room_id}")
+@router.websocket("/conversation/{user_profile_id}/{room_id}")
 async def chat(
     websocket: WebSocket,
     user_profile_id: int,
@@ -704,6 +710,82 @@ async def chat(
         try:
             async with psub as p:
                 await p.subscribe(f"pubsub:room:{room_id}:chat")
+                try:
+                    while True:
+                        message: dict = await p.get_message(ignore_subscribe_messages=True)
+                        if message:
+                            await ws.send_json(json.loads(message.get('data')))
+                except asyncio.CancelledError as exc:
+                    await p.unsubscribe()
+                    raise exc
+                except Exception as exc:
+                    logger.error(get_log_error(exc))
+        except asyncio.CancelledError:
+            await psub.close()
+
+    await redis_handler.handle_pubsub(websocket, producer_handler, consumer_handler, logger)
+
+
+@router.websocket('/followings/{user_profile_id}')
+async def chat_followings(websocket: WebSocket, user_profile_id: int):
+    """
+    친구 목록 조회
+    """
+    def get_log_error(exc: Exception):
+        return f"Followings Error - user_profile_id: {user_profile_id}, " \
+               f"reason: {ExceptionHandler(exc).error}"
+
+    async with async_session() as session:
+        user: User = await AuthValidator(session).get_user_by_websocket(websocket)
+        user_profile: UserProfile = next((p for p in user.profiles if p.id == user_profile_id and p.is_active), None)
+        if not user_profile:
+            raise WebSocketDisconnect(code=status.WS_1007_INVALID_FRAME_PAYLOAD_DATA, reason='Unauthorized user.')
+
+        redis: Redis = AioRedis().redis
+        redis_handler = RedisHandler(redis)
+
+        await websocket.accept()
+
+    async def producer_handler(pub: Redis, ws: WebSocket):
+        try:
+            while True:
+                async with async_session() as session:
+                    crud_user_profile = UserProfileCRUD(session)
+                    while True:
+                        followings: List[RedisFollowingByUserProfileS] = \
+                            await RedisFollowingsByUserProfileS.smembers(redis, user_profile_id)
+                        if followings:
+                            break
+                        if not followings:
+                            user_profile: UserProfile = await crud_user_profile.get(
+                                conditions=(UserProfile.id == user_profile_id,),
+                                options=[
+                                    selectinload(UserProfile.followings).
+                                    joinedload(UserRelationship.other_profile).
+                                    selectinload(UserProfile.images),
+                                    selectinload(UserProfile.followings).
+                                    joinedload(UserRelationship.other_profile).
+                                    selectinload(UserProfile.followers)
+                                ])
+                            await RedisFollowingsByUserProfileS.sadd(redis, user_profile_id, *[
+                                RedisFollowingsByUserProfileS.schema(
+                                    id=f.other_profile_id,
+                                    nickname=f.other_profile.get_nickname_by_other(user_profile_id),
+                                    files=await redis_handler.generate_presigned_files(
+                                        UserProfileImage, [i for i in f.other_profile.images if i.is_default])
+                                ) for f in user_profile.followings
+                            ])
+                await pub.publish(f'pubsub:user:{user_profile_id}:following', json.dumps(jsonable_encoder(followings)))
+        except WebSocketDisconnect as e:
+            logger.exception(e)
+            raise e
+        except Exception as e:
+            logger.exception(e)
+
+    async def consumer_handler(psub: PubSub, ws: WebSocket):
+        try:
+            async with psub as p:
+                await p.subscribe(f"pubsub:user:{user_profile_id}:following")
                 try:
                     while True:
                         message: dict = await p.get_message(ignore_subscribe_messages=True)

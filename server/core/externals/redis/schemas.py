@@ -88,7 +88,6 @@ class RedisChatHistoriesToSyncS(SortedSetCollectionMixin):
     score = 'id'  # schema 내부 필드여야 함
 
 
-class RedisFollowingsByUserProfileS(SortedSetCollectionMixin):
+class RedisFollowingsByUserProfileS(SetCollectionMixin):
     format = 'user:{}:followings'
     schema = RedisFollowingByUserProfileS
-    score = 'nickname'  # schema 내부 필드여야 함
