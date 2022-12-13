@@ -191,7 +191,6 @@ class RedisHandler:
 
     async def handle_pubsub(self, ws: WebSocket, producer_handler: Callable, consumer_handler: Callable, logger):
         pubsub: PubSub = self.redis.pubsub()
-
         producer_task: Coroutine = producer_handler(pub=self.redis, ws=ws)
         consumer_task: Coroutine = consumer_handler(psub=pubsub, ws=ws)
         done, pending = await asyncio.wait(

@@ -31,7 +31,7 @@ function establishWebSocketConnection() {
     const label = document.getElementById("status-label");
     const userProfileId = 1;
     const roomId = 53;
-    const socket = new WebSocket(`ws://localhost:8000/api/v1/chats/${userProfileId}/${roomId}`);
+    const socket = new WebSocket(`ws://localhost:8000/api/v1/chats/conversation/${userProfileId}/${roomId}`);
 
     // 연결 성공
     socket.onopen = function (event) {
