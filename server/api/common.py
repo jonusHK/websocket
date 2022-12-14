@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime
 from typing import Iterable, List, Dict, Any, Optional, Callable, Coroutine
 from uuid import UUID
 
@@ -81,11 +82,14 @@ class RedisHandler:
         return files_s
 
     async def get_rooms_with_user_profile(
-        self, user_profile_id: int, crud: Optional[ChatRoomUserAssociationCRUD] = None, sync=False
+        self, user_profile_id: int, crud: Optional[ChatRoomUserAssociationCRUD] = None, reverse=False, sync=False
     ) -> List[RedisChatRoomByUserProfileS]:
+        now = datetime.now().astimezone()
         while True:
             rooms_redis: List[RedisChatRoomByUserProfileS] = \
-                await RedisChatRoomsByUserProfileS.smembers(self.redis, user_profile_id)
+                await getattr(
+                    RedisChatRoomsByUserProfileS,
+                    'zrevrange' if reverse else 'zrange')(self.redis, user_profile_id)
             if not sync:
                 break
             if rooms_redis:
@@ -95,6 +99,7 @@ class RedisHandler:
                 options=[
                     joinedload(ChatRoomUserAssociation.room)
                     .selectinload(ChatRoom.user_profiles)
+                    .joinedload(ChatRoomUserAssociation.user_profile)
                     .selectinload(UserProfile.followers),
                     joinedload(ChatRoomUserAssociation.user_profile)
                     .selectinload(UserProfile.images)
@@ -102,12 +107,12 @@ class RedisHandler:
             )
             if not room_user_mapping:
                 break
-            await RedisChatRoomsByUserProfileS.sadd(self.redis, user_profile_id, *[
+            await RedisChatRoomsByUserProfileS.zadd(self.redis, user_profile_id, *[
                 RedisChatRoomsByUserProfileS.schema(
                     id=m.room.id, name=m.room.get_name_by_user_profile(user_profile_id),
-                    type=m.room.name.lower(), user_profile_files=await self.generate_presigned_files(
+                    type=m.room.type.name.lower(), user_profile_files=await self.generate_presigned_files(
                         UserProfileImage, [p for p in m.user_profile.images if p.is_default]
-                    ), unread_msg_cnt=0
+                    ), unread_msg_cnt=0, timestamp=now.timestamp()
                 ) for m in room_user_mapping
             ])
 
@@ -116,9 +121,10 @@ class RedisHandler:
     async def get_room_with_user_profile(
         self, room_id: int, user_profile_id: int, crud: Optional[ChatRoomCRUD] = None, sync=False
     ) -> RedisChatRoomByUserProfileS:
+        now = datetime.now().astimezone()
         while True:
             rooms_redis: List[RedisChatRoomByUserProfileS] = \
-                await RedisChatRoomsByUserProfileS.smembers(self.redis, user_profile_id)
+                await RedisChatRoomsByUserProfileS.zrange(self.redis, user_profile_id)
             room_redis: RedisChatRoomByUserProfileS = next((
                 r for r in rooms_redis if r.id == room_id), None) if rooms_redis else None
             if not sync:
@@ -144,15 +150,14 @@ class RedisHandler:
             ):
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No users for room')
 
-            await RedisChatRoomsByUserProfileS.sadd(self.redis, user_profile_id, RedisChatRoomsByUserProfileS.schema(
+            await RedisChatRoomsByUserProfileS.zadd(self.redis, user_profile_id, RedisChatRoomsByUserProfileS.schema(
                 id=room_db.id,
                 name=room_db.get_name_by_user_profile(user_profile_id),
                 type=room_db.type.name.lower(),
                 user_profile_files=await self.generate_presigned_files(
                     UserProfileImage,
                     [i for m in room_db.user_profiles for i in m.user_profile.images if i.is_default]),
-                unread_msg_cnt=0
-            ))
+                unread_msg_cnt=0, timestamp=now.timestamp()))
 
         return room_redis
 
@@ -188,6 +193,41 @@ class RedisHandler:
                 ) for p in room_user_mapping])
 
         return user_profiles_redis
+
+    async def get_user_profile_in_room(
+        self, room_id: int, user_profile_id: int, crud: Optional[ChatRoomUserAssociationCRUD] = None, sync=False
+    ) -> RedisUserProfileByRoomS:
+        while True:
+            user_profiles_redis: List[RedisUserProfileByRoomS] = \
+                await RedisUserProfilesByRoomS.smembers(self.redis, (room_id, user_profile_id))
+            user_profile_redis: RedisUserProfileByRoomS = next((
+                p for p in user_profiles_redis if p.id == user_profile_id), None) if user_profiles_redis else None
+            if not sync:
+                break
+            if user_profile_redis:
+                break
+            room_user_mapping: List[ChatRoomUserAssociation] = \
+                await crud.list(
+                    conditions=(
+                        ChatRoomUserAssociation.room_id == room_id,),
+                    options=[
+                        joinedload(ChatRoomUserAssociation.user_profile)
+                        .selectinload(UserProfile.images),
+                        joinedload(ChatRoomUserAssociation.user_profile)
+                        .selectinload(UserProfile.followers)
+                    ]
+                )
+            if not room_user_mapping:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Not exist any user in the room.')
+            m = next((m for m in room_user_mapping if m.user_profile_id == user_profile_id), None)
+            if m:
+                await RedisUserProfilesByRoomS.sadd(
+                    self.redis, (room_id, user_profile_id), RedisUserProfilesByRoomS.schema(
+                        id=m.user_profile.id,
+                        nickname=m.user_profile.get_nickname_by_other(user_profile_id),
+                        files=await self.generate_presigned_files(UserProfileImage, m.user_profile.images)))
+
+        return user_profile_redis
 
     async def update_histories_by_room(self, room_id: int, histories: List[RedisChatHistoryByRoomS]):
         await RedisChatHistoriesByRoomS.zadd(self.redis, room_id, histories)

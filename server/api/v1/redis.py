@@ -17,7 +17,7 @@ async def user_profiles_by_room(room_id: int, user_profile_id: int):
 
 @router.get("/rooms")
 async def chat_rooms_by_user_profile(user_profile_id: int):
-    return await RedisChatRoomsByUserProfileS.smembers(redis, user_profile_id)
+    return await RedisChatRoomsByUserProfileS.zrange(redis, user_profile_id)
 
 
 @router.get("/chats")

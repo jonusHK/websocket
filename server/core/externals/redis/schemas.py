@@ -56,6 +56,7 @@ class RedisChatRoomByUserProfileS(BaseModel):
     type: str
     user_profile_files: Optional[List[RedisUserImageFileS]] = []
     unread_msg_cnt: int
+    timestamp: float | int
 
 
 class RedisChatHistoryToSyncS(BaseModel):
@@ -77,9 +78,10 @@ class RedisChatHistoriesByRoomS(SortedSetCollectionMixin):
     score = 'timestamp'  # schema 내부 필드여야 함
 
 
-class RedisChatRoomsByUserProfileS(SetCollectionMixin):
+class RedisChatRoomsByUserProfileS(SortedSetCollectionMixin):
     format = 'user:{}:chat_rooms'
     schema = RedisChatRoomByUserProfileS
+    score = 'timestamp'  # schema 내부 필드여야 함
 
 
 class RedisChatHistoriesToSyncS(SortedSetCollectionMixin):
