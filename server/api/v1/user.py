@@ -142,10 +142,13 @@ async def create_relationship(
     AuthValidator.validate_user_profile(user_session, user_profile_id)
 
     other_profile: UserProfile = await crud_user_profile.get(
-        conditions=(UserProfile.id == other_profile_id, UserProfile.is_active == 1))
-
+        conditions=(
+            UserProfile.id == other_profile_id,
+            UserProfile.is_active == 1))
     user_profile: UserProfile = await crud_user_profile.get(
-        conditions=(UserProfile.id == user_profile_id,),
+        conditions=(
+            UserProfile.id == user_profile_id,
+            UserProfile.is_active == 1),
         options=[
             selectinload(UserProfile.followings)
         ]
@@ -181,7 +184,9 @@ async def search_relationship(
     AuthValidator.validate_user_profile(user_session, user_profile_id)
 
     user_profile: UserProfile = await crud_user_profile.get(
-        conditions=(UserProfile.id == user_profile_id, UserProfile.is_active == 1),
+        conditions=(
+            UserProfile.id == user_profile_id,
+            UserProfile.is_active == 1),
         options=[
             selectinload(UserProfile.followings).
             joinedload(UserRelationship.other_profile).

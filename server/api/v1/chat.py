@@ -155,9 +155,10 @@ async def chat_room_create(
     )
     if user_profile.user.id != request_user.id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
-    target_profiles: List[UserProfile] = await crud_user_profile.list(conditions=(
-        UserProfile.id.in_(data.target_profile_ids),
-        UserProfile.is_active == 1))
+    target_profiles: List[UserProfile] = await crud_user_profile.list(
+        conditions=(
+            UserProfile.id.in_(data.target_profile_ids),
+            UserProfile.is_active == 1))
     if len(data.target_profile_ids) != len(target_profiles):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Not exists all for target profile ids.")
@@ -595,7 +596,8 @@ async def chat(
                                 continue
                             profiles = await crud_user_profile.list(
                                 conditions=(
-                                    UserProfile.id.in_(profile_ids), UserProfile.is_active == 1),
+                                    UserProfile.id.in_(profile_ids),
+                                    UserProfile.is_active == 1),
                                 options=[
                                     selectinload(UserProfile.images),
                                     selectinload(UserProfile.followers)
@@ -763,7 +765,9 @@ async def chat_followings(websocket: WebSocket, user_profile_id: int):
                             break
                         if not followings:
                             user_profile: UserProfile = await crud_user_profile.get(
-                                conditions=(UserProfile.id == user_profile_id,),
+                                conditions=(
+                                    UserProfile.id == user_profile_id,
+                                    UserProfile.is_active == 1),
                                 options=[
                                     selectinload(UserProfile.followings).
                                     joinedload(UserRelationship.other_profile).

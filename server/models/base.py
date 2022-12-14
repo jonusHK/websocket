@@ -159,8 +159,10 @@ class S3Media(TimestampMixin, ConvertMixin, Base):
         from server.crud.base import S3MediaCRUD
         from fastapi import HTTPException
         try:
-            await S3MediaCRUD(session).get(conditions=(
-                S3Media.filepath == filepath, S3Media.bucket_name == bucket_name))
+            await S3MediaCRUD(session).get(
+                conditions=(
+                    S3Media.filepath == filepath,
+                    S3Media.bucket_name == bucket_name))
         except HTTPException:
             return False
         return True
