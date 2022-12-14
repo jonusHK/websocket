@@ -16,7 +16,8 @@ from server.core.utils import verify_password
 from server.crud.user import UserCRUD, UserProfileCRUD
 from server.db.databases import get_async_session, settings
 from server.models import UserSession, UserProfileImage, User, UserProfile, UserRelationship
-from server.schemas.user import UserS, UserSessionS, UserCreateS, UserProfileImageS, UserProfileImageUploadS
+from server.schemas.user import UserS, UserSessionS, UserCreateS, UserProfileImageS, UserProfileImageUploadS, \
+    UserProfileS, UserRelationshipS
 
 router = APIRouter(route_class=ExceptionHandlerRoute)
 
@@ -127,7 +128,7 @@ async def user_profile_image_upload(
     return [UserProfileImageS.from_orm(o) for o in objects]
 
 
-@router.post('/relationship/{user_profile_id}', dependencies=[Depends(cookie)])
+@router.post('/relationship/{user_profile_id}/create', dependencies=[Depends(cookie)])
 async def create_relationship(
     user_profile_id: int,
     other_profile_id: int,
@@ -139,6 +140,9 @@ async def create_relationship(
 
     # 권한 검증
     AuthValidator.validate_user_profile(user_session, user_profile_id)
+
+    other_profile: UserProfile = await crud_user_profile.get(
+        conditions=(UserProfile.id == other_profile_id, UserProfile.is_active == 1))
 
     user_profile: UserProfile = await crud_user_profile.get(
         conditions=(UserProfile.id == user_profile_id,),
@@ -154,10 +158,40 @@ async def create_relationship(
     relationship = UserRelationship(
         my_profile_id=user_profile_id,
         other_profile_id=other_profile_id,
+        other_profile_nickname=other_profile.nickname,
         type=relation_type
     )
     user_profile.followings.append(relationship)
     await session.commit()
     await session.refresh(relationship)
 
-    return jsonable_encoder(relationship)
+    return UserRelationshipS.from_orm(relationship)
+
+
+@router.get('/relationship/{user_profile_id}/search', dependencies=[Depends(cookie)])
+async def create_relationship(
+    user_profile_id: int,
+    nickname: str,
+    user_session: UserSession = Depends(verifier),
+    session=Depends(get_async_session)
+):
+    crud_user_profile = UserProfileCRUD(session)
+
+    # 권한 검증
+    AuthValidator.validate_user_profile(user_session, user_profile_id)
+
+    user_profile: UserProfile = await crud_user_profile.get(
+        conditions=(UserProfile.id == user_profile_id, UserProfile.is_active == 1),
+        options=[
+            selectinload(UserProfile.followings).
+            joinedload(UserRelationship.other_profile).
+            selectinload(UserProfile.images)
+        ]
+    )
+    searched_profiles: List[UserProfile] = [
+        f.other_profile for f in user_profile.followings
+        if nickname in f.other_profile_nickname and
+        f.is_active and not f.is_hidden and not f.is_forbidden
+    ]
+
+    return [UserProfileS.from_orm(p) for p in searched_profiles]

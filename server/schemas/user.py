@@ -1,5 +1,6 @@
+from __future__ import annotations
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
 from pydantic import BaseModel
 
@@ -35,33 +36,10 @@ class UserS(UserBase):
         }
 
 
-class UserProfileBaseS(BaseModel):
-    user_id: int
-    nickname: str
-    status_message: Optional[str] = None
-    is_default: bool = False
-    is_active: bool = True
-
-
-class UserProfileCreateS(UserProfileBaseS):
-    pass
-
-
-class UserProfileS(UserProfileBaseS):
-    id: int
-    created: datetime
-    updated: datetime
-
-    class Config:
-        orm_mode = True
-        json_encoders = {
-            datetime: lambda v: v.isoformat()
-        }
-
-
 class UserRelationshipBaseS(BaseModel):
     my_profile_id: int
     other_profile_id: int
+    other_profile_nickname: str
     type: RelationshipType
     favorites: int = False
     is_hidden: int = False
@@ -107,6 +85,31 @@ class UserProfileImageUploadS(BaseModel):
     user_profile_id: int
     image_type: str
     is_default: bool
+
+
+class UserProfileBaseS(BaseModel):
+    user_id: int
+    nickname: str
+    status_message: Optional[str] = None
+    is_default: bool = False
+    is_active: bool = True
+
+
+class UserProfileCreateS(UserProfileBaseS):
+    pass
+
+
+class UserProfileS(UserProfileBaseS):
+    id: int
+    images: Optional[List[UserProfileImageS]] = []
+    created: datetime
+    updated: datetime
+
+    class Config:
+        orm_mode = True
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
+        }
 
 
 class UserSessionBaseS(BaseModel):
