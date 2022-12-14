@@ -6,14 +6,16 @@ from uuid import uuid4, UUID
 from fastapi import APIRouter, Depends, HTTPException, Response, status, UploadFile
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from server.api import ExceptionHandlerRoute
+from server.api.common import AuthValidator
 from server.core.authentications import SessionData, backend, cookie, verifier, RoleChecker
-from server.core.enums import UserType, ProfileImageType
+from server.core.enums import UserType, ProfileImageType, RelationshipType
 from server.core.utils import verify_password
-from server.crud.user import UserCRUD
+from server.crud.user import UserCRUD, UserProfileCRUD
 from server.db.databases import get_async_session, settings
-from server.models import UserSession, UserProfileImage, User, UserProfile
+from server.models import UserSession, UserProfileImage, User, UserProfile, UserRelationship
 from server.schemas.user import UserS, UserSessionS, UserCreateS, UserProfileImageS, UserProfileImageUploadS
 
 router = APIRouter(route_class=ExceptionHandlerRoute)
@@ -123,3 +125,39 @@ async def user_profile_image_upload(
             o.close()
 
     return [UserProfileImageS.from_orm(o) for o in objects]
+
+
+@router.post('/relationship/{user_profile_id}', dependencies=[Depends(cookie)])
+async def create_relationship(
+    user_profile_id: int,
+    other_profile_id: int,
+    relation_type: str = RelationshipType.FRIEND.name.lower(),
+    user_session: UserSession = Depends(verifier),
+    session=Depends(get_async_session)
+):
+    crud_user_profile = UserProfileCRUD(session)
+
+    # 권한 검증
+    AuthValidator.validate_user_profile(user_session, user_profile_id)
+
+    user_profile: UserProfile = await crud_user_profile.get(
+        conditions=(UserProfile.id == user_profile_id,),
+        options=[
+            selectinload(UserProfile.followings)
+        ]
+    )
+    relation_type: RelationshipType = RelationshipType.get_by_name(relation_type)
+    if next((f for f in user_profile.followings if
+             f.other_profile_id == other_profile_id and f.type == relation_type), None):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Already following relationship.')
+
+    relationship = UserRelationship(
+        my_profile_id=user_profile_id,
+        other_profile_id=other_profile_id,
+        type=relation_type
+    )
+    user_profile.followings.append(relationship)
+    await session.commit()
+    await session.refresh(relationship)
+
+    return jsonable_encoder(relationship)
