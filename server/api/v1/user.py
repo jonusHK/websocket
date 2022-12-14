@@ -169,7 +169,7 @@ async def create_relationship(
 
 
 @router.get('/relationship/{user_profile_id}/search', dependencies=[Depends(cookie)])
-async def create_relationship(
+async def search_relationship(
     user_profile_id: int,
     nickname: str,
     user_session: UserSession = Depends(verifier),
