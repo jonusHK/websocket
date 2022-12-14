@@ -98,6 +98,9 @@ class SessionDatabaseVerifier(Generic[ID, SessionModel]):
                 raise self.auth_http_exception
             return
 
+        if not user_session.user.is_active:
+            raise self.auth_http_exception
+
         return user_session
 
 
