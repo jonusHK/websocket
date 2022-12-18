@@ -1,32 +1,29 @@
-<template>
-    <div>
-      <div>
-        <user-list-layer/>
-        <room-title-layer/>
-        <chat-list-layer/>
-        <chat-input-layer/>
-      </div>
-      <div>
-        <user-profile-layer/>
-      </div>
-    </div>
-</template>
-
 <script>
-import RoomTitleLayer from './RoomTitleLayer.vue';
-import ChatListLayer from './ChatListLayer.vue';
-import ChatInputLayer from './ChatInputLayer.vue';
-import UserProfileLayer from './UserProfileLayer.vue';
-import UserListLayer from './UserListLayer.vue';
+import { reactive, onMounted } from 'vue';
+import ChatMainLayer from '@/components/ChatMainLayer.vue';
+import LoginLayer from '@/components/LoginLayer.vue';
 
 export default {
-  name: 'MainLayer.vue',
-  components: {
-    RoomTitleLayer,
-    ChatListLayer,
-    ChatInputLayer,
-    UserProfileLayer,
-    UserListLayer,
-  }
+    name: 'Main',
+    setup () {
+        const state = reactive({
+            loggedIn: false,
+        })
+        onMounted(() => {
+            console.log('loggedIn - ', state.loggedIn);
+        })
+        return {
+            state
+        }
+    },
+    components: {
+        ChatMainLayer,
+        LoginLayer
+    }
 }
 </script>
+
+<template>
+    <ChatMainLayer v-if="state.loggedIn" />
+    <LoginLayer v-else />
+</template>
