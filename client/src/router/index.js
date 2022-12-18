@@ -1,17 +1,20 @@
 import { createWebHistory, createRouter } from "vue-router";
-import LoginLayer from "@/components/LoginLayer.vue";
-import ChatDefaultLayer from "@/components/ChatDefaultLayer.vue";
 
 const routes = [
   {
+    path: "/",
+    name: 'Home',
+    component: () => import('@/components/MainLayer.vue'),
+  },
+  {
     path: "/login",
     name: "Login",
-    component: LoginLayer,
+    component: () => import('@/components/LoginLayer.vue'),
   },
   {
     path: "/chat",
     name: "Chat",
-    component: ChatDefaultLayer,
+    component: () => import('@/components/ChatMainLayer.vue'),
   }
 ];
 

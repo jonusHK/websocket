@@ -1,9 +1,8 @@
 <script setup>
-import ChatDefaultLayer from './components/ChatDefaultLayer.vue';
 </script>
 
 <template>
-  <ChatDefaultLayer />
+  <router-view />
 </template>
 
 <style scoped>
