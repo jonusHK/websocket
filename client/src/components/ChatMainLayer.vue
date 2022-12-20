@@ -1,5 +1,5 @@
 <script>
-import { reactive, computed, onMounted } from 'vue';
+import { reactive, computed, onMounted, getCurrentInstance } from 'vue';
 
 export default {
   name: 'App',
@@ -7,26 +7,15 @@ export default {
     title: String
   },
   setup (props, { emit }) {
-    const state = reactive({
-      username: '',
-      password: '',
-      lowerCaseUsername: computed(() => state.username.toLowerCase()),
-    })
-    const login = () => {
-      emit('login', {
-        username: state.username,
-        password: state.password
-      })
-    }
+    const { proxy } = getCurrentInstance();
+    if (proxy.$store.state.user.userId === '' || proxy.$store.state.user.userIsActive === false) {
+          proxy.$router.replace('/login');
+      }
     const onResizeChatBodyList = ({ width, height}) => {
+      // TODO
     }
-    onMounted(() => {
-      console.log('title: ' + props.title)
-    })
     return { 
-      login,
-      onResizeChatBodyList,
-      state
+      onResizeChatBodyList
     }
   },
   components: {
@@ -40,7 +29,11 @@ export default {
       <div class="chat-menu-icon">
         <div>
           <ui-icon>person</ui-icon>
-          <ui-icon>chat_bubble</ui-icon>
+          <p style="margin: 0;">
+            <ui-badge overlap :count="8" style="margin: 0;">
+              <ui-icon>chat_bubble</ui-icon>
+            </ui-badge>
+          </p>
         </div>
         <div>
           <!-- <ui-icon>notifications</ui-icon> -->
@@ -53,7 +46,6 @@ export default {
       <div class="chat-header-icon">
         <ui-icon style="margin-right:10px;">search</ui-icon>
         <ui-icon>person_add_alt_1</ui-icon>
-        <!-- <ui-icon>add_comment</ui-icon> -->
       </div>
     </div>
     <div id="chat-body">
@@ -79,17 +71,6 @@ export default {
 </template>
 
 <style scoped>
-#app {
-  font-family: Avenir, Helvetica, Arial, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-align: center;
-  color: #2c3e50;
-  margin-top: 10px;
-  width: 100vw;
-  height: 100vh;
-}
-
 #chat-container {
   width: 100%;
   height: 100%;
@@ -145,7 +126,7 @@ export default {
   padding-left: 30px;
   padding-right: 30px;
   z-index: 1;
-  background-color: #fdd835;
+  background-color: #6200ee;
 }
 
 .chat-header-icon {
