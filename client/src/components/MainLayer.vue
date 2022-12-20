@@ -1,29 +1,34 @@
 <script>
-import { reactive, onMounted } from 'vue';
-import ChatMainLayer from '@/components/ChatMainLayer.vue';
-import LoginLayer from '@/components/LoginLayer.vue';
+import { reactive, onMounted, getCurrentInstance } from 'vue';
+import ChatMainLayer from './ChatMainLayer.vue';
+import { useCookies } from 'vue3-cookies';
+
+const { cookies } = useCookies();
 
 export default {
     name: 'Main',
     setup () {
+        const { proxy } = getCurrentInstance();
         const state = reactive({
-            loggedIn: false,
+            loggedIn: false
         })
         onMounted(() => {
-            console.log('loggedIn - ', state.loggedIn);
+            if (proxy.$store.state.user.userId !== '' && proxy.$store.state.user.userIsActive === true) {
+                state.loggedIn = true;
+            } else {
+                proxy.$router.replace('/login');
+            }
         })
         return {
             state
         }
     },
     components: {
-        ChatMainLayer,
-        LoginLayer
+        ChatMainLayer
     }
 }
 </script>
 
 <template>
     <ChatMainLayer v-if="state.loggedIn" />
-    <LoginLayer v-else />
 </template>

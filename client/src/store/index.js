@@ -1,17 +1,14 @@
-import { createStore } from "vuex";
+import { createStore } from 'vuex';
+import user from './modules/user';
+import createPersistedState from 'vuex-persistedstate';
+
+const storageState = createPersistedState({
+  paths: ['user']
+});
 
 export default createStore({
-  state: {
-    counter: 10
+  modules: {
+    user,
   },
-  getters: {
-    time2(state) {
-      return state.counter * 2;
-    }
-  },
-  mutations: {
-    setCounter(state, value) {
-      state.counter = value;
-    }
-  }
+  plugins: [storageState]
 });

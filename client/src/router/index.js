@@ -1,21 +1,17 @@
-import { createWebHistory, createRouter } from "vue-router";
+import { createWebHistory, createRouter } from 'vue-router';
+
 
 const routes = [
   {
-    path: "/",
+    path: '/',
     name: 'Home',
     component: () => import('@/components/MainLayer.vue'),
   },
   {
-    path: "/login",
-    name: "Login",
+    path: '/login',
+    name: 'Login',
     component: () => import('@/components/LoginLayer.vue'),
   },
-  {
-    path: "/chat",
-    name: "Chat",
-    component: () => import('@/components/ChatMainLayer.vue'),
-  }
 ];
 
 const router = createRouter({

@@ -47,8 +47,7 @@ async def signup(user_s: UserCreateS, session: AsyncSession = Depends(get_async_
 
 @router.post(
     "/login",
-    response_model=UserS,
-    response_model_include={"id"}
+    response_model=UserS
 )
 async def login(data: SessionData, response: Response, session: AsyncSession = Depends(get_async_session)):
     session_id = uuid4()
@@ -72,11 +71,6 @@ async def login(data: SessionData, response: Response, session: AsyncSession = D
 @router.get("/whoami", dependencies=[Depends(cookie)])
 async def whoami(user_session: UserSession = Depends(verifier)):
     return UserSessionS.from_orm(user_session)
-
-
-@router.get("/permission", dependencies=[Depends(cookie), Depends(RoleChecker([UserType.USER]))])
-async def permission_test():
-    return {"detail": "ok"}
 
 
 @router.post("/logout")
