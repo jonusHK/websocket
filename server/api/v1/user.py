@@ -30,14 +30,26 @@ router = APIRouter(route_class=ExceptionHandlerRoute)
     status_code=status.HTTP_201_CREATED
 )
 async def signup(user_s: UserCreateS, session: AsyncSession = Depends(get_async_session)):
-    user_crud = UserCRUD(session)
+    error_code = None
+    if not user_s.email:
+        error_code = ResponseCode.INVALID_UID
+    elif not user_s.password:
+        error_code = ResponseCode.INVALID_PASSWORD
+    elif not user_s.name:
+        error_code = ResponseCode.INVALID_USER_NAME
+    elif not user_s.mobile:
+        error_code = ResponseCode.INVALID_MOBILE
 
+    if error_code:
+        raise ClassifiableException(code=error_code)
+
+    user_crud = UserCRUD(session)
     try:
-        await user_crud.get(conditions=(User.uid == user_s.uid,))
+        await user_crud.get(conditions=(User.uid == user_s.email,))
     except HTTPException:
         pass
     else:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Already signed up.')
+        raise ClassifiableException(code=ResponseCode.ALREADY_SIGNED_UP)
     user = await user_crud.create(**jsonable_encoder(user_s))
     user.profiles.append(UserProfile(user=user, nickname=user.name, is_default=True))
     await session.commit()
