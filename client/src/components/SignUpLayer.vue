@@ -96,7 +96,7 @@ export default {
                     } else if (err.response.data.code === 'INVALID_MOBILE') {
                         error_obj['message'] = '휴대폰 번호가 올바르지 않습니다.';
                     } else {
-                        error_obj['message'] = '데이터가 올바르지 않습니다.';
+                        error_obj['message'] = err.response.data.message;
                     }
                     proxy.$alert(error_obj);
                 })
