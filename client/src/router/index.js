@@ -12,6 +12,11 @@ const routes = [
     name: 'Login',
     component: () => import('@/components/LoginLayer.vue'),
   },
+  {
+    path: '/signup',
+    name: 'SignUp',
+    component: () => import('@/components/SignUpLayer.vue'),
+  }
 ];
 
 const router = createRouter({
