@@ -34,9 +34,27 @@ export default {
                         });
                         router.push({ path: '/', name: 'Home', query: {} });
                     }
-                });
+                }).catch((error) => {
+                    if (error.response.data.code === 'INVALID_UID') {
+                        proxy.$alert({
+                            message: '이메일 주소가 올바르지 않습니다.',
+                            state: 'error',
+                            stateOutlined: true
+                        });
+                    } else if (error.response.data.code === 'INVALID_PASSWORD') {
+                        proxy.$alert({
+                            message: '비밀번호가 올바르지 않습니다.',
+                            state: 'error',
+                            stateOutlined: true
+                        })
+                    }
+                })
             } catch (error) {
-                console.error(error);
+                proxy.$alert({
+                    message: `에러 발생 (${error})`,
+                    state: 'error',
+                    stateOutlined: true
+                })
             }
         }
         return {

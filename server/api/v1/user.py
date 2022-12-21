@@ -11,7 +11,8 @@ from sqlalchemy.orm import selectinload
 from server.api import ExceptionHandlerRoute
 from server.api.common import AuthValidator
 from server.core.authentications import SessionData, backend, cookie, verifier, RoleChecker
-from server.core.enums import UserType, ProfileImageType, RelationshipType
+from server.core.enums import UserType, ProfileImageType, RelationshipType, ResponseCode
+from server.core.exceptions import ClassifiableException
 from server.core.utils import verify_password
 from server.crud.user import UserCRUD, UserProfileCRUD
 from server.db.databases import get_async_session, settings
@@ -53,11 +54,12 @@ async def login(data: SessionData, response: Response, session: AsyncSession = D
     session_id = uuid4()
     crud = UserCRUD(session)
 
-    user = await crud.get(conditions=(User.uid == data.uid,))
-    if not user:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid uid.")
+    try:
+        user = await crud.get(conditions=(User.uid == data.uid,))
+    except HTTPException:
+        raise ClassifiableException(code=ResponseCode.INVALID_UID)
     if not verify_password(data.password, user.password):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid password.")
+        raise ClassifiableException(code=ResponseCode.INVALID_PASSWORD)
 
     await backend.create(session_id, data, session)
     cookie.attach_to_response(response, session_id)  # 저장 되는 쿠키 값: str(cookie.signer.dumps(session_id.hex))

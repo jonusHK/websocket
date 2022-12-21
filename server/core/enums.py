@@ -12,6 +12,8 @@ class ResponseCode(Enum):
     METHOD_NOT_ALLOWED = '허용되지 않은 메소드입니다.'
     NOT_ALLOWED = '허용되지 않은 작업입니다.'
     INVALID_JSON_FORMAT = '유효한 JSON 포맷이 아닙니다.'
+    INVALID_UID = '유효한 UID가 아닙니다.'
+    INVALID_PASSWORD = '유효한 비밀번호가 아닙니다.'
     INTERNAL_SERVER_ERROR = '정의되지 않은 오류'
 
     def retrieve(self):
