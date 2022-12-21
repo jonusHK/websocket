@@ -11,7 +11,8 @@ from sqlalchemy.orm import selectinload
 from server.api import ExceptionHandlerRoute
 from server.api.common import AuthValidator
 from server.core.authentications import SessionData, backend, cookie, verifier, RoleChecker
-from server.core.enums import UserType, ProfileImageType, RelationshipType
+from server.core.enums import UserType, ProfileImageType, RelationshipType, ResponseCode
+from server.core.exceptions import ClassifiableException
 from server.core.utils import verify_password
 from server.crud.user import UserCRUD, UserProfileCRUD
 from server.db.databases import get_async_session, settings
@@ -29,14 +30,26 @@ router = APIRouter(route_class=ExceptionHandlerRoute)
     status_code=status.HTTP_201_CREATED
 )
 async def signup(user_s: UserCreateS, session: AsyncSession = Depends(get_async_session)):
-    user_crud = UserCRUD(session)
+    error_code = None
+    if not user_s.email:
+        error_code = ResponseCode.INVALID_UID
+    elif not user_s.password:
+        error_code = ResponseCode.INVALID_PASSWORD
+    elif not user_s.name:
+        error_code = ResponseCode.INVALID_USER_NAME
+    elif not user_s.mobile:
+        error_code = ResponseCode.INVALID_MOBILE
 
+    if error_code:
+        raise ClassifiableException(code=error_code)
+
+    user_crud = UserCRUD(session)
     try:
-        await user_crud.get(conditions=(User.uid == user_s.uid,))
+        await user_crud.get(conditions=(User.uid == user_s.email,))
     except HTTPException:
         pass
     else:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Already signed up.')
+        raise ClassifiableException(code=ResponseCode.ALREADY_SIGNED_UP)
     user = await user_crud.create(**jsonable_encoder(user_s))
     user.profiles.append(UserProfile(user=user, nickname=user.name, is_default=True))
     await session.commit()
@@ -53,11 +66,12 @@ async def login(data: SessionData, response: Response, session: AsyncSession = D
     session_id = uuid4()
     crud = UserCRUD(session)
 
-    user = await crud.get(conditions=(User.uid == data.uid,))
-    if not user:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid uid.")
+    try:
+        user = await crud.get(conditions=(User.uid == data.uid,))
+    except HTTPException:
+        raise ClassifiableException(code=ResponseCode.INVALID_UID)
     if not verify_password(data.password, user.password):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid password.")
+        raise ClassifiableException(code=ResponseCode.INVALID_PASSWORD)
 
     await backend.create(session_id, data, session)
     cookie.attach_to_response(response, session_id)  # 저장 되는 쿠키 값: str(cookie.signer.dumps(session_id.hex))
