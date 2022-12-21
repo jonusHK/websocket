@@ -1,7 +1,6 @@
 <script>
-import { reactive, onMounted, getCurrentInstance } from 'vue';
+import { reactive, getCurrentInstance } from 'vue';
 import axios from 'axios';
-import router from '@/router';
 
 const { VITE_SERVER_HOST } = import.meta.env;
 
@@ -12,16 +11,16 @@ export default {
         const state = reactive({
             email: '',
             password: ''
-        })
+        });
         const login = () => {
             try {
                 axios.post(VITE_SERVER_HOST + "/users/login", JSON.stringify({
                     uid: state.email,
                     password: state.password,
                 }), {
-                headers: {
-                    "Content-Type": `application/json`,
-                },
+                    headers: {
+                        "Content-Type": `application/json`,
+                    },
                 })
                 .then((res) => {
                     if (res.status === 200) {
@@ -32,50 +31,66 @@ export default {
                             userName: res.data.data.name,
                             userIsActive: res.data.data.is_active
                         });
-                        router.push({ path: '/', name: 'Home', query: {} });
+                        proxy.$router.push({ path: '/', name: 'Home', query: {} });
                     }
-                }).catch((error) => {
-                    if (error.response.data.code === 'INVALID_UID') {
-                        proxy.$alert({
-                            message: '이메일 주소가 올바르지 않습니다.',
-                            state: 'error',
-                            stateOutlined: true
-                        });
-                    } else if (error.response.data.code === 'INVALID_PASSWORD') {
-                        proxy.$alert({
-                            message: '비밀번호가 올바르지 않습니다.',
-                            state: 'error',
-                            stateOutlined: true
-                        })
+                })
+                .catch((err) => {
+                    const error_obj = {
+                        state: 'error',
+                        stateOutlined: true                        
                     }
+                    if (err.response.data.code === 'INVALID_UID') {
+                        error_obj['message'] = '이메일 주소가 올바르지 않습니다.';
+                    } else if (err.response.data.code === 'INVALID_PASSWORD') {
+                        error_obj['message'] = '비밀번호가 올바르지 않습니다.'
+                    } else {
+                        error_obj['message'] = err.response.data.message;
+                    }
+                    proxy.$alert(error_obj);
                 })
             } catch (error) {
                 proxy.$alert({
                     message: `에러 발생 (${error})`,
                     state: 'error',
                     stateOutlined: true
-                })
+                });
             }
+        }
+        const signUp = () => {
+            proxy.$router.push({ path: '/signup', name: 'SignUp', query: {}});
         }
         return {
             state,
-            login
+            login,
+            signUp,
         }
     },
 }
 </script>
 
 <template>
-    <div style="display: flex; flex-direction: row; justify-content: center; align-items: center; width: 100%; height: 100%; background-color: #6200ee;">
-        <div style="display: flex; flex-direction: row; justify-content: center; align-items: center; width: 600px; height: 400px; background-color: white; border-radius: 10px;">
-            <div style="width: 300px; height: 500px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
-                <ui-textfield v-model="state.email" style="width: 100%; margin-bottom: 20px;">이메일 주소</ui-textfield>
-                <ui-textfield input-type="password" v-model="state.password" style="width: 100%; margin-bottom: 20px;">비밀번호</ui-textfield>
+    <div class="menu-background-layout">
+        <div class="menu-login-layout">
+            <p class="text menu-title">로그인</p>
+            <div class="menu-form-layout">
+                <ui-textfield v-model="state.email" class="menu-textfield">이메일 주소</ui-textfield>
+                <ui-textfield input-type="password" v-model="state.password" class="menu-textfield">비밀번호</ui-textfield>
                 <div>
                     <ui-button raised @click="login" style="margin-right: 5px;">로그인</ui-button>
-                    <ui-button outlined>취소</ui-button>
+                </div>
+                <div style="margin-top: 10px;">
+                    <p class="signUpBtn" @click="signUp">회원가입</p>
                 </div>
             </div>
         </div>
     </div>
 </template>
+
+<style>
+.signUpBtn {
+    font-size: 13px;
+    color: #6200ee;
+    text-decoration: underline;
+    cursor: pointer;
+}
+</style>
