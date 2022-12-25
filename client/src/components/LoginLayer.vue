@@ -1,6 +1,5 @@
 <script>
 import { reactive, getCurrentInstance } from 'vue';
-import axios from 'axios';
 
 const { VITE_SERVER_HOST } = import.meta.env;
 
@@ -14,7 +13,7 @@ export default {
         });
         const login = () => {
             try {
-                axios.post(VITE_SERVER_HOST + "/users/login", JSON.stringify({
+                proxy.$axios.post(VITE_SERVER_HOST + "/users/login", JSON.stringify({
                     uid: state.email,
                     password: state.password,
                 }), {
@@ -25,11 +24,17 @@ export default {
                 .then((res) => {
                     if (res.status === 200) {
                         proxy.$store.dispatch('user/login', {
-                            userId: res.data.data.id,
-                            userEmail: res.data.data.email,
-                            userMobile: res.data.data.mobile,
-                            userName: res.data.data.name,
-                            userIsActive: res.data.data.is_active
+                            userId: res.data.data.user.id,
+                            userEmail: res.data.data.user.email,
+                            userMobile: res.data.data.user.mobile,
+                            userName: res.data.data.user.name,
+                            userIsActive: res.data.data.user.is_active,
+                            profileId: res.data.data.profile.id,
+                            profileNickname: res.data.data.profile.nickname,
+                            profileStatusMessage: res.data.data.profile.status_message,
+                            profileImages: res.data.data.profile.images,
+                            profileIsDefault: res.data.data.profile.is_default,
+                            profileIsActive: res.data.data.profile.is_active,
                         });
                         proxy.$router.push({ path: '/', name: 'Home', query: {} });
                     }
