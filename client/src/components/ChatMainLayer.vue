@@ -1,25 +1,70 @@
 <script>
 import { reactive, computed, onMounted, getCurrentInstance } from 'vue';
+import FollowingListLayer from './FollowingListLayer.vue';
+import FollowingDetailLayer from './FollowingDetailLayer.vue';
 
 export default {
-  name: 'App',
-  props: {
-    title: String
-  },
+  name: 'ChatMainLayer',
   setup (props, { emit }) {
     const { proxy } = getCurrentInstance();
+    const state = reactive({
+      chatBodyListView: {
+        following: true,
+        chat: false,
+      },
+      chatBodyDetailView: {
+        following: false,
+        chat: false,
+      },
+      userProfileId: null,
+      chatRoomId: null,
+    })
     if (proxy.$store.state.user.userId === '' || proxy.$store.state.user.userIsActive === false) {
-          proxy.$router.replace('/login');
-      }
+      proxy.$router.replace('/login');
+    }
     const onResizeChatBodyList = ({ width, height}) => {
       // TODO
     }
-    return { 
-      onResizeChatBodyList
+    const onChangeChatMenuType = (type) => {
+      for (const key in state.chatBodyListView) {
+        if (key === type) {
+          state.chatBodyListView[key] = true;
+        } else {
+          state.chatBodyListView[key] = false;
+        }
+      }
+      for (const key in state.chatBodyDetailView) {
+        state.chatBodyDetailView[key] = false;
+      }
+    }
+    const followingDetail = function(userProfileId) {
+      for (const key in state.chatBodyListView) {
+        if (key === 'following') {
+          state.chatBodyListView[key] = true;
+        } else {
+          state.chatBodyListView[key] = false;
+        }
+      }
+      for (const key in state.chatBodyDetailView) {
+        if (key === 'following') {
+          state.chatBodyDetailView[key] = true;
+        } else {
+          state.chatBodyDetailView[key] = false;
+        }
+      }
+      state.userProfileId = userProfileId;
+    }
+    return {
+      state,
+      onResizeChatBodyList,
+      onChangeChatMenuType,
+      followingDetail,
     }
   },
   components: {
-  }
+    FollowingListLayer,
+    FollowingDetailLayer,
+}
 }
 </script>
 
@@ -28,10 +73,26 @@ export default {
     <div id="chat-menu">
       <div class="chat-menu-icon">
         <div>
-          <ui-icon>person</ui-icon>
+          <ui-icon
+            @click="onChangeChatMenuType('following')"
+            :style="{
+              cursor: 'pointer',
+              color: state.chatBodyListView['following'] ? '#000000' : '#bdbdbd',
+            }"
+          >
+            person
+          </ui-icon>
           <p style="margin: 0;">
             <ui-badge overlap :count="8" style="margin: 0;">
-              <ui-icon>chat_bubble</ui-icon>
+              <ui-icon
+                @click="onChangeChatMenuType('chat')"
+                :style="{
+                  cursor: 'pointer',
+                  color: state.chatBodyListView['chat'] ? '#000000' : '#bdbdbd',
+                }"
+              >
+                chat_bubble
+              </ui-icon>
             </ui-badge>
           </p>
         </div>
@@ -51,11 +112,19 @@ export default {
     <div id="chat-body">
       <div class="chat-body-container">
         <div class="chat-body-list" v-resize="onResizeChatBodyList">
-          <div>
+          <FollowingListLayer 
+            v-if="state.chatBodyListView['following']"
+            @followingDetail="followingDetail"
+          />
+          <div v-if="state.chatBodyListView['chat']">
             <p v-for="i in 36" :key="i">Chat Body List {{ i }}</p>
           </div>
         </div> <!-- 채팅방 목록 or 친구 목록 -->
         <div class="chat-body-detail">
+          <FollowingDetailLayer
+            v-if="state.chatBodyDetailView['following']"
+            :userProfileId="state.userProfileId" 
+          />
           <div class="chat-body-detail-summary">
             <div>
               방 상세 정보
@@ -163,34 +232,11 @@ export default {
 .chat-body-list div {
   width: 100%;
   height: 100%;
+  padding-top: 15px;
   padding-left: 15px;
 }
 
 .chat-body-detail {
   width: calc(100% - 400px);
 }
-
-.chat-body-detail-summary {
-  position: sticky;
-  background-color: #ffffff;
-  top: 0;
-  left: 0;
-  height: 50px;
-  padding-left: 15px;
-  border-bottom: 1px solid #e0e0e0;
-}
-
-.chat-body-detail-summary div {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  height: 100%;
-}
-
-.chat-body-detail-view {
-  height: calc(100% - 50px);
-  padding-left: 15px;
-  overflow: auto;
-}
-
 </style>
