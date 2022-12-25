@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime
-from typing import List
+from typing import List, Dict, Any
 from uuid import uuid4, UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status, UploadFile
@@ -18,7 +18,7 @@ from server.crud.user import UserCRUD, UserProfileCRUD
 from server.db.databases import get_async_session, settings
 from server.models import UserSession, UserProfileImage, User, UserProfile, UserRelationship
 from server.schemas.user import UserS, UserSessionS, UserCreateS, UserProfileImageS, UserProfileImageUploadS, \
-    UserProfileS, UserRelationshipS
+    UserProfileS, UserRelationshipS, LoginUserS
 
 router = APIRouter(route_class=ExceptionHandlerRoute)
 
@@ -58,16 +58,18 @@ async def signup(user_s: UserCreateS, session: AsyncSession = Depends(get_async_
     return UserS.from_orm(user)
 
 
-@router.post(
-    "/login",
-    response_model=UserS
-)
+@router.post("/login", response_model=LoginUserS)
 async def login(data: SessionData, response: Response, session: AsyncSession = Depends(get_async_session)):
     session_id = uuid4()
     crud = UserCRUD(session)
 
     try:
-        user = await crud.get(conditions=(User.uid == data.uid,))
+        user = await crud.get(
+            conditions=(User.uid == data.uid,),
+            options=[
+                selectinload(User.profiles)
+                .selectinload(UserProfile.images)
+            ])
     except HTTPException:
         raise ClassifiableException(code=ResponseCode.INVALID_UID)
     if not verify_password(data.password, user.password):
@@ -79,7 +81,11 @@ async def login(data: SessionData, response: Response, session: AsyncSession = D
         conditions=(User.id == user.id,),
         values=dict(last_login=datetime.now().astimezone()))
     await session.commit()
-    return UserS.from_orm(user)
+
+    user_profile = next((p for p in user.profiles if p.is_default), None)
+    return LoginUserS(
+        user=UserS.from_orm(user),
+        profile=UserProfileS.from_orm(user_profile) if user_profile else None)
 
 
 @router.get("/whoami", dependencies=[Depends(cookie)])
@@ -94,6 +100,26 @@ async def logout(
     cookie.delete_from_response(response)
     await session.commit()
     return
+
+
+# 유저 프로필 상세 정보
+@router.get('/profile/{user_profile_id}')
+async def user_profile_detail(user_profile_id: int, session=Depends(get_async_session)):
+    crud = UserProfileCRUD(session)
+    user_profile: UserProfile = await crud.get(
+        conditions=(UserProfile.id == user_profile_id,),
+        options=[selectinload(UserProfile.images)])
+
+    user_profile_dict = jsonable_encoder(UserProfileS.from_orm(user_profile))
+    if user_profile.images:
+        presigned_images: List[Dict[str, Any]] = [
+            r.result() for r in await UserProfileImage.asynchronous_presigned_url(*user_profile.images)
+        ]
+        for image in user_profile_dict['images']:
+            image.update({
+                'url': next((im['url'] for im in presigned_images if im['id'] == image['id']), None)
+            })
+    return user_profile_dict
 
 
 # 유저 프로필, 배경 이미지 업로드
@@ -136,7 +162,10 @@ async def user_profile_image_upload(
     return [UserProfileImageS.from_orm(o) for o in objects]
 
 
-@router.post('/relationship/{user_profile_id}/create', dependencies=[Depends(cookie)])
+@router.post(
+    '/relationship/{user_profile_id}/create',
+    dependencies=[Depends(cookie)],
+    status_code=status.HTTP_201_CREATED)
 async def create_relationship(
     user_profile_id: int,
     other_profile_id: int,
