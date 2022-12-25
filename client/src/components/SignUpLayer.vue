@@ -1,6 +1,5 @@
 <script>
 import { reactive, getCurrentInstance } from 'vue';
-import axios from 'axios';
 import { useValidator, helpers } from 'balm-ui';
 
 const { VITE_SERVER_HOST } = import.meta.env;
@@ -60,7 +59,7 @@ export default {
                 return;
             }
             try {
-                axios.post(VITE_SERVER_HOST + '/users/signup', JSON.stringify({
+                proxy.$axios.post(VITE_SERVER_HOST + '/users/signup', JSON.stringify({
                     name: state.formData.name,
                     mobile: state.formData.mobile,
                     email: state.formData.email,

@@ -132,3 +132,8 @@ class UserSessionS(UserSessionBaseS):
         json_encoders = {
             datetime: lambda v: v.isoformat()
         }
+
+
+class LoginUserS(BaseModel):
+    user: UserS
+    profile: Optional[UserProfileS] = None

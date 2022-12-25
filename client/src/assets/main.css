@@ -68,3 +68,27 @@ html, body, #app {
   width: 100%; 
   margin-bottom: 20px;
 }
+
+.chat-body-detail-summary {
+  position: sticky;
+  background-color: #ffffff;
+  top: 0;
+  left: 0;
+  height: 50px;
+  padding-left: 15px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.chat-body-detail-summary div {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  height: 100%;
+}
+
+.chat-body-detail-view {
+  height: calc(100% - 50px);
+  padding-top: 15px;
+  padding-left: 15px;
+  overflow: auto;
+}
