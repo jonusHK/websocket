@@ -76,6 +76,7 @@ html, body, #app {
   left: 0;
   height: 50px;
   padding-left: 15px;
+  border-left: 1px solid #e0e0e0;
   border-bottom: 1px solid #e0e0e0;
 }
 
@@ -87,8 +88,36 @@ html, body, #app {
 }
 
 .chat-body-detail-view {
-  height: calc(100% - 50px);
+  height: calc(100% - 65px);
   padding-top: 15px;
   padding-left: 15px;
+  border-left: 1px solid #e0e0e0;
+  overflow: auto;
+}
+
+.chat-body-info-summary {
+  position: sticky;
+  background-color: #ffffff;
+  top: 0;
+  left: 0;
+  height: 50px;
+  padding-left: 15px;
+  padding-right: 15px;
+  border-left: 1px solid #e0e0e0;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.chat-body-info-summary div {
+  display: flex;
+  flex-direction: row;
+  justify-content:space-between;
+  align-items: center;
+  height: 100%;
+}
+
+.chat-body-info-view {
+  height: calc(100% - 65px);
+  padding-top: 15px;
+  border-left: 1px solid #e0e0e0;
   overflow: auto;
 }

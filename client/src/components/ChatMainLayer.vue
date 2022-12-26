@@ -1,7 +1,7 @@
 <script>
 import { reactive, computed, onMounted, getCurrentInstance } from 'vue';
 import FollowingListLayer from './FollowingListLayer.vue';
-import FollowingDetailLayer from './FollowingDetailLayer.vue';
+import FollowingInfoLayer from './FollowingInfoLayer.vue';
 
 export default {
   name: 'ChatMainLayer',
@@ -12,7 +12,7 @@ export default {
         following: true,
         chat: false,
       },
-      chatBodyDetailView: {
+      chatBodyInfoView: {
         following: false,
         chat: false,
       },
@@ -33,8 +33,8 @@ export default {
           state.chatBodyListView[key] = false;
         }
       }
-      for (const key in state.chatBodyDetailView) {
-        state.chatBodyDetailView[key] = false;
+      for (const key in state.chatBodyInfoView) {
+        state.chatBodyInfoView[key] = false;
       }
     }
     const followingDetail = function(userProfileId) {
@@ -45,25 +45,29 @@ export default {
           state.chatBodyListView[key] = false;
         }
       }
-      for (const key in state.chatBodyDetailView) {
+      for (const key in state.chatBodyInfoView) {
         if (key === 'following') {
-          state.chatBodyDetailView[key] = true;
+          state.chatBodyInfoView[key] = true;
         } else {
-          state.chatBodyDetailView[key] = false;
+          state.chatBodyInfoView[key] = false;
         }
       }
       state.userProfileId = userProfileId;
+    }
+    const closeFollowingInfo = function() {
+      state.chatBodyInfoView['following'] = false;
     }
     return {
       state,
       onResizeChatBodyList,
       onChangeChatMenuType,
       followingDetail,
+      closeFollowingInfo,
     }
   },
   components: {
     FollowingListLayer,
-    FollowingDetailLayer,
+    FollowingInfoLayer,
 }
 }
 </script>
@@ -121,10 +125,6 @@ export default {
           </div>
         </div> <!-- 채팅방 목록 or 친구 목록 -->
         <div class="chat-body-detail">
-          <FollowingDetailLayer
-            v-if="state.chatBodyDetailView['following']"
-            :userProfileId="state.userProfileId" 
-          />
           <div class="chat-body-detail-summary">
             <div>
               방 상세 정보
@@ -133,6 +133,16 @@ export default {
           <div class="chat-body-detail-view">
             <p v-for="i in 36" :key="i">Chat Body Detail View {{ i }}</p>
           </div>
+        </div>
+        <div 
+          class="chat-body-info" 
+          v-if="state.chatBodyInfoView['following']"
+        >
+          <FollowingInfoLayer
+            v-if="state.chatBodyInfoView['following']"
+            :userProfileId="state.userProfileId"
+            @closeFollowingInfo="closeFollowingInfo"
+          />
         </div>
       </div>
     </div>
@@ -211,7 +221,7 @@ export default {
   position: fixed;
   left: 100px;
   top: 70px;
-  width: 100%;
+  width: calc(100% - 100px);
   height: calc(100% - 70px);
 }
 
@@ -224,6 +234,7 @@ export default {
 
 .chat-body-list {
   width: 300px;
+  min-width: 150px;
   height: 100%;
   resize: horizontal;
   overflow: auto;
@@ -232,11 +243,18 @@ export default {
 .chat-body-list div {
   width: 100%;
   height: 100%;
-  padding-top: 15px;
-  padding-left: 15px;
 }
 
 .chat-body-detail {
-  width: calc(100% - 400px);
+  width: calc(100% - 300px);
+  resize: horizontal;
+  overflow: auto;
+}
+
+.chat-body-info {
+  width: 400px;
+  min-width: 300px;
+  right: 0;
+  height: 100%;
 }
 </style>

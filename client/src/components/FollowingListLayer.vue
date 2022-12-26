@@ -69,8 +69,12 @@ export default {
     flex-direction: row;
     justify-content: flex-start;
     align-items: center;
-    margin-bottom: 10px;
+    padding: 15px;
     cursor: pointer;
+}
+
+.following-list:hover {
+    background-color: #f5f5f5;
 }
 
 .following-profile-default {

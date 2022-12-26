@@ -103,23 +103,41 @@ async def logout(
 
 
 # 유저 프로필 상세 정보
-@router.get('/profile/{user_profile_id}')
-async def user_profile_detail(user_profile_id: int, session=Depends(get_async_session)):
+@router.get('/profile/{user_profile_id}/{other_profile_id}', dependencies=[Depends(cookie)])
+async def other_profile_detail(
+    user_profile_id: int,
+    other_profile_id: int,
+    user_session: UserSession = Depends(verifier),
+    session=Depends(get_async_session)
+):
+    if user_profile_id not in [p.id for p in user_session.user.profiles if p.is_active]:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
     crud = UserProfileCRUD(session)
-    user_profile: UserProfile = await crud.get(
-        conditions=(UserProfile.id == user_profile_id,),
-        options=[selectinload(UserProfile.images)])
+    other_profile: UserProfile = await crud.get(
+        conditions=(UserProfile.id == other_profile_id,),
+        options=[
+            selectinload(UserProfile.images),
+            selectinload(UserProfile.followers)
+        ])
 
-    user_profile_dict = jsonable_encoder(UserProfileS.from_orm(user_profile))
-    if user_profile.images:
+    other_profile_dict = jsonable_encoder(UserProfileS.from_orm(other_profile))
+    other_profile_dict.update({
+        'nickname': other_profile.get_nickname_by_other(user_profile_id)
+    })
+    if other_profile.images:
         presigned_images: List[Dict[str, Any]] = [
-            r.result() for r in await UserProfileImage.asynchronous_presigned_url(*user_profile.images)
+            r.result() for r in await UserProfileImage.asynchronous_presigned_url(*other_profile.images)
         ]
-        for image in user_profile_dict['images']:
+        for image in other_profile_dict['images']:
             image.update({
                 'url': next((im['url'] for im in presigned_images if im['id'] == image['id']), None)
             })
-    return user_profile_dict
+    relationship = next((m for m in other_profile.followers if m.my_profile_id == user_profile_id), None)
+    other_profile_dict.update({
+        'relationship': relationship.type.name.lower() if relationship else None
+    })
+
+    return other_profile_dict
 
 
 # 유저 프로필, 배경 이미지 업로드
@@ -130,7 +148,7 @@ async def user_profile_image_upload(
     user_session: UserSession = Depends(verifier),
     session=Depends(get_async_session)
 ):
-    if upload_s.user_profile_id not in [p.id for p in user_session.user.profiles]:
+    if upload_s.user_profile_id not in [p.id for p in user_session.user.profiles if p.is_active]:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
 
     objects: List[UserProfileImage] = []
