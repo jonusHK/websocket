@@ -26,6 +26,6 @@ app.use(BalmUI, {
 app.use(BalmUIPlus);
 app.use(VueResizeObserver);
 
-global.$ = jQuery
+window.$ = jQuery;
 
 app.mount('#app');
