@@ -187,6 +187,7 @@ class RedisHandler:
             await RedisUserProfilesByRoomS.sadd(self.redis, (room_id, user_profile_id), *[
                 RedisUserProfilesByRoomS.schema(
                     id=p.user_profile.id,
+                    identity_id=p.user_profile.identity_id,
                     nickname=p.user_profile.get_nickname_by_other(user_profile_id),
                     files=await self.generate_presigned_files(
                         UserProfileImage, p.user_profile.images)
@@ -224,6 +225,7 @@ class RedisHandler:
                 await RedisUserProfilesByRoomS.sadd(
                     self.redis, (room_id, user_profile_id), RedisUserProfilesByRoomS.schema(
                         id=m.user_profile.id,
+                        identity_id=m.user_profile.identity_id,
                         nickname=m.user_profile.get_nickname_by_other(user_profile_id),
                         files=await self.generate_presigned_files(UserProfileImage, m.user_profile.images)))
 

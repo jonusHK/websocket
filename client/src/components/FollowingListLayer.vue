@@ -33,9 +33,11 @@ export default {
         }
         socket.onclose = function(event) {
             console.log('close - ', event);
+            proxy.$router.replace('/login');
         }
         socket.onerror = function(event) {
             console.log('error - ', event);
+            proxy.$router.replace('/login');
         }
       });
       return {

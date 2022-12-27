@@ -30,6 +30,7 @@ export default {
                             userName: res.data.data.user.name,
                             userIsActive: res.data.data.user.is_active,
                             profileId: res.data.data.profile.id,
+                            profileIdentityId: res.data.data.profile.identity_id,
                             profileNickname: res.data.data.profile.nickname,
                             profileStatusMessage: res.data.data.profile.status_message,
                             profileImages: res.data.data.profile.images,

@@ -1,10 +1,12 @@
 from __future__ import annotations
+
 from datetime import datetime
 from typing import Optional, List
 
-from pydantic import BaseModel
+from pydantic import BaseModel, validator
 
 from server.core.enums import ProfileImageType, RelationshipType
+from server.schemas import ConvertMixinS
 from server.schemas.base import S3MediaBaseS
 
 
@@ -37,22 +39,34 @@ class UserS(UserBase):
 
 
 class UserRelationshipBaseS(BaseModel):
-    my_profile_id: int
-    other_profile_id: int
     other_profile_nickname: str
     type: RelationshipType
-    favorites: int = False
-    is_hidden: int = False
-    is_forbidden: int = False
+    favorites: bool = False
+    is_hidden: bool = False
+    is_forbidden: bool = False
     is_active: bool = True
 
 
-class UserRelationshipCreateS(UserRelationshipBaseS):
-    pass
+class UserRelationshipUpdateS(ConvertMixinS, BaseModel):
+    other_profile_nickname: Optional[str] = None
+    type: Optional[str] = None
+    favorites: Optional[bool] = None
+    is_hidden: Optional[bool] = None
+    is_forbidden: Optional[bool] = None
+    is_active: Optional[bool] = None
+
+    @validator("type")
+    def get_type(cls, v):
+        enum = RelationshipType.get_by_name(v)
+        if not enum:
+            raise ValueError("Invalid `type` value.")
+        return enum
 
 
 class UserRelationshipS(UserRelationshipBaseS):
     id: int
+    my_profile_id: int
+    other_profile_id: int
 
     class Config:
         orm_mode = True
@@ -89,14 +103,11 @@ class UserProfileImageUploadS(BaseModel):
 
 class UserProfileBaseS(BaseModel):
     user_id: int
+    identity_id: str
     nickname: str
     status_message: Optional[str] = None
     is_default: bool = False
     is_active: bool = True
-
-
-class UserProfileCreateS(UserProfileBaseS):
-    pass
 
 
 class UserProfileS(UserProfileBaseS):

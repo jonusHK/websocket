@@ -13,6 +13,7 @@ export default {
     setup (props, { emit }) {
       const { proxy } = getCurrentInstance();
       const state = reactive({
+        loginProfileId: proxy.$store.getters['user/getProfileId'],
         profileId: toRef(props, 'userProfileId'),
         profileNickname: '',
         profileStatusMessage: '',
@@ -23,7 +24,7 @@ export default {
         profileIsActive: true,
       });
       const getUserProfileDetail = async function(profileId) {
-        proxy.$axios.get(VITE_SERVER_HOST + `/users/profile/${proxy.$store.getters['user/getProfileId']}/${profileId}`)
+        proxy.$axios.get(VITE_SERVER_HOST + `/users/profile/${state.loginProfileId}/${profileId}`)
         .then((res) => {
             if (res.status === 200) {
                 state.profileNickname = res.data.data.nickname;
@@ -56,6 +57,44 @@ export default {
       const closeFollowingInfo = function() {
         emit('closeFollowingInfo');
       }
+      const followingHidden = function(profileId) {
+        proxy.$axios.patch(VITE_SERVER_HOST + `/users/relationship/${state.loginProfileId}/${profileId}`, JSON.stringify({
+            is_hidden: true,
+        }), {
+            headers: {
+                "Content-Type": `application/json`,
+            },
+        })
+        .then((res) => {
+            if (res.status === 200) {
+                proxy.$alert({
+                    message: '숨김 처리하였습니다.',
+                    state: 'success',
+                    stateOutlined: true
+                })
+                proxy.$router.replace('/');
+            }
+        })
+      }
+      const followingForbidden = function(profileId) {
+        proxy.$axios.patch(VITE_SERVER_HOST + `/users/relationship/${state.loginProfileId}/${profileId}`, JSON.stringify({
+            is_forbidden: true,
+        }), {
+            headers: {
+                "Content-Type": `application/json`,
+            },
+        })
+        .then((res) => {
+            if (res.status === 200) {
+                proxy.$alert({
+                    message: '차단 완료하였습니다.',
+                    state: 'success',
+                    stateOutlined: true
+                })
+                proxy.$router.replace('/');
+            }
+        })
+      }
       watch(
         () => props.userProfileId,
         (cur, prev) => {
@@ -70,6 +109,8 @@ export default {
         getUserProfileDetail,
         getDefaultProfileImage,
         closeFollowingInfo,
+        followingHidden,
+        followingForbidden,
       }
     }
 }
@@ -111,11 +152,11 @@ export default {
                     <p><ui-icon>chat_bubble_outline</ui-icon></p>
                     <p>1:1 대화</p>
                 </div>
-                <div>
+                <div @click="followingHidden(state.profileId)">
                     <p><ui-icon>lens_blur</ui-icon></p>
                     <p>숨김</p>
                 </div>
-                <div>
+                <div @click="followingForbidden(state.profileId)">
                     <p><ui-icon>block</ui-icon></p>
                     <p>차단</p>
                 </div>

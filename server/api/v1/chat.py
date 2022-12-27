@@ -235,6 +235,7 @@ async def chat_room_create(
             redis, (room.id, m.user_profile_id), *[
                 RedisUserProfilesByRoomS.schema(
                     id=n.user_profile_id,
+                    identity_id=n.user_profile.identity_id,
                     nickname=n.user_profile.get_nickname_by_other(m.user_profile_id),
                     files=profile_images[n.user_profile_id][0]
                 ) for n in room.user_profiles
@@ -594,6 +595,7 @@ async def chat(
                                     await RedisUserProfilesByRoomS.sadd(redis, (room_id, current_id), *[
                                         RedisUserProfilesByRoomS.schema(
                                             id=p.user_profile.id,
+                                            identity_id=p.user_profile.identity_id,
                                             nickname=p.user_profile.get_nickname_by_other(current_id),
                                             files=profile_images[p.user_profile_id]
                                         ) for p in _room_user_mapping])
@@ -633,6 +635,7 @@ async def chat(
                                 await RedisUserProfilesByRoomS.sadd(redis, (room_id, target_profile.id), *[
                                     RedisUserProfilesByRoomS.schema(
                                         id=p.id,
+                                        identity_id=p.identity_id,
                                         nickname=p.get_nickname_by_other(target_profile.id),
                                         files=profile_images[p.id]
                                     ) for p in (total_profiles if target_profile in profiles else profiles)
@@ -789,10 +792,15 @@ async def chat_followings(websocket: WebSocket, user_profile_id: int):
                             await RedisFollowingsByUserProfileS.sadd(redis, user_profile_id, *[
                                 RedisFollowingsByUserProfileS.schema(
                                     id=f.other_profile_id,
+                                    identity_id=f.other_profile.identity_id,
                                     nickname=f.other_profile.get_nickname_by_other(user_profile_id),
+                                    type=f.type.name.lower(),
+                                    favorites=f.favorites,
+                                    is_hidden=f.is_hidden,
+                                    is_forbidden=f.is_forbidden,
                                     files=await redis_handler.generate_presigned_files(
                                         UserProfileImage, [i for i in f.other_profile.images if i.is_default])
-                                ) for f in user_profile.followings
+                                ) for f in user_profile.followings if not f.is_hidden and not f.is_forbidden
                             ])
                 await pub.publish(f'pubsub:user:{user_profile_id}:following', json.dumps(jsonable_encoder(followings)))
         except WebSocketDisconnect as e:
