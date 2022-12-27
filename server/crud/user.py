@@ -1,6 +1,6 @@
 from server.core.utils import hash_password, get_formatted_phone, get_phone
 from server.crud import CRUDBase
-from server.models.user import User, UserSession, UserProfile, UserProfileImage
+from server.models.user import User, UserSession, UserProfile, UserProfileImage, UserRelationship
 
 
 class UserCRUD(CRUDBase):
@@ -27,3 +27,7 @@ class UserProfileCRUD(CRUDBase):
 
 class UserProfileImageCRUD(CRUDBase):
     model = UserProfileImage
+
+
+class UserRelationshipCRUD(CRUDBase):
+    model = UserRelationship

@@ -1,3 +1,6 @@
+import random
+import string
+
 from passlib.context import CryptContext
 from sqlalchemy import Integer
 from sqlalchemy.types import TypeDecorator
@@ -88,3 +91,13 @@ def get_phone(value: str, region='KR') -> PhoneNumber:
         raise TypeError("Can't convert %s to PhoneNumber." % type(value).__name__)
 
     return phone_number
+
+
+def generate_random_string(
+    words=string.digits + string.ascii_letters,
+    length=10
+):
+    random_str = ''
+    for _ in range(length):
+        random_str += random.choice(words)
+    return random_str

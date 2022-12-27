@@ -32,8 +32,16 @@ class RedisChatHistoryFileS(RedisFileBaseS):
 
 class RedisUserProfileS(BaseModel):
     id: int
+    identity_id: str
     nickname: str
     files: Optional[List[RedisUserImageFileS]] = []
+
+
+class RedisFollowingS(RedisUserProfileS):
+    type: str
+    favorites: bool
+    is_hidden: bool
+    is_forbidden: bool
 
 
 class RedisUserProfileByRoomS(RedisUserProfileS):
@@ -63,7 +71,7 @@ class RedisChatHistoryToSyncS(BaseModel):
     id: int
 
 
-class RedisFollowingByUserProfileS(RedisUserProfileS):
+class RedisFollowingByUserProfileS(RedisFollowingS):
     ...
 
 
