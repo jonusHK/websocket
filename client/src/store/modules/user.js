@@ -7,6 +7,7 @@ const user = {
         userName: '',
         userIsActive: false,
         profileId: '',
+        profileIdentityId: '',
         profileNickname: '',
         profileStatusMessage: '',
         profileImages: [],
@@ -31,6 +32,9 @@ const user = {
         },
         getProfileId(state) {
             return state.profileId;
+        },
+        getProfileIdentityId(state) {
+            return state.profileIdentityId;
         },
         getProfileNickname(state) {
             return state.profileNickname;
@@ -64,6 +68,7 @@ const user = {
             state.userName = value.userName;
             state.userIsActive = value.userIsActive;
             state.profileId = value.profileId;
+            state.profileIdentityId = value.profileIdentityId;
             state.profileNickname = value.profileNickname;
             state.profileStatusMessage = value.profileStatusMessage;
             state.profileImages = value.profileImages;
@@ -77,6 +82,7 @@ const user = {
             state.userName = '';
             state.userIsActive = false;
             state.profileId = '';
+            state.profileIdentityId = '';
             state.profileNickname = '';
             state.profileStatusMessage = '';
             state.profileImages = [];

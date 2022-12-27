@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Boolean, DateTime, BigInteger, Text, ForeignKey
+from sqlalchemy import Column, String, Boolean, DateTime, BigInteger, Text, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import relationship
 
 from server.core.enums import RelationshipType, ProfileImageType
@@ -30,6 +30,7 @@ class UserProfile(TimestampMixin, ConvertMixin, Base):
 
     id = Column(BigInteger, primary_key=True, index=True)
     user_id = Column(BigInteger, ForeignKey("users.id"), nullable=False)
+    identity_id = Column(String(30), unique=True, nullable=False)
     nickname = Column(String(30), nullable=False)
     status_message = Column(Text, nullable=True)
     is_default = Column(Boolean, default=False, nullable=False)
@@ -64,6 +65,9 @@ class UserProfile(TimestampMixin, ConvertMixin, Base):
 
 class UserRelationship(ConvertMixin, Base):
     __tablename__ = "user_relationships"
+    __table_args__ = (
+        UniqueConstraint('my_profile_id', 'other_profile_id', name='unique relationship for both profile ids'),
+    )
 
     id = Column(BigInteger, primary_key=True, index=True)
     my_profile_id = Column(BigInteger, ForeignKey("user_profiles.id"), nullable=False)
