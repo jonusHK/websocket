@@ -1,5 +1,6 @@
 <script>
 import { reactive, computed, onMounted, getCurrentInstance } from 'vue';
+import _ from 'lodash';
 
 export default {
     name: 'FollowingListLayer',
@@ -29,7 +30,7 @@ export default {
             console.log('연결 성공');
         }
         socket.onmessage = function(event) {
-            state.followings = JSON.parse(event.data);
+            state.followings = _.orderBy(JSON.parse(event.data), ['nickname'], ['asc']);
         }
         socket.onclose = function(event) {
             console.log('close - ', event);

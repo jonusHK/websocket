@@ -44,7 +44,6 @@ class UserRelationshipBaseS(BaseModel):
     favorites: bool = False
     is_hidden: bool = False
     is_forbidden: bool = False
-    is_active: bool = True
 
 
 class UserRelationshipUpdateS(ConvertMixinS, BaseModel):
@@ -53,7 +52,6 @@ class UserRelationshipUpdateS(ConvertMixinS, BaseModel):
     favorites: Optional[bool] = None
     is_hidden: Optional[bool] = None
     is_forbidden: Optional[bool] = None
-    is_active: Optional[bool] = None
 
     @validator("type")
     def get_type(cls, v):
