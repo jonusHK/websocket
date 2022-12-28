@@ -6,5 +6,5 @@ class ConvertMixinS:
         assert isinstance(self, BaseModel), 'Must be instance of `BaseModel`.'
         return {
             k: getattr(self, k)
-            for k in self.__fields__.keys() if getattr(self, k)
+            for k in self.__fields__.keys() if getattr(self, k) is not None
         }
