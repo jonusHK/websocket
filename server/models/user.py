@@ -77,7 +77,6 @@ class UserRelationship(ConvertMixin, Base):
     favorites = Column(Boolean, default=False, nullable=False)
     is_hidden = Column(Boolean, default=False, nullable=False)
     is_forbidden = Column(Boolean, default=False, nullable=False)
-    is_active = Column(Boolean, default=True, nullable=False)
 
     my_profile = relationship("UserProfile", foreign_keys=[my_profile_id], backref='followings')
     other_profile = relationship("UserProfile", foreign_keys=[other_profile_id], backref='followers')

@@ -4,7 +4,7 @@ from typing import List, Dict, Any
 from uuid import uuid4, UUID
 
 from aioredis import Redis
-from fastapi import APIRouter, Depends, HTTPException, Response, status, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Response, status, UploadFile, Body
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload, joinedload
@@ -125,8 +125,9 @@ async def other_profile_detail(
     user_session: UserSession = Depends(verifier),
     session=Depends(get_async_session)
 ):
-    if user_profile_id not in [p.id for p in user_session.user.profiles if p.is_active]:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    # 권한 검증
+    AuthValidator.validate_user_profile(user_session, user_profile_id)
+
     crud = UserProfileCRUD(session)
     other_profile: UserProfile = await crud.get(
         conditions=(UserProfile.id == other_profile_id,),
@@ -163,8 +164,8 @@ async def user_profile_image_upload(
     user_session: UserSession = Depends(verifier),
     session=Depends(get_async_session)
 ):
-    if upload_s.user_profile_id not in [p.id for p in user_session.user.profiles if p.is_active]:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    # 권한 검증
+    AuthValidator.validate_user_profile(user_session, upload_s.user_profile_id)
 
     objects: List[UserProfileImage] = []
     async for o in UserProfileImage.files_to_models(
@@ -196,19 +197,20 @@ async def user_profile_image_upload(
 
 
 @router.post(
-    '/relationship/{user_profile_id}/create',
+    '/relationship/{user_profile_id}/{other_profile_id}',
     dependencies=[Depends(cookie)],
     status_code=status.HTTP_201_CREATED)
 async def create_relationship(
     user_profile_id: int,
     other_profile_id: int,
-    relation_type: str = RelationshipType.FRIEND.name.lower(),
+    relation_type: str = Body(embed=True, default=RelationshipType.FRIEND.name.lower()),
     user_session: UserSession = Depends(verifier),
     session=Depends(get_async_session)
 ):
     redis: Redis = AioRedis().redis
     redis_handler = RedisHandler(redis)
     crud_user_profile = UserProfileCRUD(session)
+    crud_relationship = UserRelationshipCRUD(session)
 
     # 권한 검증
     AuthValidator.validate_user_profile(user_session, user_profile_id)
@@ -218,8 +220,10 @@ async def create_relationship(
             UserProfile.id == other_profile_id,
             UserProfile.is_active == 1),
         options=[
-            selectinload(UserProfile.images)
+            selectinload(UserProfile.images),
+            selectinload(UserProfile.followers)
         ])
+    other_profile_images: List[UserProfileImage] = other_profile.images
     user_profile: UserProfile = await crud_user_profile.get(
         conditions=(
             UserProfile.id == user_profile_id,
@@ -232,13 +236,11 @@ async def create_relationship(
              f.other_profile_id == other_profile_id and f.type == relation_type), None):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Already following relationship.')
 
-    relationship = UserRelationship(
+    relationship = await crud_relationship.create(
         my_profile_id=user_profile_id,
         other_profile_id=other_profile_id,
         other_profile_nickname=other_profile.nickname,
-        type=relation_type
-    )
-    user_profile.followings.append(relationship)
+        type=relation_type)
     await session.commit()
     await session.refresh(relationship)
 
@@ -253,21 +255,25 @@ async def create_relationship(
             is_hidden=relationship.is_hidden,
             is_forbidden=relationship.is_forbidden,
             files=await redis_handler.generate_presigned_files(
-                UserProfileImage, [i for i in other_profile.images if i.is_default])))
+                UserProfileImage, [i for i in other_profile_images if i.is_default])))
 
     return UserRelationshipS.from_orm(relationship)
 
 
-@router.patch('/relationship/{user_profile_id}/{other_profile_id}')
+@router.patch('/relationship/{user_profile_id}/{other_profile_id}', dependencies=[Depends(cookie)])
 async def update_relationship(
     user_profile_id: int,
     other_profile_id: int,
     data: UserRelationshipUpdateS,
+    user_session: UserSession = Depends(verifier),
     session=Depends(get_async_session)
 ):
     redis: Redis = AioRedis().redis
     redis_handler = RedisHandler(redis)
     crud = UserRelationshipCRUD(session)
+
+    # 권한 검증
+    AuthValidator.validate_user_profile(user_session, user_profile_id)
 
     values = data.values_except_null()
     conditions = (
@@ -285,35 +291,60 @@ async def update_relationship(
 
     followings_redis: List[RedisFollowingByUserProfileS] = \
         await RedisFollowingsByUserProfileS.smembers(redis, user_profile_id)
-    following_redis: RedisFollowingByUserProfileS = next((f for f in followings_redis if f.id == other_profile_id), None)
-    if following_db.is_active:
-        if following_redis:
-            await RedisFollowingsByUserProfileS.srem(redis, user_profile_id, following_redis)
-            if following_db.is_active:
-                for k, v in values.items():
-                    if k == 'type':
-                        setattr(following_redis, k, v.name.lower())
-                    elif k == 'other_profile_nickname':
-                        setattr(following_redis, 'nickname', v)
-                    else:
-                        setattr(following_redis, k, v)
-                await RedisFollowingsByUserProfileS.sadd(redis, user_profile_id, following_redis)
-        else:
-            await RedisFollowingsByUserProfileS.sadd(redis, user_profile_id, RedisFollowingsByUserProfileS.schema(
-                id=other_profile_id,
-                identity_id=following_db.other_profile.identity_id,
-                nickname=following_db.other_profile.nickname,
-                type=following_db.type.name.lower(),
-                favorites=following_db.favorites,
-                is_hidden=following_db.is_hidden,
-                is_forbidden=following_db.is_forbidden,
-                files=await redis_handler.generate_presigned_files(
-                    UserProfileImage, [i for i in following_db.other_profile.images if i.is_default])))
+    following_redis: RedisFollowingByUserProfileS = next((
+        f for f in followings_redis if f.id == other_profile_id), None)
+    if following_redis:
+        await RedisFollowingsByUserProfileS.srem(redis, user_profile_id, following_redis)
+        for k, v in values.items():
+            if k == UserRelationship.type.key:
+                setattr(following_redis, k, v.name.lower())
+            elif k == UserRelationship.other_profile_nickname.key:
+                setattr(following_redis, 'nickname', v)
+            else:
+                setattr(following_redis, k, v)
+        await RedisFollowingsByUserProfileS.sadd(redis, user_profile_id, following_redis)
     else:
-        if following_redis:
-            await RedisFollowingsByUserProfileS.srem(redis, user_profile_id, following_redis)
+        await RedisFollowingsByUserProfileS.sadd(redis, user_profile_id, RedisFollowingsByUserProfileS.schema(
+            id=other_profile_id,
+            identity_id=following_db.other_profile.identity_id,
+            nickname=following_db.other_profile.nickname,
+            type=following_db.type.name.lower(),
+            favorites=following_db.favorites,
+            is_hidden=following_db.is_hidden,
+            is_forbidden=following_db.is_forbidden,
+            files=await redis_handler.generate_presigned_files(
+                UserProfileImage, [i for i in following_db.other_profile.images if i.is_default])))
 
     return UserRelationshipS.from_orm(following_db)
+
+
+@router.delete('/relationship/{user_profile_id}/{other_profile_id}', dependencies=[Depends(cookie)])
+async def delete_relationship(
+    user_profile_id: int,
+    other_profile_id: int,
+    user_session: UserSession = Depends(verifier),
+    session=Depends(get_async_session)
+):
+    redis: Redis = AioRedis().redis
+    crud = UserRelationshipCRUD(session)
+
+    # 권한 검증
+    AuthValidator.validate_user_profile(user_session, user_profile_id)
+
+    await crud.delete(
+        conditions=(
+            UserRelationship.my_profile_id == user_profile_id,
+            UserRelationship.other_profile_id == other_profile_id))
+    await session.commit()
+
+    followings_redis: List[RedisFollowingByUserProfileS] = \
+        await RedisFollowingsByUserProfileS.smembers(redis, user_profile_id)
+    following_redis: RedisFollowingByUserProfileS = next((
+        f for f in followings_redis if f.id == other_profile_id), None)
+    if following_redis:
+        await RedisFollowingsByUserProfileS.srem(redis, user_profile_id, following_redis)
+
+    return {'success': True}
 
 
 @router.get('/relationship/{user_profile_id}/search', dependencies=[Depends(cookie)])
