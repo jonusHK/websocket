@@ -69,6 +69,103 @@ html, body, #app {
   margin-bottom: 20px;
 }
 
+#chat-container {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  position: relative;
+}
+
+#chat-menu {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100px;
+  height: 100%;
+  background-color: #eeeeee;
+  z-index: 1;
+}
+
+.chat-menu-icon {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.chat-menu-icon div:nth-child(1) {
+  height: 100%;
+  margin-top: 100px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
+}
+
+.chat-menu-icon div:nth-child(2) {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.chat-menu-icon div .material-icons {
+  margin-bottom: 40px;
+}
+
+#chat-header {
+  position: fixed;
+  top: 0;
+  left: 100px;
+  right: 0;
+  height: 70px;
+  padding-left: 30px;
+  padding-right: 30px;
+  z-index: 1;
+  background-color: #6200ee;
+}
+
+.chat-header-icon {
+  height: 100%;
+  display: flex; 
+  flex-direction: row; 
+  justify-content: flex-end; 
+  align-items: center;
+  z-index: 50;
+}
+
+#chat-body {
+  position: fixed;
+  left: 100px;
+  top: 70px;
+  width: calc(100% - 100px);
+  height: calc(100% - 70px);
+}
+
+.chat-body-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: row;
+}
+
+.chat-body-list {
+  width: 100%;
+  min-width: 150px;
+  height: 100%;
+  resize: horizontal;
+  overflow: auto;
+}
+
+.chat-body-detail {
+  /* width: 3000px; */
+  height: 100%;
+  /* resize: horizontal; */
+  overflow: auto;
+}
+
 .chat-body-detail-summary {
   position: sticky;
   background-color: #ffffff;
@@ -88,11 +185,18 @@ html, body, #app {
 }
 
 .chat-body-detail-view {
-  height: calc(100% - 65px);
+  height: calc(100% - 66px);
   padding-top: 15px;
   padding-left: 15px;
   border-left: 1px solid #e0e0e0;
   overflow: auto;
+}
+
+.chat-body-info {
+  width: 700px;
+  min-width: 300px;
+  right: 0;
+  height: 100%;
 }
 
 .chat-body-info-summary {
@@ -116,7 +220,7 @@ html, body, #app {
 }
 
 .chat-body-info-view {
-  height: calc(100% - 65px);
+  height: calc(100% - 66px);
   padding-top: 15px;
   border-left: 1px solid #e0e0e0;
   overflow: auto;
