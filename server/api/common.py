@@ -50,7 +50,9 @@ class RedisHandler:
         self.redis = redis
 
     @classmethod
-    async def generate_presigned_files(cls, model, iterable: Iterable):
+    async def generate_presigned_files(
+        cls, model, iterable: Iterable
+    ) -> List[RedisUserImageFileS | RedisChatHistoryFileS]:
         assert issubclass(model, UserProfileImage | ChatHistoryFile), 'Invalid model type.'
 
         model_schema_mapping = {
@@ -247,3 +249,24 @@ class RedisHandler:
         for task in pending:
             logger.info(f"Canceling task: {task}")
             task.cancel()
+
+
+def generate_room_mapping_name(user_profile_id: int, other_profiles: List[UserProfile]):
+    return ', '.join([p.get_nickname_by_other(user_profile_id) for p in other_profiles])
+
+
+async def generate_user_profile_images(
+    redis_handler: RedisHandler,
+    profiles: List[UserProfileImage],
+    only_default=False
+) -> List[RedisUserImageFileS]:
+    images: List[UserProfileImage] = []
+    for p in profiles:
+        if only_default:
+            image = next((im for im in p.images if im.is_default), None)
+            if image:
+                images.append(image)
+        else:
+            for image in p.images:
+                images.append(image)
+    return await redis_handler.generate_presigned_files(UserProfileImage, images)
