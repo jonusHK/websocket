@@ -12,10 +12,6 @@ class ChatRoomBaseS(BaseModel):
     is_active: bool = True
 
 
-class ChatRoomCreateS(ChatRoomBaseS):
-    pass
-
-
 class ChatRoomS(ChatRoomBaseS):
     id: int
     created: datetime
@@ -32,10 +28,7 @@ class ChatRoomS(ChatRoomBaseS):
 class ChatRoomUserAssociationBaseS(BaseModel):
     room_id: int
     user_profile_id: int
-
-
-class ChatRoomUserAssociationCreateS(ChatRoomUserAssociationBaseS):
-    pass
+    room_name: str
 
 
 class ChatRoomUserAssociationS(ChatRoomUserAssociationBaseS):
@@ -52,10 +45,6 @@ class ChatRoomUserAssociationS(ChatRoomUserAssociationBaseS):
 class ChatHistoryBaseS(BaseModel):
     contents: str
     is_active: bool = True
-
-
-class ChatHistoryCreateS(ChatHistoryBaseS):
-    pass
 
 
 class ChatHistoryS(ChatHistoryBaseS):

@@ -8,17 +8,21 @@ from server.core.enums import ChatType, ChatRoomType
 class ChatRoomCreateParamS(BaseModel):
     user_profile_id: int
     target_profile_ids: List[int]
-    type: ChatRoomType
+    type: str
 
     @classmethod
     def convert_type(cls, value):
+        enum = None
         if isinstance(value, ChatRoomType):
-            return value
+            enum = value
         elif isinstance(value, str):
-            return ChatRoomType.get_by_name(value)
+            enum = ChatRoomType.get_by_name(value)
         elif isinstance(value, int):
-            return ChatRoomType(value)
-        raise ValueError('Invalid type.')
+            enum = ChatRoomType(value)
+
+        if enum is None:
+            raise ValueError('Invalid type.')
+        return enum
 
     @root_validator
     def validate_all(cls, values):
