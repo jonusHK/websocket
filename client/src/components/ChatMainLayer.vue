@@ -2,6 +2,8 @@
 import { reactive, computed, onMounted, getCurrentInstance } from 'vue';
 import FollowingListLayer from './FollowingListLayer.vue';
 import FollowingInfoLayer from './FollowingInfoLayer.vue';
+import ChatListLayer from './ChatListLayer.vue';
+import ChatDetailLayer from './ChatDetailLayer.vue';
 
 export default {
   name: 'ChatMainLayer',
@@ -10,6 +12,10 @@ export default {
     const state = reactive({
       chatBodyListView: {
         following: true,
+        chat: false,
+      },
+      chatBodyDetailView: {
+        following: false,
         chat: false,
       },
       chatBodyInfoView: {
@@ -21,9 +27,6 @@ export default {
     })
     if (proxy.$store.state.user.userId === '' || proxy.$store.state.user.userIsActive === false) {
       proxy.$router.replace('/login');
-    }
-    const onResizeChatBodyList = ({ width, height}) => {
-      // TODO
     }
     const onChangeChatMenuType = (type) => {
       for (const key in state.chatBodyListView) {
@@ -38,13 +41,6 @@ export default {
       }
     }
     const followingDetail = function(userProfileId) {
-      for (const key in state.chatBodyListView) {
-        if (key === 'following') {
-          state.chatBodyListView[key] = true;
-        } else {
-          state.chatBodyListView[key] = false;
-        }
-      }
       for (const key in state.chatBodyInfoView) {
         if (key === 'following') {
           state.chatBodyInfoView[key] = true;
@@ -57,9 +53,25 @@ export default {
     const closeFollowingInfo = function() {
       state.chatBodyInfoView['following'] = false;
     }
+    const chatDetail = function(chatRoomId) {
+      for (const key in state.chatBodyListView) {
+        if (key === 'chat') {
+          state.chatBodyListView[key] = true;
+        } else {
+          state.chatBodyListView[key] = false;
+        }
+      }
+      for (const key in state.chatBodyDetailView) {
+        if (key === 'chat') {
+          state.chatBodyDetailView[key] = true;
+        } else {
+          state.chatBodyDetailView[key] = false;
+        }
+      }
+      state.chatRoomId = chatRoomId;
+    }
     return {
       state,
-      onResizeChatBodyList,
       onChangeChatMenuType,
       followingDetail,
       closeFollowingInfo,
@@ -68,7 +80,9 @@ export default {
   components: {
     FollowingListLayer,
     FollowingInfoLayer,
-}
+    ChatListLayer,
+    ChatDetailLayer,
+  },
 }
 </script>
 
@@ -115,146 +129,27 @@ export default {
     </div>
     <div id="chat-body">
       <div class="chat-body-container">
-        <div class="chat-body-list" v-resize="onResizeChatBodyList">
-          <FollowingListLayer 
-            v-if="state.chatBodyListView['following']"
-            @followingDetail="followingDetail"
-          />
-          <div v-if="state.chatBodyListView['chat']">
-            <p v-for="i in 36" :key="i">Chat Body List {{ i }}</p>
-          </div>
-        </div> <!-- 채팅방 목록 or 친구 목록 -->
-        <div class="chat-body-detail">
-          <div class="chat-body-detail-summary">
-            <div>
-              방 상세 정보
-            </div>
-          </div>
-          <div class="chat-body-detail-view">
-            <p v-for="i in 36" :key="i">Chat Body Detail View {{ i }}</p>
-          </div>
-        </div>
-        <div 
-          class="chat-body-info" 
+        <FollowingListLayer 
+          v-if="state.chatBodyListView['following']"
+          @followingDetail="followingDetail"
+        />
+        <FollowingInfoLayer
           v-if="state.chatBodyInfoView['following']"
-        >
-          <FollowingInfoLayer
-            v-if="state.chatBodyInfoView['following']"
-            :userProfileId="state.userProfileId"
-            @closeFollowingInfo="closeFollowingInfo"
-          />
-        </div>
+          :userProfileId="state.userProfileId"
+          @closeFollowingInfo="closeFollowingInfo"
+        />
+        <ChatListLayer
+          v-if="state.chatBodyListView['chat']"
+          @chatDetail="chatDetail"
+        />
+        <ChatDetailLayer
+          v-if="state.chatBodyDetailView['chat']"
+          :chatRoomId="state.chatRoomId"
+        />
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-#chat-container {
-  width: 100%;
-  height: 100%;
-  overflow: auto;
-  position: relative;
-}
-
-#chat-menu {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100px;
-  height: 100%;
-  background-color: #eeeeee;
-  z-index: 1;
-}
-
-.chat-menu-icon {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.chat-menu-icon div:nth-child(1) {
-  height: 100%;
-  margin-top: 100px;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
-  align-items: center;
-}
-
-.chat-menu-icon div:nth-child(2) {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  align-items: center;
-}
-
-.chat-menu-icon div .material-icons {
-  margin-bottom: 40px;
-}
-
-#chat-header {
-  position: fixed;
-  top: 0;
-  left: 100px;
-  right: 0;
-  height: 70px;
-  padding-left: 30px;
-  padding-right: 30px;
-  z-index: 1;
-  background-color: #6200ee;
-}
-
-.chat-header-icon {
-  height: 100%;
-  display: flex; 
-  flex-direction: row; 
-  justify-content: flex-end; 
-  align-items: center;
-  z-index: 50;
-}
-
-#chat-body {
-  position: fixed;
-  left: 100px;
-  top: 70px;
-  width: calc(100% - 100px);
-  height: calc(100% - 70px);
-}
-
-.chat-body-container {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: row;
-}
-
-.chat-body-list {
-  width: 300px;
-  min-width: 150px;
-  height: 100%;
-  resize: horizontal;
-  overflow: auto;
-}
-
-.chat-body-list div {
-  width: 100%;
-  height: 100%;
-}
-
-.chat-body-detail {
-  width: calc(100% - 300px);
-  resize: horizontal;
-  overflow: auto;
-}
-
-.chat-body-info {
-  width: 400px;
-  min-width: 300px;
-  right: 0;
-  height: 100%;
-}
 </style>

@@ -88,6 +88,7 @@ class ChatType(IntValueEnum):
     UPDATE = "변경"
     INVITE = "초대"
     LOOKUP = "조회"
+    TERMINATE = "연결 종료"
 
 
 class ChatRoomType(IntValueEnum):

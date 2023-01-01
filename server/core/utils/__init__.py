@@ -1,11 +1,11 @@
 import random
 import string
 
+import phonenumbers
 from passlib.context import CryptContext
+from phonenumbers.phonenumber import PhoneNumber as BasePhoneNumber
 from sqlalchemy import Integer
 from sqlalchemy.types import TypeDecorator
-import phonenumbers
-from phonenumbers.phonenumber import PhoneNumber as BasePhoneNumber
 from sqlalchemy_utils import PhoneNumber, PhoneNumberParseException
 
 

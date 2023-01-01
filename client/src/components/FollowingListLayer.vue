@@ -6,7 +6,7 @@ export default {
     name: 'FollowingListLayer',
     setup (props, { emit }) {
       const { proxy } = getCurrentInstance();
-      const socket = new WebSocket(`ws://localhost:8000/api/v1/chats/followings/${proxy.$store.getters['user/getProfileId']}`);
+      const ws = new WebSocket(`ws://localhost:8000/api/v1/chats/followings/${proxy.$store.getters['user/getProfileId']}`);
       const state = reactive({
         followings: [],
       });
@@ -26,17 +26,17 @@ export default {
         emit('followingDetail', profileId);
       }
       onMounted(() => {
-        socket.onopen = function(event) {
-            console.log('연결 성공');
+        ws.onopen = function(event) {
+            console.log('친구 목록 웹소켓 연결 성공');
         }
-        socket.onmessage = function(event) {
+        ws.onmessage = function(event) {
             state.followings = _.orderBy(JSON.parse(event.data), ['nickname'], ['asc']);
         }
-        socket.onclose = function(event) {
+        ws.onclose = function(event) {
             console.log('close - ', event);
             proxy.$router.replace('/login');
         }
-        socket.onerror = function(event) {
+        ws.onerror = function(event) {
             console.log('error - ', event);
             proxy.$router.replace('/login');
         }
@@ -51,7 +51,7 @@ export default {
 </script>
 
 <template>
-    <div v-if="state.followings">
+    <div class="chat-body-list" v-if="state.followings">
         <div v-for="obj in state.followings" :key="obj.id" class="following-list" @click="onClickProfile(obj.id)">
             <div v-if="getDefaultProfileImage(obj) !== null" class="following-profile" :style="{
                 backgroundImage: 'url(' + getDefaultProfileImage(obj) + ')',
