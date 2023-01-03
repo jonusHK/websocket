@@ -63,6 +63,7 @@ class RedisChatRoomByUserProfileS(BaseModel):
     name: str
     type: str
     user_profile_files: Optional[List[RedisUserImageFileS]] = []
+    user_cnt: int
     unread_msg_cnt: int
     timestamp: float | int
 

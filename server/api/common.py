@@ -83,6 +83,24 @@ class RedisHandler:
 
         return files_s
 
+    @classmethod
+    async def generate_user_profile_images(
+        cls,
+        profiles: List[UserProfileImage],
+        only_default=False
+    ) -> List[RedisUserImageFileS]:
+        images: List[UserProfileImage] = []
+        for p in profiles:
+            assert hasattr(p, 'images'), 'Profile must have `images` attr.'
+            if only_default:
+                image = next((im for im in p.images if im.is_default), None)
+                if image:
+                    images.append(image)
+            else:
+                for image in p.images:
+                    images.append(image)
+        return await cls.generate_presigned_files(UserProfileImage, images)
+
     async def get_rooms_with_user_profile(
         self, user_profile_id: int, crud: Optional[ChatRoomUserAssociationCRUD] = None, reverse=False, sync=False
     ) -> List[RedisChatRoomByUserProfileS]:
@@ -103,6 +121,10 @@ class RedisHandler:
                     .selectinload(ChatRoom.user_profiles)
                     .joinedload(ChatRoomUserAssociation.user_profile)
                     .selectinload(UserProfile.followers),
+                    joinedload(ChatRoomUserAssociation.room)
+                    .selectinload(ChatRoom.user_profiles)
+                    .joinedload(ChatRoomUserAssociation.user_profile)
+                    .selectinload(UserProfile.images),
                     joinedload(ChatRoomUserAssociation.user_profile)
                     .selectinload(UserProfile.images)
                 ]
@@ -112,9 +134,9 @@ class RedisHandler:
             await RedisChatRoomsByUserProfileS.zadd(self.redis, user_profile_id, *[
                 RedisChatRoomsByUserProfileS.schema(
                     id=m.room.id, name=m.room.get_name_by_user_profile(user_profile_id),
-                    type=m.room.type.name.lower(), user_profile_files=await self.generate_presigned_files(
-                        UserProfileImage, [p for p in m.user_profile.images if p.is_default]
-                    ), unread_msg_cnt=0, timestamp=now.timestamp()
+                    type=m.room.type.name.lower(), user_profile_files=await self.generate_user_profile_images(
+                        [_m.user_profile for _m in m.room.user_profiles], only_default=True),
+                    user_cnt=len(m.room.user_profiles), unread_msg_cnt=0, timestamp=now.timestamp()
                 ) for m in room_user_mapping
             ])
 
@@ -159,6 +181,7 @@ class RedisHandler:
                 user_profile_files=await self.generate_presigned_files(
                     UserProfileImage,
                     [i for m in room_db.user_profiles for i in m.user_profile.images if i.is_default]),
+                user_cnt=len(room_db.user_profiles),
                 unread_msg_cnt=0, timestamp=now.timestamp()))
 
         return room_redis
@@ -253,20 +276,3 @@ class RedisHandler:
 
 def generate_room_mapping_name(user_profile_id: int, other_profiles: List[UserProfile]):
     return ', '.join([p.get_nickname_by_other(user_profile_id) for p in other_profiles])
-
-
-async def generate_user_profile_images(
-    redis_handler: RedisHandler,
-    profiles: List[UserProfileImage],
-    only_default=False
-) -> List[RedisUserImageFileS]:
-    images: List[UserProfileImage] = []
-    for p in profiles:
-        if only_default:
-            image = next((im for im in p.images if im.is_default), None)
-            if image:
-                images.append(image)
-        else:
-            for image in p.images:
-                images.append(image)
-    return await redis_handler.generate_presigned_files(UserProfileImage, images)

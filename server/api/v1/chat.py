@@ -20,7 +20,7 @@ from starlette.responses import HTMLResponse
 from websockets.exceptions import ConnectionClosedOK
 
 from server.api import ExceptionHandlerRoute, templates
-from server.api.common import AuthValidator, RedisHandler, generate_user_profile_images, generate_room_mapping_name
+from server.api.common import AuthValidator, RedisHandler, generate_room_mapping_name
 from server.core.authentications import cookie, RoleChecker
 from server.core.enums import UserType, ChatType, ChatRoomType
 from server.core.exceptions import ExceptionHandler
@@ -95,10 +95,9 @@ async def chat_room(
                         # 마지막 대화 내역 업데이트
                         chat_histories: List[RedisChatHistoryByRoomS] = \
                             await RedisChatHistoriesByRoomS.zrevrange(redis, room_redis.id, 0, 1)
-                        if chat_histories:
-                            obj.update({
-                                'last_chat_history': jsonable_encoder(chat_histories[0])
-                            })
+                        obj.update({
+                            'last_chat_history': jsonable_encoder(chat_histories[0]) if chat_histories else None
+                        })
                         result.append(obj)
                     await pub.publish(f"pubsub:user:{user_profile_id}:chat_room", json.dumps(result))
                     await websocket.send_json(result)
@@ -224,14 +223,16 @@ async def chat_room_create(
             .selectinload(UserProfile.followers)
         ])
 
-    default_user_profile_images: List[RedisUserImageFileS] = await generate_user_profile_images(
-        redis_handler, [m.user_profile for m in room.user_profiles], only_default=True)
+    default_user_profile_images: List[RedisUserImageFileS] = await redis_handler.generate_user_profile_images(
+        [m.user_profile for m in room.user_profiles], only_default=True)
+    user_cnt = len(room.user_profiles)
     for m in room.user_profiles:
         await RedisChatRoomsByUserProfileS.zadd(redis, m.user_profile_id, RedisChatRoomsByUserProfileS.schema(
             id=room.id,
             name=room.get_name_by_user_profile(m.user_profile_id),
             type=room.type.name.lower(),
             user_profile_files=default_user_profile_images,
+            user_cnt=user_cnt,
             unread_msg_cnt=0, timestamp=now.timestamp()))
         await RedisUserProfilesByRoomS.sadd(
             redis, (room.id, m.user_profile_id), *[
@@ -318,9 +319,14 @@ async def chat(
 
                     try:
                         # 방 데이터 추출
-                        room_redis: RedisChatRoomByUserProfileS = \
-                            await redis_handler.get_room_with_user_profile(
-                                room_id, user_profile_id, crud_room, sync=True)
+                        try:
+                            room_redis: RedisChatRoomByUserProfileS = \
+                                await redis_handler.get_room_with_user_profile(
+                                    room_id, user_profile_id, crud_room, sync=True)
+                        except Exception as e:
+                            raise WebSocketDisconnect(
+                                code=status.WS_1000_NORMAL_CLOSURE,
+                                reason=f"Failed to get room for user profile. {e}")
                         # 방에 속한 유저들 프로필 데이터 추출
                         try:
                             user_profiles_redis: List[RedisUserProfileByRoomS] = \
@@ -426,6 +432,7 @@ async def chat(
                                             name=_room_redis.name,
                                             type=_room_redis.type,
                                             user_profile_files=_room_redis.user_profile_files,
+                                            user_cnt=_room_redis.user_cnt,
                                             unread_msg_cnt=_unread_msg_cnt,
                                             timestamp=request_s.data.timestamp
                                         ))
@@ -584,8 +591,8 @@ async def chat(
                                 )
                             # 방에 속한 유저 -> Redis, DB 동기화
                             current_profiles: List[UserProfile] = [m.user_profile for m in _room_user_mapping]
-                            current_profile_images_redis: List[RedisUserImageFileS] = await generate_user_profile_images(
-                                redis_handler, current_profiles, only_default=True)
+                            current_profile_images_redis: List[RedisUserImageFileS] = \
+                                await redis_handler.generate_user_profile_images(current_profiles, only_default=True)
                             current_profile_ids: Set[int] = {p.id for p in current_profiles}
                             for current_id in current_profile_ids:
                                 _user_profiles_redis: List[RedisUserProfileByRoomS] = await RedisUserProfilesByRoomS.smembers(
@@ -628,8 +635,8 @@ async def chat(
 
                             # 초대 받은 유저에 대해 Redis 업데이트
                             total_profiles = current_profiles + profiles
-                            profile_images_redis: List[RedisUserImageFileS] = await generate_user_profile_images(
-                                redis_handler, profiles, only_default=True)
+                            profile_images_redis: List[RedisUserImageFileS] = \
+                                await redis_handler.generate_user_profile_images(profiles, only_default=True)
                             total_profile_images_redis: List[RedisUserImageFileS] = \
                                 current_profile_images_redis + profile_images_redis
                             for target_profile in total_profiles:
@@ -656,6 +663,7 @@ async def chat(
                                         await RedisChatRoomsByUserProfileS.zrem(redis, target_profile.id, _room_redis)
                                         _room_redis.name = new_room_name
                                         _room_redis.timestamp = now.timestamp()
+                                        _room_redis.user_cnt = len(total_profiles)
                                         await RedisChatRoomsByUserProfileS.zadd(redis, target_profile.id, _room_redis)
                                 else:
                                     await RedisChatRoomsByUserProfileS.zadd(
@@ -663,6 +671,7 @@ async def chat(
                                             id=room_id, name=new_room_name,
                                             type=_room_user_mapping[0].room.type.name.lower(),
                                             user_profile_files=total_profile_images_redis,
+                                            user_cnt=len(total_profiles),
                                             unread_msg_cnt=0, timestamp=request_s.data.timestamp))
                             # 대화방 초대 메시지 전송
                             if len(profiles) > 1:
@@ -676,14 +685,29 @@ async def chat(
                                     timestamp=request_s.data.timestamp))
                         # 연결 종료
                         else:
-                            _user_profile_redis: RedisUserProfileByRoomS = \
-                                await redis_handler.get_user_profile_in_room(room_id, user_profile_id)
-                            if _user_profile_redis:
-                                await RedisUserProfilesByRoomS.srem(
-                                    redis, (room_id, user_profile_id), _user_profile_redis)
-                            _room_redis = await redis_handler.get_room_with_user_profile(room_id, user_profile_id)
-                            if _room_redis:
-                                await RedisChatRoomsByUserProfileS.zrem(redis, user_profile_id, _room_redis)
+                            await RedisUserProfilesByRoomS.srem(redis, (room_id, user_profile_id), user_profile_redis)
+                            await RedisChatRoomsByUserProfileS.zrem(redis, user_profile_id, room_redis)
+
+                            try:
+                                room_db: ChatRoom = await crud_room.get(
+                                    conditions=(ChatRoom.id == room_id,),
+                                    options=[
+                                        selectinload(ChatRoom.user_profiles)
+                                    ]
+                                )
+                            except HTTPException:
+                                pass
+                            else:
+                                # 다른 유저들의 방 정보 업데이트
+                                for m in room_db.user_profiles:
+                                    room_redis: RedisChatRoomByUserProfileS = await redis_handler.get_room_with_user_profile(room_id, user_profile_id)
+                                    if room_redis:
+                                        await RedisChatRoomsByUserProfileS.zrem(redis, m.user_profile_id, room_redis)
+                                        room_redis.user_profile_files = [
+                                            f for f in room_redis.user_profile_files if f.user_profile_id != user_profile_id
+                                        ]
+                                        room_redis.user_cnt -= 1
+                                        await RedisChatRoomsByUserProfileS.zadd(redis, m.user_profile_id, room_redis)
                             try:
                                 room_user_mappings_db: List[ChatRoomUserAssociation] = await crud_room_user_mapping.list(
                                     conditions=(ChatRoomUserAssociation.room_id == room_id,),
