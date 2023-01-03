@@ -42,8 +42,6 @@ class CRUDBase:
             stmt = stmt.order_by(*order_by)
         if conditions:
             stmt = stmt.where(*conditions)
-        if with_only_columns:
-            stmt = stmt.with_only_columns(*with_only_columns)
         if group_by:
             stmt = stmt.group_by(*group_by)
         if having is not None:
@@ -57,6 +55,9 @@ class CRUDBase:
         if options:
             for o in options:
                 stmt = stmt.options(o)
+        if with_only_columns:
+            stmt = stmt.with_only_columns(*with_only_columns)
+            return (row for row in await self.session.execute(stmt))
 
         results = await self.session.execute(stmt)
         return results.scalars().all()
