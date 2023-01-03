@@ -10,6 +10,8 @@ import jQuery from 'jquery';
 import axios from 'axios'
 import validatorRules from './config/validator-rules';
 import './assets/main.css';
+import dayjs from 'dayjs';
+import 'dayjs/locale/ko';
 
 const app = createApp(App);
 
@@ -17,6 +19,8 @@ axios.defaults.withCredentials = true;
 app.config.globalProperties.$axios = axios;
 app.config.globalProperties.$router = router;
 app.config.globalProperties.$store = store;
+dayjs.locale('ko');
+app.config.globalProperties.$dayjs = dayjs;
 
 app.use(store);
 app.use(router);
