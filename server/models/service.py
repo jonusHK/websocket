@@ -21,26 +21,6 @@ class ChatRoom(TimestampMixin, ConvertMixin, Base):
         "ChatRoomUserAssociation", back_populates="room", cascade="all, delete", passive_deletes=True)
     chat_histories = relationship("ChatHistory", back_populates="room")
 
-    # 해당 유저에게 보여지는 방 이름 추출
-    def get_name_by_user_profile(self, user_profile_id: int):
-        assert hasattr(self, 'user_profiles'), 'Must have `user_profiles` attr.'
-        mapping: ChatRoomUserAssociation | None = None
-        other_mapping: List[ChatRoomUserAssociation] = []
-        for m in self.user_profiles:
-            if m.user_profile_id == user_profile_id:
-                mapping = m
-            else:
-                other_mapping.append(m)
-
-        if mapping:
-            # 개인방인 경우 상대방 닉네임 반환
-            if self.type == ChatRoomType.ONE_TO_ONE:
-                return other_mapping[0].user_profile.get_nickname_by_other(mapping.user_profile_id)
-            # 유저가 수정한 방 이름 or 자체 방 이름
-            return mapping.room_name or self.name
-        else:
-            return self.name
-
 
 class ChatRoomUserAssociation(TimestampMixin, ConvertMixin, Base):
     __tablename__ = "chat_room_user_association"

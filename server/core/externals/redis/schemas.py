@@ -58,12 +58,18 @@ class RedisChatHistoryByRoomS(BaseModel):
     is_active: bool
 
 
+class RedisChatRoomInfoS(BaseModel):
+    id: int
+    user_cnt: int
+    type: str
+    user_profile_ids: List[int]
+    user_profile_files: Optional[List[RedisUserImageFileS]] = []
+    is_active: bool
+
+
 class RedisChatRoomByUserProfileS(BaseModel):
     id: int
-    name: str
-    type: str
-    user_profile_files: Optional[List[RedisUserImageFileS]] = []
-    user_cnt: int
+    name: str | None = None
     unread_msg_cnt: int
     timestamp: float | int
 
@@ -74,6 +80,11 @@ class RedisChatHistoryToSyncS(BaseModel):
 
 class RedisFollowingByUserProfileS(RedisFollowingS):
     ...
+
+
+class RedisChatRoomsInfoS(SetCollectionMixin):
+    format = 'rooms'
+    schema = RedisChatRoomInfoS
 
 
 class RedisUserProfilesByRoomS(SetCollectionMixin):
