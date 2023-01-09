@@ -472,7 +472,7 @@ async def chat(
                                 user_profile_id=chat_history_db.user_profile_id,
                                 contents=chat_history_db.contents,
                                 read_user_ids=[user_profile_id],
-                                timestamp=request_s.data.timestamp,
+                                timestamp=now.timestamp(),
                                 is_active=True
                             ))
                             # 각 유저 별 해당 방의 unread_msg_cnt 업데이트
@@ -488,14 +488,14 @@ async def chat(
                                             id=_room_by_profile_redis.id,
                                             name=_room_by_profile_redis.name,
                                             unread_msg_cnt=_unread_msg_cnt,
-                                            timestamp=request_s.data.timestamp
+                                            timestamp=now.timestamp()
                                         ))
                             response_s = ChatSendFormS(
                                 type=request_s.type,
                                 data=ChatSendDataS(
                                     user_profile_id=user_profile_id,
                                     nickname=user_profile_redis.nickname,
-                                    timestamp=request_s.data.timestamp,
+                                    timestamp=now.timestamp(),
                                     text=request_s.data.text,
                                     is_active=request_s.data.is_active
                                 ))
@@ -546,7 +546,7 @@ async def chat(
                                 id=chat_history_db.id,
                                 user_profile_id=user_profile_id,
                                 files=files_s,
-                                timestamp=request_s.data.timestamp,
+                                timestamp=now.timestamp(),
                                 is_active=chat_history_db.is_active
                             ))
                             response_s = ChatSendFormS(
@@ -555,7 +555,7 @@ async def chat(
                                     user_profile_id=user_profile_id,
                                     nickname=user_profile_redis.nickname,
                                     files=files_s,
-                                    timestamp=request_s.data.timestamp,
+                                    timestamp=now.timestamp(),
                                     is_active=chat_history_db.is_active
                                 ))
                         # 대화 내용 조회
@@ -637,7 +637,7 @@ async def chat(
                                     user_profiles=await RedisUserProfilesByRoomS.smembers(
                                         redis, (room_id, user_profile_id)
                                     ),
-                                    timestamp=request_s.data.timestamp
+                                    timestamp=now.timestamp()
                                 ))
                         # 유저 초대
                         elif request_s.type == ChatType.INVITE:
@@ -731,14 +731,14 @@ async def chat(
                                     await RedisChatRoomsByUserProfileS.zrem(
                                         redis, target_profile.id, _room_by_profile_redis
                                     )
-                                    _room_by_profile_redis.timestamp = request_s.data.timestamp
+                                    _room_by_profile_redis.timestamp = now.timestamp()
                                     await RedisChatRoomsByUserProfileS.zadd(
                                         redis, target_profile.id, _room_by_profile_redis
                                     )
                                 else:
                                     await RedisChatRoomsByUserProfileS.zadd(
                                         redis, target_profile.id, RedisChatRoomsByUserProfileS.schema(
-                                            id=room_id, unread_msg_cnt=0, timestamp=request_s.data.timestamp
+                                            id=room_id, unread_msg_cnt=0, timestamp=now.timestamp()
                                         )
                                     )
                             # 대화방 초대 메시지 전송
@@ -750,7 +750,7 @@ async def chat(
                                 type=request_s.type,
                                 data=ChatSendDataS(
                                     text=f"{user_profile_redis.nickname}님이 {target_msg}님을 초대했습니다.",
-                                    timestamp=request_s.data.timestamp))
+                                    timestamp=now.timestamp()))
                         # 연결 종료
                         else:
                             try:
@@ -799,7 +799,7 @@ async def chat(
                                 type=ChatType.MESSAGE,
                                 data=ChatSendDataS(
                                     text=f"{user_profile_redis.nickname}님이 나갔습니다.",
-                                    timestamp=request_s.data.timestamp
+                                    timestamp=now.timestamp()
                                 ))
                         await pub.publish(f"pubsub:room:{room_id}:chat", response_s.json())
                     except WebSocketDisconnect as exc:
