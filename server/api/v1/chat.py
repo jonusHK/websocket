@@ -97,13 +97,27 @@ async def chat_room(
                         rooms: List[RedisChatRoomInfoS] = await RedisChatRoomsInfoS.smembers(redis, None)
                         rooms = [r for r in rooms if r.id in room_ids] if rooms else []
                         for room_by_profile_redis in rooms_by_profile_redis:
-                            obj: Dict[str, Any] = jsonable_encoder(room_by_profile_redis)
+                            room_name: str | None = room_by_profile_redis.name
+                            if not room_name:
+                                profiles_by_room_redis: List[RedisUserProfileByRoomS] = \
+                                    await RedisUserProfilesByRoomS.smembers(
+                                        redis, (room_by_profile_redis.id, user_profile_id))
+                                if profiles_by_room_redis:
+                                    profile_nicknames: List[str] = [
+                                        p.nickname for p in profiles_by_room_redis
+                                        if p.id == user_profile_id and p.nickname
+                                    ]
+                                    if profile_nicknames:
+                                        room_name: str = ', '.join(profile_nicknames)
                             room: RedisChatRoomInfoS = next((
                                 r for r in rooms if r.id == room_by_profile_redis.id), None)
                             chat_histories: List[RedisChatHistoryByRoomS] = \
                                 await RedisChatHistoriesByRoomS.zrevrange(redis, room_by_profile_redis.id, 0, 1)
+
+                            obj: Dict[str, Any] = jsonable_encoder(room_by_profile_redis)
                             obj.update({
                                 'user_cnt': room.user_cnt if room else None,
+                                'name': room_name,
                                 'type': room.type if room else None,
                                 'user_profile_files': room.user_profile_files if room else None,
                                 # 마지막 대화 내역 추출
@@ -382,6 +396,7 @@ async def chat(
                                 reason='Left the chat room.'
                             )
 
+                        now = datetime.now().astimezone()
                         # 요청 데이터 확보
                         request_s = ChatReceiveFormS(**data)
 
