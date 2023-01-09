@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     aws_storage_bucket_name: str
 
     @validator("backend_cors_origins", pre=True)
-    def assemble_cors_origins(cls, v: str | List[str]) -> List[str] | str:
+    def assemble_cors_origins(cls, v: str | List[str]) -> str | List[str]:
         if isinstance(v, str) and not v.startswith("["):
             return [i.strip() for i in v.split(",")]
         elif isinstance(v, (list, str)):
