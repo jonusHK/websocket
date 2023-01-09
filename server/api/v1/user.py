@@ -1,18 +1,17 @@
-import logging
 from datetime import datetime
 from typing import List, Dict, Any
 from uuid import uuid4, UUID
 
 from aioredis import Redis
-from fastapi import APIRouter, Depends, HTTPException, Response, status, UploadFile, Body
+from fastapi import APIRouter, Depends, HTTPException, Response, status, UploadFile, Body, Form
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload, joinedload
 
 from server.api import ExceptionHandlerRoute
 from server.api.common import AuthValidator, RedisHandler
-from server.core.authentications import SessionData, backend, cookie, verifier, RoleChecker
-from server.core.enums import UserType, ProfileImageType, RelationshipType, ResponseCode
+from server.core.authentications import SessionData, backend, cookie, verifier
+from server.core.enums import ProfileImageType, RelationshipType, ResponseCode
 from server.core.exceptions import ClassifiableException
 from server.core.externals.redis import AioRedis
 from server.core.externals.redis.schemas import RedisFollowingsByUserProfileS, RedisFollowingByUserProfileS
@@ -160,21 +159,23 @@ async def other_profile_detail(
 @router.post("/profile/image/upload", dependencies=[Depends(cookie)])
 async def user_profile_image_upload(
     file: UploadFile,
-    upload_s: UserProfileImageUploadS = Depends(),
+    user_profile_id: int = Form(),
+    image_type: str = Form(),
+    is_default: bool = Form(),
     user_session: UserSession = Depends(verifier),
     session=Depends(get_async_session)
 ):
     # 권한 검증
-    AuthValidator.validate_user_profile(user_session, upload_s.user_profile_id)
+    AuthValidator.validate_user_profile(user_session, user_profile_id)
 
     objects: List[UserProfileImage] = []
     async for o in UserProfileImage.files_to_models(
         session,
         [file],
         root='user_profile/',
-        user_profile_id=upload_s.user_profile_id,
-        type=ProfileImageType.get_by_name(upload_s.image_type),
-        is_default=upload_s.is_default,
+        user_profile_id=user_profile_id,
+        type=ProfileImageType.get_by_name(image_type),
+        is_default=is_default,
         bucket_name=settings.aws_storage_bucket_name
     ):
         objects.append(o)
@@ -192,6 +193,8 @@ async def user_profile_image_upload(
     finally:
         for o in objects:
             o.close()
+
+    # TODO 레디스 업데이트
 
     return [UserProfileImageS.from_orm(o) for o in objects]
 

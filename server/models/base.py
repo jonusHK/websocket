@@ -290,11 +290,9 @@ class S3Media(TimestampMixin, ConvertMixin, Base):
     @classmethod
     async def files_to_models(
         cls, session: AsyncSession, files: List[UploadFile | WebSocketFileS], root: str = None,
-        user_profile_id=None, upload=False, thumbnail=False, **kwargs
+        upload=False, thumbnail=False, **kwargs
     ):
-        uploaded_by_id = None
-        if user_profile_id:
-            uploaded_by_id = user_profile_id
+        uploaded_by_id = kwargs.get('user_profile_id')
 
         for file in files:
             origin, thumb = await cls.new(
