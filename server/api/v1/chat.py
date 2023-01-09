@@ -306,7 +306,7 @@ async def chat(
             # 유저가 속한 방 데이터 추출
             try:
                 await redis_handler.get_room_by_user_profile(
-                    room_id, user_profile_id, ChatRoomCRUD(session), sync=True
+                    room_id, user_profile_id, ChatRoomCRUD(session), sync=True, raise_exception=True
                 )
             except Exception as e:
                 raise WebSocketDisconnect(
@@ -317,7 +317,7 @@ async def chat(
             # 방에 속한 유저들 프로필 데이터 추출
             try:
                 user_profiles_redis: List[RedisUserProfileByRoomS] = await redis_handler.get_user_profiles_in_room(
-                    room_id, user_profile_id, ChatRoomUserAssociationCRUD(session), sync=True
+                    room_id, user_profile_id, ChatRoomUserAssociationCRUD(session), sync=True, raise_exception=True
                 )
             except Exception as e:
                 raise WebSocketDisconnect(
@@ -357,7 +357,9 @@ async def chat(
                     try:
                         # 방 데이터 추출
                         try:
-                            room_redis: RedisChatRoomInfoS = await redis_handler.get_room(room_id, crud_room, sync=True)
+                            room_redis: RedisChatRoomInfoS = await redis_handler.get_room(
+                                room_id, crud_room, sync=True, raise_exception=True
+                            )
                         except Exception as e:
                             raise WebSocketDisconnect(
                                 code=status.WS_1000_NORMAL_CLOSURE,
@@ -367,7 +369,7 @@ async def chat(
                         try:
                             room_by_profile_redis: RedisChatRoomByUserProfileS = \
                                 await redis_handler.get_room_by_user_profile(
-                                    room_id, user_profile_id, crud_room, sync=True
+                                    room_id, user_profile_id, crud_room, sync=True, raise_exception=True
                                 )
                         except Exception as e:
                             raise WebSocketDisconnect(
@@ -378,7 +380,7 @@ async def chat(
                         try:
                             user_profiles_redis: List[RedisUserProfileByRoomS] = \
                                 await redis_handler.get_user_profiles_in_room(
-                                    room_id, user_profile_id, crud_room_user_mapping, sync=True
+                                    room_id, user_profile_id, crud_room_user_mapping, sync=True, raise_exception=True
                                 )
                         except Exception as e:
                             raise WebSocketDisconnect(
@@ -855,24 +857,23 @@ async def chat_followings(websocket: WebSocket, user_profile_id: int):
             while True:
                 async with async_session() as session:
                     crud_user_profile = UserProfileCRUD(session)
-                    while True:
-                        followings: List[RedisFollowingByUserProfileS] = \
-                            await RedisFollowingsByUserProfileS.smembers(redis, user_profile_id)
-                        if followings:
-                            break
-                        if not followings:
-                            user_profile: UserProfile = await crud_user_profile.get(
-                                conditions=(
-                                    UserProfile.id == user_profile_id,
-                                    UserProfile.is_active == 1),
-                                options=[
-                                    selectinload(UserProfile.followings).
-                                    joinedload(UserRelationship.other_profile).
-                                    selectinload(UserProfile.images),
-                                    selectinload(UserProfile.followings).
-                                    joinedload(UserRelationship.other_profile).
-                                    selectinload(UserProfile.followers)
-                                ])
+
+                    followings: List[RedisFollowingByUserProfileS] = \
+                        await RedisFollowingsByUserProfileS.smembers(redis, user_profile_id)
+                    if not followings:
+                        user_profile: UserProfile = await crud_user_profile.get(
+                            conditions=(
+                                UserProfile.id == user_profile_id,
+                                UserProfile.is_active == 1),
+                            options=[
+                                selectinload(UserProfile.followings).
+                                joinedload(UserRelationship.other_profile).
+                                selectinload(UserProfile.images),
+                                selectinload(UserProfile.followings).
+                                joinedload(UserRelationship.other_profile).
+                                selectinload(UserProfile.followers)
+                            ])
+                        if user_profile.followings:
                             await RedisFollowingsByUserProfileS.sadd(redis, user_profile_id, *[
                                 RedisFollowingsByUserProfileS.schema(
                                     id=f.other_profile_id,
@@ -884,7 +885,7 @@ async def chat_followings(websocket: WebSocket, user_profile_id: int):
                                     is_forbidden=f.is_forbidden,
                                     files=await redis_handler.generate_presigned_files(
                                         UserProfileImage, [i for i in f.other_profile.images if i.is_default])
-                                ) for f in user_profile.followings if not f.is_hidden and not f.is_forbidden
+                                ) for f in user_profile.followings
                             ])
                 await pub.publish(f'pubsub:user:{user_profile_id}:following', json.dumps(jsonable_encoder(followings)))
         except WebSocketDisconnect as e:
