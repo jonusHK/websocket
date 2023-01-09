@@ -1,19 +1,19 @@
-"""async sqlalchemy init
+"""add table for websocket
 
-Revision ID: 5b279f15806a
+Revision ID: 670b2b5f985a
 Revises: 
-Create Date: 2022-08-27 02:43:09.316561
+Create Date: 2023-01-09 22:38:34.730273
 
 """
 from alembic import op
 import sqlalchemy as sa
-import server
 
 
 # revision identifiers, used by Alembic.
-from server.core.enums import ProfileImageType, RelationshipType
+import server
+from server.core.enums import ChatRoomType, ProfileImageType, RelationshipType
 
-revision = '5b279f15806a'
+revision = '670b2b5f985a'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -25,21 +25,31 @@ def upgrade():
     sa.Column('created', sa.DateTime(timezone=True), nullable=False),
     sa.Column('updated', sa.DateTime(timezone=True), nullable=False),
     sa.Column('id', sa.BigInteger(), nullable=False),
-    sa.Column('name', sa.String(length=30), nullable=False),
+    sa.Column('name', sa.String(length=30), nullable=True),
+    sa.Column('type', server.core.utils.IntTypeEnum(enum_class=ChatRoomType), nullable=False),
+    sa.Column('is_active', sa.Boolean(), nullable=False),
     sa.PrimaryKeyConstraint('id')
     )
+    op.create_index(op.f('ix_chat_rooms_created'), 'chat_rooms', ['created'], unique=False)
     op.create_index(op.f('ix_chat_rooms_id'), 'chat_rooms', ['id'], unique=False)
     op.create_table('s3_media',
     sa.Column('created', sa.DateTime(timezone=True), nullable=False),
     sa.Column('updated', sa.DateTime(timezone=True), nullable=False),
     sa.Column('id', sa.BigInteger(), nullable=False),
+    sa.Column('uid', sa.String(length=32), nullable=False),
+    sa.Column('origin_uid', sa.String(length=32), nullable=True),
+    sa.Column('uploaded_by_id', sa.BigInteger(), nullable=True),
     sa.Column('bucket_name', sa.String(length=50), nullable=False),
-    sa.Column('file_key', sa.String(length=45), nullable=False),
-    sa.Column('file_path', sa.String(length=100), nullable=False),
+    sa.Column('filename', sa.String(length=45), nullable=False),
+    sa.Column('filepath', sa.String(length=250), nullable=False),
     sa.Column('content_type', sa.String(length=45), nullable=False),
     sa.Column('use_type', sa.String(length=50), nullable=True),
-    sa.PrimaryKeyConstraint('id')
+    sa.Column('is_active', sa.Boolean(), nullable=False),
+    sa.ForeignKeyConstraint(['origin_uid'], ['s3_media.uid'], ),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('uid')
     )
+    op.create_index(op.f('ix_s3_media_created'), 's3_media', ['created'], unique=False)
     op.create_index(op.f('ix_s3_media_id'), 's3_media', ['id'], unique=False)
     op.create_table('users',
     sa.Column('created', sa.DateTime(timezone=True), nullable=False),
@@ -49,40 +59,33 @@ def upgrade():
     sa.Column('password', sa.String(length=150), nullable=False),
     sa.Column('name', sa.String(length=30), nullable=False),
     sa.Column('mobile', sa.String(length=30), nullable=False),
-    sa.Column('email', sa.String(length=50), nullable=True),
+    sa.Column('email', sa.String(length=50), nullable=False),
     sa.Column('last_login', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('is_superuser', sa.Boolean(), nullable=False),
     sa.Column('is_staff', sa.Boolean(), nullable=False),
     sa.Column('is_active', sa.Boolean(), nullable=False),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('email'),
-    sa.UniqueConstraint('mobile')
+    sa.UniqueConstraint('mobile'),
+    sa.UniqueConstraint('uid')
     )
+    op.create_index(op.f('ix_users_created'), 'users', ['created'], unique=False)
     op.create_index(op.f('ix_users_id'), 'users', ['id'], unique=False)
-    op.create_table('chat_histories',
-    sa.Column('created', sa.DateTime(timezone=True), nullable=False),
-    sa.Column('updated', sa.DateTime(timezone=True), nullable=False),
-    sa.Column('id', sa.BigInteger(), nullable=False),
-    sa.Column('room_id', sa.BigInteger(), nullable=False),
-    sa.Column('contents', sa.Text(), nullable=True),
-    sa.Column('s3_media_id', sa.BigInteger(), nullable=True),
-    sa.Column('is_active', sa.Boolean(), nullable=False),
-    sa.ForeignKeyConstraint(['room_id'], ['chat_rooms.id'], ),
-    sa.ForeignKeyConstraint(['s3_media_id'], ['s3_media.id'], ),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_chat_histories_id'), 'chat_histories', ['id'], unique=False)
     op.create_table('user_profiles',
     sa.Column('created', sa.DateTime(timezone=True), nullable=False),
     sa.Column('updated', sa.DateTime(timezone=True), nullable=False),
     sa.Column('id', sa.BigInteger(), nullable=False),
     sa.Column('user_id', sa.BigInteger(), nullable=False),
+    sa.Column('identity_id', sa.String(length=30), nullable=False),
     sa.Column('nickname', sa.String(length=30), nullable=False),
     sa.Column('status_message', sa.Text(), nullable=True),
     sa.Column('is_default', sa.Boolean(), nullable=False),
     sa.Column('is_active', sa.Boolean(), nullable=False),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
-    sa.PrimaryKeyConstraint('id')
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('identity_id')
     )
+    op.create_index(op.f('ix_user_profiles_created'), 'user_profiles', ['created'], unique=False)
     op.create_index(op.f('ix_user_profiles_id'), 'user_profiles', ['id'], unique=False)
     op.create_table('user_sessions',
     sa.Column('created', sa.DateTime(timezone=True), nullable=False),
@@ -94,59 +97,102 @@ def upgrade():
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
+    op.create_index(op.f('ix_user_sessions_created'), 'user_sessions', ['created'], unique=False)
     op.create_index(op.f('ix_user_sessions_id'), 'user_sessions', ['id'], unique=False)
+    op.create_table('chat_histories',
+    sa.Column('created', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('updated', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('id', sa.BigInteger(), nullable=False),
+    sa.Column('room_id', sa.BigInteger(), nullable=False),
+    sa.Column('user_profile_id', sa.BigInteger(), nullable=True),
+    sa.Column('contents', sa.Text(), nullable=True),
+    sa.Column('is_active', sa.Boolean(), nullable=False),
+    sa.ForeignKeyConstraint(['room_id'], ['chat_rooms.id'], ),
+    sa.ForeignKeyConstraint(['user_profile_id'], ['user_profiles.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_chat_histories_created'), 'chat_histories', ['created'], unique=False)
+    op.create_index(op.f('ix_chat_histories_id'), 'chat_histories', ['id'], unique=False)
     op.create_table('chat_room_user_association',
     sa.Column('created', sa.DateTime(timezone=True), nullable=False),
     sa.Column('updated', sa.DateTime(timezone=True), nullable=False),
     sa.Column('room_id', sa.BigInteger(), nullable=False),
     sa.Column('user_profile_id', sa.BigInteger(), nullable=False),
-    sa.ForeignKeyConstraint(['room_id'], ['chat_rooms.id'], ),
-    sa.ForeignKeyConstraint(['user_profile_id'], ['user_profiles.id'], ),
+    sa.Column('room_name', sa.String(length=30), nullable=True),
+    sa.ForeignKeyConstraint(['room_id'], ['chat_rooms.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['user_profile_id'], ['user_profiles.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('room_id', 'user_profile_id')
     )
+    op.create_index(op.f('ix_chat_room_user_association_created'), 'chat_room_user_association', ['created'], unique=False)
     op.create_table('user_profile_images',
     sa.Column('id', sa.BigInteger(), nullable=False),
     sa.Column('user_profile_id', sa.BigInteger(), nullable=False),
     sa.Column('type', server.core.utils.IntTypeEnum(enum_class=ProfileImageType), nullable=False),
     sa.Column('is_default', sa.Boolean(), nullable=False),
-    sa.Column('is_active', sa.Boolean(), nullable=False),
     sa.ForeignKeyConstraint(['id'], ['s3_media.id'], ),
-    sa.ForeignKeyConstraint(['user_profile_id'], ['user_profiles.id'], ),
+    sa.ForeignKeyConstraint(['user_profile_id'], ['user_profiles.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_table('user_relationships',
     sa.Column('id', sa.BigInteger(), nullable=False),
     sa.Column('my_profile_id', sa.BigInteger(), nullable=False),
     sa.Column('other_profile_id', sa.BigInteger(), nullable=False),
+    sa.Column('other_profile_nickname', sa.String(length=30), nullable=True),
     sa.Column('type', server.core.utils.IntTypeEnum(enum_class=RelationshipType), nullable=False),
     sa.Column('favorites', sa.Boolean(), nullable=False),
     sa.Column('is_hidden', sa.Boolean(), nullable=False),
     sa.Column('is_forbidden', sa.Boolean(), nullable=False),
-    sa.Column('is_active', sa.Boolean(), nullable=False),
     sa.ForeignKeyConstraint(['my_profile_id'], ['user_profiles.id'], ),
     sa.ForeignKeyConstraint(['other_profile_id'], ['user_profiles.id'], ),
-    sa.PrimaryKeyConstraint('id')
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('my_profile_id', 'other_profile_id', name='unique relationship for both profile ids')
     )
     op.create_index(op.f('ix_user_relationships_id'), 'user_relationships', ['id'], unique=False)
+    op.create_table('chat_history_files',
+    sa.Column('id', sa.BigInteger(), nullable=False),
+    sa.Column('chat_history_id', sa.BigInteger(), nullable=False),
+    sa.Column('order', sa.Integer(), nullable=False),
+    sa.ForeignKeyConstraint(['chat_history_id'], ['chat_histories.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['id'], ['s3_media.id'], ),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('chat_history_id', 'order', name='unique order for chat_history_id')
+    )
+    op.create_table('chat_history_user_association',
+    sa.Column('history_id', sa.BigInteger(), nullable=False),
+    sa.Column('user_profile_id', sa.BigInteger(), nullable=False),
+    sa.Column('is_read', sa.Boolean(), nullable=False),
+    sa.ForeignKeyConstraint(['history_id'], ['chat_histories.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['user_profile_id'], ['user_profiles.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('history_id', 'user_profile_id')
+    )
     # ### end Alembic commands ###
 
 
 def downgrade():
     # ### commands auto generated by Alembic - please adjust! ###
+    op.drop_table('chat_history_user_association')
+    op.drop_table('chat_history_files')
     op.drop_index(op.f('ix_user_relationships_id'), table_name='user_relationships')
     op.drop_table('user_relationships')
     op.drop_table('user_profile_images')
+    op.drop_index(op.f('ix_chat_room_user_association_created'), table_name='chat_room_user_association')
     op.drop_table('chat_room_user_association')
+    op.drop_index(op.f('ix_chat_histories_id'), table_name='chat_histories')
+    op.drop_index(op.f('ix_chat_histories_created'), table_name='chat_histories')
+    op.drop_table('chat_histories')
     op.drop_index(op.f('ix_user_sessions_id'), table_name='user_sessions')
+    op.drop_index(op.f('ix_user_sessions_created'), table_name='user_sessions')
     op.drop_table('user_sessions')
     op.drop_index(op.f('ix_user_profiles_id'), table_name='user_profiles')
+    op.drop_index(op.f('ix_user_profiles_created'), table_name='user_profiles')
     op.drop_table('user_profiles')
-    op.drop_index(op.f('ix_chat_histories_id'), table_name='chat_histories')
-    op.drop_table('chat_histories')
     op.drop_index(op.f('ix_users_id'), table_name='users')
+    op.drop_index(op.f('ix_users_created'), table_name='users')
     op.drop_table('users')
     op.drop_index(op.f('ix_s3_media_id'), table_name='s3_media')
+    op.drop_index(op.f('ix_s3_media_created'), table_name='s3_media')
     op.drop_table('s3_media')
     op.drop_index(op.f('ix_chat_rooms_id'), table_name='chat_rooms')
+    op.drop_index(op.f('ix_chat_rooms_created'), table_name='chat_rooms')
     op.drop_table('chat_rooms')
     # ### end Alembic commands ###
