@@ -23,6 +23,10 @@ class KeyMixin:
             return getattr(cls, 'format').format(*key_param)
         return getattr(cls, 'format').format(key_param)
 
+    @classmethod
+    def get_lock_key(cls, key_param: Optional[Any] = None):
+        return f'lock:{cls.get_key(key_param)}'
+
 
 class ValueMixin:
     @classmethod
@@ -86,6 +90,12 @@ class SetCollectionMixin(KeyMixin, ValueMixin, ConvertFormatMixin):
     async def scard(cls, redis: Redis, key_param: Any | None):
         key = cls.get_key(key_param)
         await redis.scard(key)
+
+    @classmethod
+    async def sismember(cls, redis: Redis, key_param: Any | None, value: Any):
+        key = cls.get_key(key_param)
+        value = cls.get_value(value)
+        await redis.sismember(key, value)
 
 
 class ListCollectionMixin(KeyMixin, ValueMixin, ConvertFormatMixin):
