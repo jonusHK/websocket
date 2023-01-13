@@ -3,6 +3,7 @@ from typing import List, Dict, Any
 from uuid import uuid4, UUID
 
 from aioredis import Redis
+from aioredis.client import Pipeline
 from fastapi import APIRouter, Depends, HTTPException, Response, status, UploadFile, Body, Form
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,8 +20,8 @@ from server.core.utils import verify_password, generate_random_string
 from server.crud.user import UserCRUD, UserProfileCRUD, UserRelationshipCRUD
 from server.db.databases import get_async_session, settings
 from server.models import UserSession, UserProfileImage, User, UserProfile, UserRelationship
-from server.schemas.user import UserS, UserSessionS, UserCreateS, UserProfileImageS, UserProfileImageUploadS, \
-    UserProfileS, UserRelationshipS, LoginUserS, UserRelationshipUpdateS
+from server.schemas.user import UserS, UserSessionS, UserCreateS, UserProfileImageS, UserProfileS, UserRelationshipS, \
+    LoginUserS, UserRelationshipUpdateS
 
 router = APIRouter(route_class=ExceptionHandlerRoute)
 
@@ -297,16 +298,19 @@ async def update_relationship(
             await RedisFollowingsByUserProfileS.smembers(redis_handler.redis, user_profile_id)
         following_redis: RedisFollowingByUserProfileS = next((
             f for f in followings_redis if f.id == other_profile_id), None)
+
         if following_redis:
-            await RedisFollowingsByUserProfileS.srem(redis_handler.redis, user_profile_id, following_redis)
-            for k, v in values.items():
-                if k == UserRelationship.type.key:
-                    setattr(following_redis, k, v.name.lower())
-                elif k == UserRelationship.other_profile_nickname.key:
-                    setattr(following_redis, 'nickname', v)
-                else:
-                    setattr(following_redis, k, v)
-            await RedisFollowingsByUserProfileS.sadd(redis_handler.redis, user_profile_id, following_redis)
+            async with redis_handler.pipeline(transaction=True) as pipe:
+                pipe = await RedisFollowingsByUserProfileS.srem(pipe, user_profile_id, following_redis)
+                for k, v in values.items():
+                    if k == UserRelationship.type.key:
+                        setattr(following_redis, k, v.name.lower())
+                    elif k == UserRelationship.other_profile_nickname.key:
+                        setattr(following_redis, 'nickname', v)
+                    else:
+                        setattr(following_redis, k, v)
+                pipe = await RedisFollowingsByUserProfileS.sadd(pipe, user_profile_id, following_redis)
+                await pipe.execute()
         else:
             await RedisFollowingsByUserProfileS.sadd(
                 redis_handler.redis,

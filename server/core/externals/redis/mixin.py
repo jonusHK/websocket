@@ -1,9 +1,10 @@
 import datetime
 import json
 from json import JSONDecodeError
-from typing import Any, TypeVar, Mapping, Sequence, Dict, Optional
+from typing import Any, TypeVar, Mapping, Sequence, Dict, Optional, Coroutine, Awaitable
 
 from aioredis import Redis
+from aioredis.client import Pipeline
 
 KeyT = bytes | str | memoryview
 EncodedT = bytes | memoryview
@@ -40,6 +41,12 @@ class ValueMixin:
         return json.dumps(value)
 
 
+class TransactionMixin:
+    @classmethod
+    async def execute(cls, target: Awaitable):
+        return target if isinstance(target, Pipeline) else await target
+
+
 class ConvertFormatMixin:
     @classmethod
     def decode(cls, value: Any):
@@ -66,12 +73,12 @@ class ConvertFormatMixin:
         raise AssertionError('Type should be `list` or `dict`.')
 
 
-class SetCollectionMixin(KeyMixin, ValueMixin, ConvertFormatMixin):
+class SetCollectionMixin(KeyMixin, ValueMixin, TransactionMixin, ConvertFormatMixin):
     @classmethod
     async def sadd(cls, redis: Redis, key_param: Any | None, *args):
         key = cls.get_key(key_param)
         args = cls.get_value(args)
-        return await redis.sadd(key, *args)
+        return await cls.execute(redis.sadd(key, *args))
 
     @classmethod
     async def smembers(cls, redis: Redis, key_param: Any | None):
@@ -84,12 +91,12 @@ class SetCollectionMixin(KeyMixin, ValueMixin, ConvertFormatMixin):
     async def srem(cls, redis: Redis, key_param: Any | None, *args):
         key = cls.get_key(key_param)
         args = cls.get_value(args)
-        return await redis.srem(key, *args)
+        return await cls.execute(redis.srem(key, *args))
 
     @classmethod
     async def scard(cls, redis: Redis, key_param: Any | None):
         key = cls.get_key(key_param)
-        await redis.scard(key)
+        return await cls.execute(redis.scard(key))
 
     @classmethod
     async def sismember(cls, redis: Redis, key_param: Any | None, value: Any):
@@ -98,30 +105,36 @@ class SetCollectionMixin(KeyMixin, ValueMixin, ConvertFormatMixin):
         await redis.sismember(key, value)
 
 
-class ListCollectionMixin(KeyMixin, ValueMixin, ConvertFormatMixin):
+class ListCollectionMixin(KeyMixin, ValueMixin, TransactionMixin, ConvertFormatMixin):
     @classmethod
     async def lpush(cls, redis: Redis, key_param: Any | None, *args):
         key = cls.get_key(key_param)
         args = cls.get_value(args)
-        return await redis.lpush(key, *args)
+        return await cls.execute(redis.lpush(key, *args))
 
     @classmethod
     async def rpush(cls, redis: Redis, key_param: Any | None, *args):
         key = cls.get_key(key_param)
         args = cls.get_value(args)
-        return await redis.rpush(key, *args)
+        return await cls.execute(redis.rpush(key, *args))
 
     @classmethod
     async def lpop(cls, redis: Redis, key_param: Any | None):
         key = cls.get_key(key_param)
-        result = cls.decode(await redis.lpop(key))
-        return cls.to_schema(result)
+        res = await cls.execute(redis.lpop(key))
+        if not isinstance(res, Pipeline):
+            result = cls.decode(await redis.lpop(key))
+            return cls.to_schema(result)
+        return res
 
     @classmethod
     async def rpop(cls, redis: Redis, key_param: Any | None):
         key = cls.get_key(key_param)
-        result = cls.decode(await redis.rpop(key))
-        return cls.to_schema(result)
+        res = await cls.execute(redis.rpop(key))
+        if not isinstance(res, Pipeline):
+            result = cls.decode(await redis.rpop(key))
+            return cls.to_schema(result)
+        return res
 
     @classmethod
     async def lrange(cls, redis: Redis, key_param: Any | None, start: int = 0, stop: int = -1):
@@ -139,13 +152,13 @@ class ListCollectionMixin(KeyMixin, ValueMixin, ConvertFormatMixin):
     async def lset(cls, redis: Redis, key_param: Any | None, index: int, value: Any):
         key = cls.get_key(key_param)
         value = cls.get_value(value)
-        return await redis.lset(key, index, value)
+        return await cls.execute(redis.lset(key, index, value))
 
     @classmethod
     async def lrem(cls, redis: Redis, key_param: Any | None, value: Any, count: int = 0):
         key = cls.get_key(key_param)
         value = cls.get_value(value)
-        return await redis.lrem(key, count, value)
+        return await cls.execute(redis.lrem(key, count, value))
 
     @classmethod
     async def llen(cls, redis: Redis, key_param: Any | None):
@@ -155,27 +168,27 @@ class ListCollectionMixin(KeyMixin, ValueMixin, ConvertFormatMixin):
     @classmethod
     async def ltrim(cls, redis: Redis, key_param: Any | None, start: int, end: int):
         key = cls.get_key(key_param)
-        return await redis.ltrim(key, start, end)
+        return await cls.execute(redis.ltrim(key, start, end))
 
 
-class StringCollectionMixin(KeyMixin, ValueMixin, ConvertFormatMixin):
+class StringCollectionMixin(KeyMixin, ValueMixin, TransactionMixin, ConvertFormatMixin):
     @classmethod
     async def set(cls, redis: Redis, key_param: Any | None, value: Any, **kwargs):
         key = cls.get_key(key_param)
         value = cls.get_value(value)
-        return await redis.set(key, value, **kwargs)
+        return await cls.execute(redis.set(key, value, **kwargs))
 
     @classmethod
     async def setex(cls, redis: Redis, key_param: Any | None, time: int, value: Any):
         key = cls.get_key(key_param)
         value = cls.get_value(value)
-        return await redis.setex(key, time, value)
+        return await cls.execute(redis.setex(key, time, value))
 
     @classmethod
     async def setnx(cls, redis: Redis, key_param: Any | None, value: Any):
         key = cls.get_key(key_param)
         value = cls.get_value(value)
-        return await redis.setnx(key, value)
+        return await cls.execute(redis.setnx(key, value))
 
     @classmethod
     async def strlen(cls, redis: Redis, key_param: Any | None):
@@ -186,7 +199,7 @@ class StringCollectionMixin(KeyMixin, ValueMixin, ConvertFormatMixin):
     async def setrange(cls, redis: Redis, key_param: Any | None, offset: int, value: Any):
         key = cls.get_key(key_param)
         value = cls.get_value(value)
-        return await redis.setrange(key, offset, value)
+        return await cls.execute(redis.setrange(key, offset, value))
 
     @classmethod
     async def get(cls, redis: Redis, key_param: Any | None):
@@ -209,16 +222,16 @@ class StringCollectionMixin(KeyMixin, ValueMixin, ConvertFormatMixin):
     @classmethod
     async def decr(cls, redis: Redis, key_param: Any | None, amount: int = 1):
         key = cls.get_key(key_param)
-        return await redis.decr(key, amount)
+        return await cls.execute(redis.decr(key, amount))
 
     @classmethod
     async def incrbyfloat(cls, redis: Redis, key_param: Any | None, amount: float):
         key = cls.get_key(key_param)
-        return await redis.incrbyfloat(key, amount)
+        return await cls.execute(redis.incrbyfloat(key, amount))
 
     @classmethod
     async def mset(cls, redis: Redis, mapping: Mapping[AnyKeyT, Any]):
-        return await redis.mset(mapping=mapping)
+        return await cls.execute(redis.mset(mapping=mapping))
 
     @classmethod
     async def mget(cls, redis: Redis, keys: KeyT | Sequence[KeyT], *args):
@@ -228,29 +241,32 @@ class StringCollectionMixin(KeyMixin, ValueMixin, ConvertFormatMixin):
 
     @classmethod
     async def msetnx(cls, redis: Redis, mapping: Mapping[AnyKeyT, EncodableT]):
-        return await redis.msetnx(mapping)
+        return await cls.execute(redis.msetnx(mapping))
 
     @classmethod
     async def psetex(cls, redis: Redis, key_param: Any | None, time_ms: ExpiryT, value: Any):
         key = cls.get_key(key_param)
         value = cls.get_value(value)
-        return await redis.psetex(key, time_ms, value)
+        return await cls.execute(redis.psetex(key, time_ms, value))
 
     @classmethod
     async def getset(cls, redis: Redis, key_param: Any | None, value: Any):
         key = cls.get_key(key_param)
         value = cls.get_value(value)
-        result = cls.decode(await redis.getset(key, value))
-        return cls.to_schema(result)
+        res = await cls.execute(redis.getset(key, value))
+        if not isinstance(res, Pipeline):
+            result = cls.decode(await redis.getset(key, value))
+            return cls.to_schema(result)
+        return res
 
     @classmethod
     async def append(cls, redis: Redis, key_param: Any | None, value: Any):
         key = cls.get_key(key_param)
         value = cls.get_value(value)
-        return await redis.append(key, value)
+        return await cls.execute(redis.append(key, value))
 
 
-class SortedSetCollectionMixin(KeyMixin, ValueMixin, ConvertFormatMixin):
+class SortedSetCollectionMixin(KeyMixin, ValueMixin, TransactionMixin, ConvertFormatMixin):
     @classmethod
     async def zadd(cls, redis: Redis, key_param: Any | None, data: Any, **kwargs):
         key = cls.get_key(key_param)
@@ -266,13 +282,13 @@ class SortedSetCollectionMixin(KeyMixin, ValueMixin, ConvertFormatMixin):
                     convert_mapping[cls.get_value(obj)] = getattr(obj, getattr(cls, 'score'))
             else:
                 convert_mapping[cls.get_value(data)] = getattr(data, getattr(cls, 'score'))
-        return await redis.zadd(key, convert_mapping, **kwargs)
+        return await cls.execute(redis.zadd(key, convert_mapping, **kwargs))
 
     @classmethod
     async def zscore(cls, redis: Redis, key_param: Any | None, value: Any):
         key = cls.get_key(key_param)
         value = cls.get_value(value)
-        return await redis.append(key, value)
+        return await redis.zscore(key, value)
 
     @classmethod
     async def zrank(cls, redis: Redis, key_param: Any | None, value: Any):
@@ -307,7 +323,7 @@ class SortedSetCollectionMixin(KeyMixin, ValueMixin, ConvertFormatMixin):
     async def zrem(cls, redis: Redis, key_param: Any | None, *values):
         key = cls.get_key(key_param)
         values = cls.get_value(values)
-        return await redis.zrem(key, *values)
+        return await cls.execute(redis.zrem(key, *values))
 
     @classmethod
     async def zcard(cls, redis: Redis, key_param: Any | None):
