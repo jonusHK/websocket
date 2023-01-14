@@ -295,12 +295,14 @@ async def update_relationship(
     ):
         followings_redis: List[RedisFollowingByUserProfileS] = \
             await RedisFollowingsByUserProfileS.smembers(redis_handler.redis, user_profile_id)
-        following_redis: RedisFollowingByUserProfileS = next((
-            f for f in followings_redis if f.id == other_profile_id), None)
+        duplicated_following_redis: List[RedisFollowingByUserProfileS] = [
+            f for f in followings_redis if f.id == other_profile_id
+        ]
 
-        if following_redis:
+        if duplicated_following_redis:
             async with redis_handler.pipeline(transaction=True) as pipe:
-                pipe = await RedisFollowingsByUserProfileS.srem(pipe, user_profile_id, following_redis)
+                pipe = await RedisFollowingsByUserProfileS.srem(pipe, user_profile_id, *duplicated_following_redis)
+                following_redis = duplicated_following_redis[-1]
                 for k, v in values.items():
                     if k == UserRelationship.type.key:
                         setattr(following_redis, k, v.name.lower())
@@ -351,10 +353,11 @@ async def delete_relationship(
 
     followings_redis: List[RedisFollowingByUserProfileS] = \
         await RedisFollowingsByUserProfileS.smembers(redis, user_profile_id)
-    following_redis: RedisFollowingByUserProfileS = next((
-        f for f in followings_redis if f.id == other_profile_id), None)
-    if following_redis:
-        await RedisFollowingsByUserProfileS.srem(redis, user_profile_id, following_redis)
+    duplicated_following_redis: List[RedisFollowingByUserProfileS] = [
+        f for f in followings_redis if f.id == other_profile_id
+    ]
+    if duplicated_following_redis:
+        await RedisFollowingsByUserProfileS.srem(redis, user_profile_id, *duplicated_following_redis)
 
     return {'success': True}
 
