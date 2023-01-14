@@ -1,14 +1,17 @@
 <script>
-import { reactive, computed, onMounted, getCurrentInstance } from 'vue';
+import { reactive, computed, onMounted, toRef, getCurrentInstance } from 'vue';
 import _ from 'lodash';
 
 export default {
     name: 'FollowingListLayer',
+    props: {
+        followings: Array,
+    },
     setup (props, { emit }) {
       const { proxy } = getCurrentInstance();
       const ws = new WebSocket(`ws://localhost:8000/api/v1/chats/followings/${proxy.$store.getters['user/getProfileId']}`);
       const state = reactive({
-        followings: [],
+        followings: toRef(props, 'followings'),
       });
       const getDefaultProfileImage = function(obj) {
         if (obj.files.length > 0) {
@@ -25,25 +28,6 @@ export default {
       const onClickProfile = function(profileId) {
         emit('followingDetail', profileId);
       }
-      onMounted(() => {
-        ws.onopen = function(event) {
-            console.log('친구 목록 웹소켓 연결 성공');
-        }
-        ws.onmessage = function(event) {
-            const followings = _.orderBy(JSON.parse(event.data), ['nickname'], ['asc']);
-            state.followings = _.filter(followings, function(f) {
-                return f.is_hidden === false && f.is_forbidden === false;
-            });    
-        }
-        ws.onclose = function(event) {
-            console.log('close - ', event);
-            proxy.$router.replace('/login');
-        }
-        ws.onerror = function(event) {
-            console.log('error - ', event);
-            proxy.$router.replace('/login');
-        }
-      });
       return {
         state,
         getDefaultProfileImage,

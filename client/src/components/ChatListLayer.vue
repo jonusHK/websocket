@@ -9,12 +9,14 @@ const { VITE_SERVER_HOST } = import.meta.env;
 
 export default {
     name: 'ChatListLayer',
-    props: {},
+    props: {
+        chatRooms: Array,
+    },
     setup (props, { emit }) {
         const { proxy } = getCurrentInstance();
         const ws = new WebSocket(`ws://localhost:8000/api/v1/chats/rooms/${proxy.$store.getters['user/getProfileId']}`);
         const state = reactive({
-            chatRooms: [],
+            chatRooms: toRef(props, 'chatRooms'),
             chatRoomImageUrls: {},
         });
         const onClickChatRoom = function(roomId) {
@@ -83,13 +85,13 @@ export default {
                         urls.push(file.url);
                     }
                 }
-                if (urls.length > 0) {
-                    state.chatRoomImageUrls[obj.id] = urls;
-                }
             }
             const requiredUrlCnt = urlCnt - urls.length;
             for (const i of Array(requiredUrlCnt).keys()) {
                 urls.push(defaultChatRoomImage);
+            }
+            if (urls.length > 0) {
+                state.chatRoomImageUrls[obj.id] = urls;
             }
             return urls.length > 4 ? urls.slice(0, 4) : urls;
         }
@@ -122,36 +124,19 @@ export default {
                 }
             }
             return dt.format('YY-MM-DD.');
-            
         }
-        onMounted(() => {
-            ws.onopen = function(event) {
-                console.log('채팅방 목록 웹소켓 연결 성공');
-            }
-            ws.onmessage = function(event) {
-                state.chatRooms = JSON.parse(event.data);
-            }
-            ws.onclose = function(event) {
-                console.log('close - ', event);
-                proxy.$router.replace('/login');
-            }
-            ws.onerror = function(event) {
-                console.log('error - ', event);
-                proxy.$router.replace('/login');
-            }
-        });
         return {
-        state,
-        proxy,
-        onClickChatRoom,
-        getBackgroundImageUrl,
-        getBackgroundRepeat,
-        getBackgroundSize,
-        getBackgroundPosition,
-        getChatRoomImage,
-        getLastChatHistory,
-        getChatRoomCreated,
-      }
+            state,
+            proxy,
+            onClickChatRoom,
+            getBackgroundImageUrl,
+            getBackgroundRepeat,
+            getBackgroundSize,
+            getBackgroundPosition,
+            getChatRoomImage,
+            getLastChatHistory,
+            getChatRoomCreated,
+        }
     }
 }
 </script>
@@ -170,7 +155,15 @@ export default {
                     <p><b>{{ obj.name }}</b></p>
                     <p>{{ getLastChatHistory(obj) }}</p>
                 </div>
-                <div class="chat-room-info-time">{{ getChatRoomCreated(obj.timestamp) }}</div>
+                <div class="chat-room-info-meta">
+                    <div class="chat-room-info-time">{{ getChatRoomCreated(obj.timestamp) }}</div>
+                    <div>
+                        <div class="unread-msg-cnt-icon-div">
+                            <p class="unread-msg-cnt-icon"></p>
+                        </div>
+                        <p class="unread-msg-cnt">{{ obj.unread_msg_cnt }}</p>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -227,7 +220,37 @@ export default {
     color: #757575;
 }
 
+.chat-room-info-meta div {
+    height: 20px;
+    margin: 5px;
+    text-align: center;
+}
+
+.chat-room-info-meta p {
+    margin: 0px;
+
+}
+
 .chat-room-info-time {
     color: #757575;
+}
+
+.unread-msg-cnt-icon-div {
+    display: flex; 
+    justify-content: center;
+}
+
+.unread-msg-cnt-icon {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%; 
+    background-color: #e53935;
+}
+
+.unread-msg-cnt {
+    position: relative;
+    bottom: 23px;
+    font-size: 14px;
+    color: #ffffff;
 }
 </style>
