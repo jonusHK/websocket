@@ -92,5 +92,5 @@ class ChatType(IntValueEnum):
 
 
 class ChatRoomType(IntValueEnum):
-    ONE_TO_ONE = "개인"
-    GROUP = "단체"
+    PUBLIC = "공개"
+    PRIVATE = "비공개"

@@ -3,7 +3,6 @@ from typing import List, Dict, Any
 from uuid import uuid4, UUID
 
 from aioredis import Redis
-from aioredis.client import Pipeline
 from fastapi import APIRouter, Depends, HTTPException, Response, status, UploadFile, Body, Form
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy.ext.asyncio import AsyncSession

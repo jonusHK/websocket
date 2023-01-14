@@ -135,7 +135,7 @@ class RedisHandler:
                     ]
                 )
                 if room_db:
-                    def _transaction(pipeline: Pipeline):
+                    async def _transaction(pipeline: Pipeline):
                         return await RedisChatRoomsInfoS.sadd(
                             pipeline, None, RedisChatRoomsInfoS.schema(
                                 id=room_db.id, type=room_db.type.name.lower(), user_cnt=len(room_db.user_profiles),
@@ -157,7 +157,7 @@ class RedisHandler:
             return room_redis, callback_pipe
 
         if lock:
-            async with self.lock(key=RedisChatRoomsInfoS.get_key()):
+            async with self.lock(key=RedisChatRoomsInfoS.get_lock_key()):
                 return await _action()
         return await _action()
 
@@ -201,7 +201,7 @@ class RedisHandler:
             return rooms_by_profile_redis, callback_pipeline
 
         if lock:
-            async with self.lock(key=RedisChatRoomsByUserProfileS.get_key(user_profile_id)):
+            async with self.lock(key=RedisChatRoomsByUserProfileS.get_lock_key(user_profile_id)):
                 return await _action()
         return await _action()
 
@@ -209,7 +209,7 @@ class RedisHandler:
         self,
         room_id: int,
         user_profile_id: int,
-        crud: Optional[ChatRoomCRUD] = None,
+        crud: Optional[ChatRoomUserAssociationCRUD] = None,
         pipe: Optional[Pipeline] = None,
         sync=False, lock=True, raise_exception=False
     ) -> Tuple[RedisChatRoomByUserProfileS, Pipeline | None]:
@@ -251,7 +251,7 @@ class RedisHandler:
             return room_by_profile_redis, callback_pipe
 
         if lock:
-            async with self.lock(key=RedisChatRoomsByUserProfileS.get_key(user_profile_id)):
+            async with self.lock(key=RedisChatRoomsByUserProfileS.get_lock_key(user_profile_id)):
                 return await _action()
         return await _action()
 
@@ -304,7 +304,7 @@ class RedisHandler:
             return profiles_by_room_redis, callback_pipe
 
         if lock:
-            async with self.lock(key=RedisUserProfilesByRoomS.get_key((room_id, user_profile_id))):
+            async with self.lock(key=RedisUserProfilesByRoomS.get_lock_key((room_id, user_profile_id))):
                 return await _action()
         return await _action()
 
@@ -359,7 +359,7 @@ class RedisHandler:
             return user_profile_redis, callback_pipeline
 
         if lock:
-            async with self.lock(key=RedisUserProfilesByRoomS.get_key((room_id, user_profile_id))):
+            async with self.lock(key=RedisUserProfilesByRoomS.get_lock_key((room_id, user_profile_id))):
                 return await _action()
         return await _action()
 

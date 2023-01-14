@@ -57,7 +57,7 @@ class CRUDBase:
                 stmt = stmt.options(o)
         if with_only_columns:
             stmt = stmt.with_only_columns(*with_only_columns)
-            return (row for row in await self.session.execute(stmt))
+            return [row for row in await self.session.execute(stmt)]
 
         results = await self.session.execute(stmt)
         return results.scalars().all()

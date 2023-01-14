@@ -27,12 +27,6 @@ class ChatRoomCreateParamS(BaseModel):
     @root_validator
     def validate_all(cls, values):
         room_type, target_profile_ids = cls.convert_type(values['type']), values['target_profile_ids']
-        if room_type == ChatRoomType.ONE_TO_ONE:
-            if len(target_profile_ids) != 1:
-                raise ValueError('The size for `target_profile_ids` should be 1 for private room.')
-        elif room_type == ChatRoomType.GROUP:
-            if len(target_profile_ids) <= 1:
-                raise ValueError('The size for `target_profile_ids` should be bigger than 1 for group room.')
         values.update({'type': room_type})
         return values
 
