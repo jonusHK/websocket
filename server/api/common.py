@@ -183,7 +183,7 @@ class RedisHandler:
                 if room_by_profile_db:
                     async def _transaction(pipeline: Pipeline):
                         return await RedisChatRoomsByUserProfileS.zadd(
-                            pipeline, user_profile_id, *[
+                            pipeline, user_profile_id, [
                                 RedisChatRoomsByUserProfileS.schema(
                                     id=m.room_id, name=m.room_name, unread_msg_cnt=0, timestamp=now.timestamp()
                                 ) for m in room_by_profile_db
@@ -218,7 +218,7 @@ class RedisHandler:
         async def _action():
             callback_pipe = None
             rooms_by_profile_redis: List[RedisChatRoomByUserProfileS] = \
-                await RedisChatRoomsByUserProfileS.zrange(self.redis, user_profile_id)
+                await RedisChatRoomsByUserProfileS.zrevrange(self.redis, user_profile_id)
             room_by_profile_redis: RedisChatRoomByUserProfileS = next(
                 (r for r in rooms_by_profile_redis if r.id == room_id), None
             )
