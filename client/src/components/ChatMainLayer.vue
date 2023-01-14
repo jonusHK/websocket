@@ -4,11 +4,14 @@ import FollowingListLayer from './FollowingListLayer.vue';
 import FollowingInfoLayer from './FollowingInfoLayer.vue';
 import ChatListLayer from './ChatListLayer.vue';
 import ChatDetailLayer from './ChatDetailLayer.vue';
+import _ from 'lodash';
 
 export default {
   name: 'ChatMainLayer',
   setup (props, { emit }) {
     const { proxy } = getCurrentInstance();
+    const followingListSocket = new WebSocket(`ws://localhost:8000/api/v1/chats/followings/${proxy.$store.getters['user/getProfileId']}`);
+    const chatRoomListSocket = new WebSocket(`ws://localhost:8000/api/v1/chats/rooms/${proxy.$store.getters['user/getProfileId']}`);
     const state = reactive({
       chatBodyListView: {
         following: true,
@@ -24,6 +27,9 @@ export default {
       },
       userProfileId: null,
       chatRoomId: null,
+      followings: [],
+      chatRooms: [],
+      totalUnreadMsgCnt: 0,
     })
     if (proxy.$store.state.user.userId === '' || proxy.$store.state.user.userIsActive === false) {
       proxy.$router.replace('/login');
@@ -53,6 +59,9 @@ export default {
     const closeFollowingInfo = function() {
       state.chatBodyInfoView['following'] = false;
     }
+    const getTotalUnreadMsgCnt = function(cnt) {
+      state.totalUnreadMsgCnt = cnt;
+    }
     const chatDetail = function(chatRoomId) {
       for (const key in state.chatBodyListView) {
         if (key === 'chat') {
@@ -70,11 +79,51 @@ export default {
       }
       state.chatRoomId = chatRoomId;
     }
+    onMounted(() => {
+      followingListSocket.onopen = function(event) {
+          console.log('친구 목록 웹소켓 연결 성공');
+      }
+      followingListSocket.onmessage = function(event) {
+          const followings = _.orderBy(JSON.parse(event.data), ['nickname'], ['asc']);
+          state.followings = _.filter(followings, function(f) {
+              return f.is_hidden === false && f.is_forbidden === false;
+          });    
+      }
+      followingListSocket.onclose = function(event) {
+          console.log('close - ', event);
+          proxy.$router.replace('/login');
+      }
+      followingListSocket.onerror = function(event) {
+          console.log('error - ', event);
+          proxy.$router.replace('/login');
+      }
+      chatRoomListSocket.onopen = function(event) {
+          console.log('채팅방 목록 웹소켓 연결 성공');
+      }
+      chatRoomListSocket.onmessage = function(event) {
+          state.chatRooms = _.orderBy(JSON.parse(event.data), ['timestamp'], 'desc');
+          let totalUnreadMsgCnt = 0;
+          for (const room of state.chatRooms) {
+              totalUnreadMsgCnt += room.unread_msg_cnt;
+          }
+          state.totalUnreadMsgCnt = totalUnreadMsgCnt;
+      }
+      chatRoomListSocket.onclose = function(event) {
+          console.log('close - ', event);
+          proxy.$router.replace('/login');
+      }
+      chatRoomListSocket.onerror = function(event) {
+          console.log('error - ', event);
+          proxy.$router.replace('/login');
+      }
+    });
     return {
       state,
       onChangeChatMenuType,
       followingDetail,
       closeFollowingInfo,
+      getTotalUnreadMsgCnt,
+      chatDetail,
     }
   },
   components: {
@@ -101,7 +150,7 @@ export default {
             person
           </ui-icon>
           <p style="margin: 0;">
-            <ui-badge overlap :count="8" style="margin: 0;">
+            <ui-badge overlap :count="state.totalUnreadMsgCnt" style="margin: 0;">
               <ui-icon
                 @click="onChangeChatMenuType('chat')"
                 :style="{
@@ -131,6 +180,7 @@ export default {
       <div class="chat-body-container">
         <FollowingListLayer 
           v-if="state.chatBodyListView['following']"
+          :followings="state.followings"
           @followingDetail="followingDetail"
         />
         <FollowingInfoLayer
@@ -140,6 +190,7 @@ export default {
         />
         <ChatListLayer
           v-if="state.chatBodyListView['chat']"
+          :chatRooms="state.chatRooms"
           @chatDetail="chatDetail"
         />
         <ChatDetailLayer
