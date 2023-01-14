@@ -110,14 +110,16 @@ async def chat_room(
                                         redis_handler.redis, (room_by_profile_redis.id, user_profile_id)
                                     )
                                 if profiles_by_room_redis:
-                                    profile_nicknames: List[str] = [
-                                        p.nickname for p in profiles_by_room_redis
-                                        if p.id == user_profile_id and p.nickname
-                                    ]
-                                    if profile_nicknames:
-                                        room_name: str = ', '.join(profile_nicknames)
-                            room: RedisChatRoomInfoS = next((
-                                r for r in rooms if r.id == room_by_profile_redis.id), None)
+                                    if len(profiles_by_room_redis) == 2:
+                                        room_name = next(
+                                            (p.nickname for p in profiles_by_room_redis if p.id != user_profile_id),
+                                            None
+                                        )
+                                    else:
+                                        room_name: str = ', '.join([p.nickname for p in profiles_by_room_redis])
+                            room: RedisChatRoomInfoS = next(
+                                (r for r in rooms if r.id == room_by_profile_redis.id), None
+                            )
                             chat_histories: List[RedisChatHistoryByRoomS] = \
                                 await RedisChatHistoriesByRoomS.zrevrange(
                                     redis_handler.redis, room_by_profile_redis.id, 0, 1
@@ -128,7 +130,7 @@ async def chat_room(
                                 'user_cnt': room.user_cnt if room else None,
                                 'name': room_name,
                                 'type': room.type if room else None,
-                                'user_profile_files': room.user_profile_files if room else None,
+                                'user_profile_files': jsonable_encoder(room.user_profile_files) if room else None,
                                 # 마지막 대화 내역 추출
                                 'last_chat_history': jsonable_encoder(chat_histories[0]) if chat_histories else None
                             })
