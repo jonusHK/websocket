@@ -134,7 +134,7 @@ class DatabaseBackend(Generic[ID, SessionModel], SessionDatabaseBackend[ID, Sess
                 conditions=(UserSession.session_id == session_id,))
         except HTTPException:
             raise BackendError("Session does not exist, cannot update")
-        await crud.update(conditions=(UserSession == user_session.id,), values=data.dict())
+        await crud.update(conditions=(UserSession == user_session.id,), **data.dict())
 
     async def delete(self, session_id: ID, session: AsyncSession) -> None:
         crud = UserSessionCRUD(session)

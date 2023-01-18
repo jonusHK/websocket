@@ -99,7 +99,7 @@ class RedisHandler:
     @classmethod
     async def generate_user_profile_images(
         cls,
-        profiles: List[UserProfileImage],
+        profiles: List[UserProfile],
         only_default=False
     ) -> List[RedisUserImageFileS]:
         images: List[UserProfileImage] = []

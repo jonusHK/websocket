@@ -71,11 +71,11 @@ class CRUDBase:
         stmt = insert(self.model).values(values)
         await self.session.execute(stmt)
 
-    async def update(self, values: dict, conditions: tuple):
+    async def update(self, conditions: tuple, **kwargs):
         stmt = (
             update(self.model).
             where(*conditions).
-            values(**values).
+            values(**kwargs).
             execution_options(synchronize_session="fetch")
         )
         result = await self.session.execute(stmt)
