@@ -24,13 +24,13 @@ from websockets.exceptions import ConnectionClosedOK
 from server.api import ExceptionHandlerRoute, templates
 from server.api.common import AuthValidator, RedisHandler
 from server.core.authentications import cookie, RoleChecker
-from server.core.enums import UserType, ChatType
+from server.core.enums import UserType, ChatType, ChatHistoryType
 from server.core.exceptions import ExceptionHandler
 from server.core.externals.redis.schemas import RedisUserProfilesByRoomS, \
     RedisChatHistoriesByRoomS, RedisUserProfileByRoomS, RedisChatHistoryByRoomS, \
     RedisChatRoomsByUserProfileS, RedisChatHistoryFileS, RedisFollowingsByUserProfileS, \
     RedisFollowingByUserProfileS, RedisUserImageFileS, RedisChatRoomsInfoS, RedisChatRoomInfoS, \
-    RedisChatRoomByUserProfileS
+    RedisChatRoomByUserProfileS, RedisUserProfileS
 from server.crud.service import ChatRoomUserAssociationCRUD, ChatRoomCRUD, ChatHistoryCRUD, \
     ChatHistoryUserAssociationCRUD
 from server.crud.user import UserProfileCRUD
@@ -43,25 +43,25 @@ from server.schemas.service import ChatRoomS
 
 router = APIRouter(route_class=ExceptionHandlerRoute)
 
-logger = logging.getLogger("chat")
+logger = logging.getLogger('chat')
 
 
-@router.get("", response_class=HTMLResponse)
+@router.get('', response_class=HTMLResponse)
 def index(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse('index.html', {'request': request})
 
 
-@router.get("/rooms", response_class=HTMLResponse)
+@router.get('/rooms', response_class=HTMLResponse)
 def rooms(request: Request):
-    return templates.TemplateResponse("rooms.html", {"request": request})
+    return templates.TemplateResponse('rooms.html', {'request': request})
 
 
-@router.get("/followings", response_class=HTMLResponse)
+@router.get('/followings', response_class=HTMLResponse)
 def followings(request: Request):
-    return templates.TemplateResponse("followings.html", {"request": request})
+    return templates.TemplateResponse('followings.html', {'request': request})
 
 
-@router.websocket("/rooms/{user_profile_id}")
+@router.websocket('/rooms/{user_profile_id}')
 async def chat_room(
     websocket: WebSocket,
     user_profile_id: int
@@ -70,8 +70,8 @@ async def chat_room(
     대화 방 목록 조회
     """
     def get_log_error(exc: Exception):
-        return f"Chat Room Error - user_profile_id: {user_profile_id}, " \
-               f"reason: {ExceptionHandler(exc).error}"
+        return f'Chat Room Error - user_profile_id: {user_profile_id}, ' \
+               f'reason: {ExceptionHandler(exc).error}'
 
     redis_handler = RedisHandler()
 
@@ -135,7 +135,7 @@ async def chat_room(
                                 'last_chat_history': jsonable_encoder(chat_histories[0]) if chat_histories else None
                             })
                             result.append(obj)
-                    await pub.publish(f"pubsub:user:{user_profile_id}:chat_room", json.dumps(result))
+                    await pub.publish(f'pubsub:user:{user_profile_id}:chat_room', json.dumps(result))
                     await websocket.send_json(result)
                 except (WebSocketDisconnect, ConnectionClosedOK) as e:
                     logger.exception(e)
@@ -146,7 +146,7 @@ async def chat_room(
     async def consumer_handler(psub: PubSub, ws: WebSocket):
         try:
             async with psub as p:
-                await p.subscribe(f"pubsub:user:{user_profile_id}:chat_room")
+                await p.subscribe(f'pubsub:user:{user_profile_id}:chat_room')
                 try:
                     while True:
                         message: dict = await p.get_message(ignore_subscribe_messages=True)
@@ -165,7 +165,7 @@ async def chat_room(
 
 
 @router.post(
-    "/rooms/create",
+    '/rooms/create',
     dependencies=[Depends(cookie), Depends(RoleChecker([UserType.USER]))],
     response_model=ChatRoomS)
 async def chat_room_create(
@@ -200,7 +200,7 @@ async def chat_room_create(
     )
     if len(data.target_profile_ids) != len(target_profiles):
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Not exists all for target profile ids.")
+            status_code=status.HTTP_400_BAD_REQUEST, detail='Not exists all for target profile ids.')
 
     mapping_profile_ids: List[int] = data.target_profile_ids + [data.user_profile_id]
 
@@ -309,7 +309,7 @@ async def chat_room_create(
     return ChatRoomS.from_orm(room)
 
 
-@router.websocket("/conversation/{user_profile_id}/{room_id}")
+@router.websocket('/conversation/{user_profile_id}/{room_id}')
 async def chat(
     websocket: WebSocket,
     user_profile_id: int,
@@ -319,8 +319,8 @@ async def chat(
     대화 방 입장 및 실시간 채팅
     """
     def get_log_error(exc: Exception):
-        return f"Chat Error - room_id: {room_id}, user_profile_id: {user_profile_id}, " \
-               f"reason: {ExceptionHandler(exc).error}"
+        return f'Chat Error - room_id: {room_id}, user_profile_id: {user_profile_id}, ' \
+               f'reason: {ExceptionHandler(exc).error}'
 
     redis_handler = RedisHandler()
 
@@ -485,21 +485,21 @@ async def chat(
                                             _update_target_db.append(_history_id)
                                     # Redis 에 저장되어 있는 데이터 업데이트
                                     if _update_target_redis:
-                                        pipe = await redis_handler.update_histories_by_room(room_id, _update_target_redis, pipe)
+                                        pipe = await redis_handler.update_histories_by_room(
+                                            room_id, _update_target_redis, pipe
+                                        )
                                     await pipe.execute()
                             # Redis 에 저장되어 있지 않은 history_ids 에 한해 DB 업데이트
                             if _update_target_db:
                                 await crud_chat_history.update(
-                                    values=_update_values_db,
-                                    conditions=(ChatHistory.id.in_(_update_target_db),)
+                                    conditions=(ChatHistory.id.in_(_update_target_db),),
+                                    **_update_values_db
                                 )
                                 await session.commit()
+
                             response_s = ChatSendFormS(
                                 type=request_s.type,
-                                data=ChatSendDataS(
-                                    history_ids=request_s.data.history_ids,
-                                    is_active=request_s.data.is_active
-                                )
+                                data=ChatSendDataS(history_ids=request_s.data.history_ids)
                             )
                         # 메시지 요청
                         elif request_s.type == ChatType.MESSAGE:
@@ -507,20 +507,30 @@ async def chat(
                             chat_history_db: ChatHistory = await crud_chat_history.create(
                                 room_id=room_id,
                                 user_profile_id=user_profile_id,
-                                contents=request_s.data.text)
+                                contents=request_s.data.text,
+                                type=ChatHistoryType.MESSAGE
+                            )
                             await session.commit()
                             await session.refresh(chat_history_db)
                             # Redis 저장
-                            await RedisChatHistoriesByRoomS.zadd(
-                                redis_handler.redis, room_id, RedisChatHistoriesByRoomS.schema(
-                                    id=chat_history_db.id,
-                                    user_profile_id=chat_history_db.user_profile_id,
-                                    contents=chat_history_db.contents,
-                                    read_user_ids=[user_profile_id],
-                                    timestamp=now.timestamp(),
-                                    is_active=True
-                                )
+                            chat_history_redis: RedisChatHistoryByRoomS = RedisChatHistoryByRoomS(
+                                id=chat_history_db.id,
+                                user_profile=RedisUserProfileS(
+                                    id=user_profile_id,
+                                    identity_id=user_profile_redis.identity_id,
+                                    nickname=user_profile_redis.nickname,
+                                    image=next(
+                                        (f for f in user_profile_redis.files if f.type == 'profile'), None
+                                    ),
+                                    files=user_profile_redis.files
+                                ),
+                                contents=chat_history_db.contents,
+                                type=chat_history_db.type.name.lower(),
+                                read_user_ids=[user_profile_id],
+                                timestamp=now.timestamp(),
+                                is_active=True
                             )
+                            await RedisChatHistoriesByRoomS.zadd(redis_handler.redis, room_id, chat_history_redis)
                             # 각 유저 별 해당 방의 unread_msg_cnt 업데이트
                             for p in user_profiles_redis:
                                 _unread_msg_cnt = 1
@@ -545,17 +555,14 @@ async def chat(
                                             await pipe.execute()
                             response_s = ChatSendFormS(
                                 type=request_s.type,
-                                data=ChatSendDataS(
-                                    user_profile_id=user_profile_id,
-                                    nickname=user_profile_redis.nickname,
-                                    timestamp=now.timestamp(),
-                                    text=request_s.data.text,
-                                    is_active=request_s.data.is_active
-                                ))
+                                data=ChatSendDataS(history=chat_history_redis)
+                            )
                         # 파일 업로드 요청
                         elif request_s.type == ChatType.FILE:
                             chat_history_db: ChatHistory = await crud_chat_history.create(
-                                room_id=room_id, user_profile_id=user_profile_id
+                                room_id=room_id,
+                                user_profile_id=user_profile_id,
+                                type=ChatHistoryType.FILE
                             )
                             await session.flush()
                             await session.refresh(chat_history_db)
@@ -595,26 +602,25 @@ async def chat(
 
                             files_s: List[RedisChatHistoryFileS] = await redis_handler.generate_presigned_files(
                                 ChatHistoryFile, chat_files_db)
-                            await RedisChatHistoriesByRoomS.zadd(
-                                redis_handler.redis,
-                                room_id,
-                                RedisChatHistoriesByRoomS.schema(
-                                    id=chat_history_db.id,
-                                    user_profile_id=user_profile_id,
-                                    files=files_s,
-                                    timestamp=now.timestamp(),
-                                    is_active=chat_history_db.is_active
-                                )
+                            chat_history_redis: RedisChatHistoryByRoomS = RedisChatHistoryByRoomS(
+                                id=chat_history_db.id,
+                                user_profile=RedisUserProfileS(
+                                    id=user_profile_id,
+                                    identity_id=user_profile_redis.identity_id,
+                                    nickname=user_profile_redis.nickname,
+                                    image=next((f for f in user_profile_redis.files if f.type == 'profile'), None),
+                                    files=user_profile_redis.files
+                                ),
+                                files=files_s,
+                                type=chat_history_db.type.name.lower(),
+                                timestamp=now.timestamp(),
+                                is_active=chat_history_db.is_active
                             )
+                            await RedisChatHistoriesByRoomS.zadd(redis_handler.redis, room_id, chat_history_redis)
                             response_s = ChatSendFormS(
                                 type=request_s.type,
-                                data=ChatSendDataS(
-                                    user_profile_id=user_profile_id,
-                                    nickname=user_profile_redis.nickname,
-                                    files=files_s,
-                                    timestamp=now.timestamp(),
-                                    is_active=chat_history_db.is_active
-                                ))
+                                data=ChatSendDataS(history=chat_history_redis)
+                            )
                         # 대화 내용 조회
                         elif request_s.type == ChatType.LOOKUP:
                             if not request_s.data.offset or not request_s.data.limit:
@@ -705,17 +711,12 @@ async def chat(
                                         await pipe.execute()
                             response_s = ChatSendFormS(
                                 type=ChatType.LOOKUP,
-                                data=ChatSendDataS(
-                                    histories=chat_histories_redis,
-                                    user_profiles=await RedisUserProfilesByRoomS.smembers(
-                                        redis_handler.redis, (room_id, user_profile_id)
-                                    ),
-                                    timestamp=now.timestamp()
-                                ))
+                                data=ChatSendDataS(histories=chat_histories_redis)
+                            )
                         # 유저 초대
                         elif request_s.type == ChatType.INVITE:
-                            target_user_profile_ids: List[int] = request_s.data.target_user_profile_ids
-                            if not target_user_profile_ids:
+                            target_profile_ids: List[int] = request_s.data.target_profile_ids
+                            if not target_profile_ids:
                                 raise WebSocketDisconnect(
                                     code=status.WS_1007_INVALID_FRAME_PAYLOAD_DATA,
                                     reason='Not exists user profile ids for invite.'
@@ -764,7 +765,7 @@ async def chat(
                                             )
                                             await pipe.execute()
 
-                            add_profile_ids: Set[int] = set(target_user_profile_ids)
+                            add_profile_ids: Set[int] = set(target_profile_ids)
                             profile_ids: Set[int] = add_profile_ids - current_profile_ids
                             if not profile_ids:
                                 continue
@@ -846,11 +847,39 @@ async def chat(
                                 target_msg = '님과 '.join([p.nickname for p in profiles])
                             else:
                                 target_msg = profiles[0].nickname
+
+                            message = f'{user_profile_redis.nickname}님이 {target_msg}님을 초대했습니다.'
+                            chat_history_db: ChatHistory = await crud_chat_history.create(
+                                room_id=room_id,
+                                user_profile_id=user_profile_id,
+                                contents=message,
+                                type=ChatHistoryType.NOTICE
+                            )
+                            await session.commit()
+
+                            chat_history_redis: RedisChatHistoryByRoomS = RedisChatHistoryByRoomS(
+                                id=chat_history_db.id,
+                                user_profile=RedisUserProfileS(
+                                    id=user_profile_id,
+                                    identity_id=user_profile_redis.identity_id,
+                                    nickname=user_profile_redis.nickname,
+                                    image=next(
+                                        (f for f in user_profile_redis.files if f.type == 'profile'), None
+                                    ),
+                                    files=user_profile_redis.files
+                                ),
+                                contents=chat_history_db.contents,
+                                type=chat_history_db.type.name.lower(),
+                                read_user_ids=[user_profile_id],
+                                timestamp=now.timestamp(),
+                                is_active=True
+                            )
+                            await RedisChatHistoriesByRoomS.zadd(redis_handler.redis, room_id, chat_history_redis)
+
                             response_s = ChatSendFormS(
                                 type=request_s.type,
-                                data=ChatSendDataS(
-                                    text=f"{user_profile_redis.nickname}님이 {target_msg}님을 초대했습니다.",
-                                    timestamp=now.timestamp()))
+                                data=ChatSendDataS(history=chat_history_redis)
+                            )
                         # 연결 종료
                         else:
                             try:
@@ -906,13 +935,39 @@ async def chat(
                                         pipe = await RedisChatRoomsInfoS.sadd(pipe, None, room_redis)
                                         await pipe.execute()
 
+                            message = f'{user_profile_redis.nickname}님이 나갔습니다.'
+                            chat_history_db: ChatHistory = await crud_chat_history.create(
+                                room_id=room_id,
+                                user_profile_id=user_profile_id,
+                                contents=message,
+                                type=ChatHistoryType.NOTICE
+                            )
+                            await session.commit()
+
+                            chat_history_redis: RedisChatHistoryByRoomS = RedisChatHistoryByRoomS(
+                                id=chat_history_db.id,
+                                user_profile=RedisUserProfileS(
+                                    id=user_profile_id,
+                                    identity_id=user_profile_redis.identity_id,
+                                    nickname=user_profile_redis.nickname,
+                                    image=next(
+                                        (f for f in user_profile_redis.files if f.type == 'profile'), None
+                                    ),
+                                    files=user_profile_redis.files
+                                ),
+                                contents=chat_history_db.contents,
+                                type=chat_history_db.type.name.lower(),
+                                read_user_ids=[user_profile_id],
+                                timestamp=now.timestamp(),
+                                is_active=True
+                            )
+                            await RedisChatHistoriesByRoomS.zadd(redis_handler.redis, room_id, chat_history_redis)
+
                             response_s = ChatSendFormS(
                                 type=ChatType.MESSAGE,
-                                data=ChatSendDataS(
-                                    text=f"{user_profile_redis.nickname}님이 나갔습니다.",
-                                    timestamp=now.timestamp()
-                                ))
-                        await pub.publish(f"pubsub:room:{room_id}:chat", response_s.json())
+                                data=ChatSendDataS(history=chat_history_redis)
+                            )
+                        await pub.publish(f'pubsub:room:{room_id}:chat', response_s.json())
                     except WebSocketDisconnect as exc:
                         raise exc
                     except Exception as exc:
@@ -924,7 +979,7 @@ async def chat(
     async def consumer_handler(psub: PubSub, ws: WebSocket):
         try:
             async with psub as p:
-                await p.subscribe(f"pubsub:room:{room_id}:chat")
+                await p.subscribe(f'pubsub:room:{room_id}:chat')
                 try:
                     while True:
                         message: dict = await p.get_message(ignore_subscribe_messages=True)
@@ -947,8 +1002,8 @@ async def chat_followings(websocket: WebSocket, user_profile_id: int):
     친구 목록 조회
     """
     def get_log_error(exc: Exception):
-        return f"Followings Error - user_profile_id: {user_profile_id}, " \
-               f"reason: {ExceptionHandler(exc).error}"
+        return f'Followings Error - user_profile_id: {user_profile_id}, ' \
+               f'reason: {ExceptionHandler(exc).error}'
 
     async with async_session() as session:
         user: User = await AuthValidator(session).get_user_by_websocket(websocket)
@@ -1015,7 +1070,7 @@ async def chat_followings(websocket: WebSocket, user_profile_id: int):
     async def consumer_handler(psub: PubSub, ws: WebSocket):
         try:
             async with psub as p:
-                await p.subscribe(f"pubsub:user:{user_profile_id}:following")
+                await p.subscribe(f'pubsub:user:{user_profile_id}:following')
                 try:
                     while True:
                         message: dict = await p.get_message(ignore_subscribe_messages=True)

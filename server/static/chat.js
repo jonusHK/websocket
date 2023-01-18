@@ -50,7 +50,7 @@ function establishWebSocketConnection() {
             console.log('json - ', json);
             if (json.type === 'message') {
                 data = json.data;
-                label.innerHTML = label.innerHTML + "<br />" + data.text;
+                label.innerHTML = label.innerHTML + "<br />" + data.history.contents;
             }
         } catch (e) {
             console.log('Received wrong type message.')
@@ -125,7 +125,7 @@ function establishWebSocketConnection() {
             const data = {
                 'type': 'invite',
                 'data': {
-                    'target_user_profile_ids': [userIdView.value],
+                    'target_profile_ids': [userIdView.value],
                     'timestamp': Date.now(),
                 }
             }
