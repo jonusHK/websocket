@@ -25,8 +25,8 @@ export default {
         }
         return null;
       }
-      const onClickProfile = function(profileId) {
-        emit('followingDetail', profileId);
+      const onClickProfile = function(userProfile) {
+        emit('followingInfo', userProfile.id);
       }
       return {
         state,
@@ -39,7 +39,7 @@ export default {
 
 <template>
     <div class="chat-body-list" v-if="state.followings">
-        <div v-for="obj in state.followings" :key="obj.id" class="following-list" @click="onClickProfile(obj.id)">
+        <div v-for="obj in state.followings" :key="obj.id" class="following-list" @click="onClickProfile(obj)">
             <div v-if="getDefaultProfileImage(obj) !== null" class="following-profile" :style="{
                 backgroundImage: 'url(' + getDefaultProfileImage(obj) + ')',
                 backgroundRepeat: 'no-repeat',

@@ -46,7 +46,7 @@ class ChatReceiveFileS(BaseModel):
 
 
 class ChatReceiveDataS(ChatDataBaseS):
-    target_user_profile_ids: Optional[List[int]] = None
+    target_profile_ids: Optional[List[int]] = None
     files: list[ChatReceiveFileS] = None
     is_read: Optional[bool] = None
     offset: Optional[int] = None
@@ -55,12 +55,11 @@ class ChatReceiveDataS(ChatDataBaseS):
 
 
 class ChatSendDataS(ChatDataBaseS):
-    from server.core.externals.redis.schemas import RedisChatHistoryByRoomS, RedisUserProfileByRoomS, RedisUserImageFileS, RedisChatHistoryFileS
-    user_profile_id: Optional[int] = None
-    nickname: Optional[str] = None
+    from server.core.externals.redis.schemas import RedisChatHistoryByRoomS
+
+    history: Optional[RedisChatHistoryByRoomS] = None
     histories: Optional[List[RedisChatHistoryByRoomS]] = None
-    user_profiles: Optional[List[RedisUserProfileByRoomS]] = None
-    files: Optional[List[RedisChatHistoryFileS | RedisUserImageFileS]] = None
+    history_ids: Optional[List[int]] = None
 
 
 class ChatReceiveFormS(BaseModel):

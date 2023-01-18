@@ -93,7 +93,8 @@ async def login(data: SessionData, response: Response, session: AsyncSession = D
     cookie.attach_to_response(response, session_id)  # 저장 되는 쿠키 값: str(cookie.signer.dumps(session_id.hex))
     await crud.update(
         conditions=(User.id == user.id,),
-        values=dict(last_login=datetime.now().astimezone()))
+        last_login=datetime.now().astimezone()
+    )
     await session.commit()
 
     user_profile = next((p for p in user.profiles if p.is_default), None)
@@ -281,7 +282,7 @@ async def update_relationship(
         UserRelationship.my_profile_id == user_profile_id,
         UserRelationship.other_profile_id == other_profile_id
     )
-    await crud.update(values=values, conditions=conditions)
+    await crud.update(conditions=conditions, **values)
     await session.commit()
 
     following_db: UserRelationship = await crud.get(

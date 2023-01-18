@@ -34,6 +34,7 @@ class RedisUserProfileS(BaseModel):
     id: int
     identity_id: str
     nickname: str
+    image: Optional[RedisUserImageFileS] = None
     files: Optional[List[RedisUserImageFileS]] = []
 
 
@@ -50,8 +51,9 @@ class RedisUserProfileByRoomS(RedisUserProfileS):
 
 class RedisChatHistoryByRoomS(BaseModel):
     id: int
-    user_profile_id: int
+    user_profile: RedisUserProfileS
     contents: Optional[str] = None
+    type: str
     files: Optional[List[RedisChatHistoryFileS]] = []
     read_user_ids: List[int] = []
     timestamp: float | int

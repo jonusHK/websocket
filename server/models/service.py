@@ -1,7 +1,7 @@
 from sqlalchemy import Column, BigInteger, String, ForeignKey, Text, Boolean, Integer, UniqueConstraint
 from sqlalchemy.orm import relationship
 
-from server.core.enums import ChatRoomType
+from server.core.enums import ChatRoomType, ChatHistoryType
 from server.core.utils import IntTypeEnum
 from server.db.databases import Base
 from server.models.base import TimestampMixin, S3Media, ConvertMixin
@@ -38,6 +38,7 @@ class ChatHistory(TimestampMixin, ConvertMixin, Base):
     room_id = Column(BigInteger, ForeignKey("chat_rooms.id"), nullable=False)
     user_profile_id = Column(BigInteger, ForeignKey("user_profiles.id", ondelete="CASCADE"))
     contents = Column(Text, nullable=True)
+    type = Column(IntTypeEnum(enum_class=ChatHistoryType), nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
 
     room = relationship("ChatRoom", back_populates="chat_histories")

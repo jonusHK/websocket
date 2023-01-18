@@ -19,8 +19,11 @@ export default {
             chatRooms: toRef(props, 'chatRooms'),
             chatRoomImageUrls: {},
         });
-        const onClickChatRoom = function(roomId) {
-            emit('chatDetail', roomId);
+        const detailChatRoom = function(room) {
+            emit('chatDetail', room.id);
+        }
+        const infoChatRoom = function(room) {
+            emit('chatInfo', room.id);
         }
         const getBackgroundImageUrl = function(urls) {
             let text = '';
@@ -128,7 +131,8 @@ export default {
         return {
             state,
             proxy,
-            onClickChatRoom,
+            detailChatRoom,
+            infoChatRoom,
             getBackgroundImageUrl,
             getBackgroundRepeat,
             getBackgroundSize,
@@ -143,13 +147,13 @@ export default {
 
 <template>
     <div class="chat-body-list" v-if="state.chatRooms">
-        <div v-for="obj in state.chatRooms" :key="obj.id" class="chat-room-list" @click="onClickChatRoom(obj.id)">
+        <div v-for="obj in state.chatRooms" :key="obj.id" class="chat-room-list" @click="detailChatRoom(obj)">
             <div class="chat-room-image" :style="{
                 backgroundImage: getBackgroundImageUrl(getChatRoomImage(obj)),
                 backgroundRepeat: getBackgroundRepeat(getChatRoomImage(obj)),
                 backgroundSize: getBackgroundSize(getChatRoomImage(obj)),
                 backgroundPosition: getBackgroundPosition(getChatRoomImage(obj)),
-            }"></div>
+            }" @click="infoChatRoom(obj)"></div>
             <div class="chat-room-info">
                 <div class="chat-room-info-summary">
                     <p><b>{{ obj.name }}</b></p>

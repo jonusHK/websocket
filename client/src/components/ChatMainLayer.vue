@@ -4,6 +4,7 @@ import FollowingListLayer from './FollowingListLayer.vue';
 import FollowingInfoLayer from './FollowingInfoLayer.vue';
 import ChatListLayer from './ChatListLayer.vue';
 import ChatDetailLayer from './ChatDetailLayer.vue';
+import ChatInfoLayer from './ChatInfoLayer.vue';
 import _ from 'lodash';
 
 export default {
@@ -46,7 +47,7 @@ export default {
         state.chatBodyInfoView[key] = false;
       }
     }
-    const followingDetail = function(userProfileId) {
+    const followingInfo = function(userProfileId) {
       for (const key in state.chatBodyInfoView) {
         if (key === 'following') {
           state.chatBodyInfoView[key] = true;
@@ -77,7 +78,23 @@ export default {
           state.chatBodyDetailView[key] = false;
         }
       }
+      for (const key in state.chatBodyInfoView) {
+        state.chatBodyInfoView[key] = false;
+      }
       state.chatRoomId = chatRoomId;
+    }
+    const chatInfo = function(chatRoomId) {
+      for (const key in state.chatBodyInfoView) {
+        if (key === 'chat') {
+          state.chatBodyInfoView[key] = true;
+        } else {
+          state.chatBodyInfoView[key] = false;
+        }
+      }
+      state.chatRoomId = chatRoomId;
+    }
+    const closeChatInfo = function() {
+      state.chatBodyInfoView['chat'] = false;
     }
     onMounted(() => {
       followingListSocket.onopen = function(event) {
@@ -120,10 +137,12 @@ export default {
     return {
       state,
       onChangeChatMenuType,
-      followingDetail,
+      followingInfo,
       closeFollowingInfo,
       getTotalUnreadMsgCnt,
       chatDetail,
+      chatInfo,
+      closeChatInfo,
     }
   },
   components: {
@@ -131,6 +150,7 @@ export default {
     FollowingInfoLayer,
     ChatListLayer,
     ChatDetailLayer,
+    ChatInfoLayer,
   },
 }
 </script>
@@ -181,7 +201,7 @@ export default {
         <FollowingListLayer 
           v-if="state.chatBodyListView['following']"
           :followings="state.followings"
-          @followingDetail="followingDetail"
+          @followingInfo="followingInfo"
         />
         <FollowingInfoLayer
           v-if="state.chatBodyInfoView['following']"
@@ -192,10 +212,17 @@ export default {
           v-if="state.chatBodyListView['chat']"
           :chatRooms="state.chatRooms"
           @chatDetail="chatDetail"
+          @chatInfo="chatInfo"
         />
         <ChatDetailLayer
           v-if="state.chatBodyDetailView['chat']"
           :chatRoomId="state.chatRoomId"
+          @followingInfo="followingInfo"
+        />
+        <ChatInfoLayer
+          v-if="state.chatBodyInfoView['chat']"
+          :chatRoomId="state.chatRoomId"
+          @closeChatInfo="closeChatInfo"
         />
       </div>
     </div>

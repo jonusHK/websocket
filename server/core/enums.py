@@ -94,3 +94,9 @@ class ChatType(IntValueEnum):
 class ChatRoomType(IntValueEnum):
     PUBLIC = "공개"
     PRIVATE = "비공개"
+
+
+class ChatHistoryType(IntValueEnum):
+    MESSAGE = '메시지'
+    FILE = '파일'
+    NOTICE = '안내'
