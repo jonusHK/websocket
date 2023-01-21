@@ -26,7 +26,7 @@ class ChatRoomCreateParamS(BaseModel):
 
     @root_validator
     def validate_all(cls, values):
-        room_type, target_profile_ids = cls.convert_type(values['type']), values['target_profile_ids']
+        room_type = cls.convert_type(values['type'])
         values.update({'type': room_type})
         return values
 
