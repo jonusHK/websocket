@@ -31,30 +31,26 @@ class ChatRoomCreateParamS(BaseModel):
         return values
 
 
-# TODO ChatType 에 따라 분기 처리
-class ChatDataBaseS(BaseModel):
-    text: Optional[str] = None
-    history_ids: Optional[List[int]] = None
-    timestamp: float | int
-    is_active: bool = True
-
-
 class ChatReceiveFileS(BaseModel):
     content: str
     content_type: str
     filename: str
 
 
-class ChatReceiveDataS(ChatDataBaseS):
+class ChatReceiveDataS(BaseModel):
+    text: Optional[str] = None
+    history_ids: Optional[List[int]] = None
     target_profile_ids: Optional[List[int]] = None
-    files: list[ChatReceiveFileS] = None
+    files: Optional[list[ChatReceiveFileS]] = None
     is_read: Optional[bool] = None
     offset: Optional[int] = None
     limit: Optional[int] = None
     order_by: List[str] = ['-created']
+    timestamp: Optional[float | int] = None
+    is_active: bool = True
 
 
-class ChatSendDataS(ChatDataBaseS):
+class ChatSendDataS(BaseModel):
     from server.core.externals.redis.schemas import RedisChatHistoryByRoomS
 
     history: Optional[RedisChatHistoryByRoomS] = None

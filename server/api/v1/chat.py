@@ -88,7 +88,8 @@ async def chat_room(
                 crud_room_user_mapping = ChatRoomUserAssociationCRUD(session)
                 try:
                     duplicated_rooms_by_profile_redis, _ = await redis_handler.get_rooms_by_user_profile(
-                        user_profile_id=user_profile_id, crud=crud_room_user_mapping, sync=True, reverse=True
+                        user_profile_id=user_profile_id, crud=crud_room_user_mapping,
+                        sync=True, lock=False, reverse=True
                     )
                     result = []
                     if duplicated_rooms_by_profile_redis:
@@ -643,26 +644,23 @@ async def chat(
                                     )
                                     await pipe.execute()
 
-                            async with redis_handler.lock(key=RedisChatRoomsByUserProfileS.get_lock_key(room_id)):
+                            async with redis_handler.lock(key=RedisChatHistoriesByRoomS.get_lock_key(room_id)):
                                 # Redis 대화 내용 조회
                                 chat_histories_redis: List[RedisChatHistoryByRoomS] = \
                                     await RedisChatHistoriesByRoomS.zrevrange(
                                         redis_handler.redis, room_id,
-                                        start=request_s.data.offset + 1,
-                                        end=request_s.data.offset + request_s.data.limit
+                                        start=request_s.data.offset,
+                                        end=request_s.data.offset + request_s.data.limit - 1
                                     )
                                 # Redis 데이터 없는 경우 DB 조회
                                 lack_cnt: int = request_s.data.limit - len(chat_histories_redis)
                                 if lack_cnt > 0:
                                     if chat_histories_redis:
-                                        next_offset: int = request_s.data.offset + len(chat_histories_redis) + 1
+                                        next_offset: int = request_s.data.offset + len(chat_histories_redis)
                                     else:
                                         next_offset: int = request_s.data.offset
                                     chat_histories_db: List[ChatHistory] = await crud_chat_history.list(
-                                        conditions=(
-                                            ChatHistory.room_id == room_id,
-                                            ChatHistory.user_profile_id == user_profile_id
-                                        ),
+                                        conditions=(ChatHistory.room_id == room_id,),
                                         offset=next_offset,
                                         limit=lack_cnt,
                                         order_by=ChatHistory.generate_order_by_from_str(request_s.data.order_by),
