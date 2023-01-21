@@ -43,6 +43,9 @@ export default {
           state.chatBodyListView[key] = false;
         }
       }
+      for (const key in state.chatBodyDetailView) {
+        state.chatBodyDetailView[key] = false;
+      }
       for (const key in state.chatBodyInfoView) {
         state.chatBodyInfoView[key] = false;
       }

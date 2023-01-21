@@ -29,20 +29,28 @@ export default {
         onMounted(() => {
             ws.onopen = function(event) {
                 console.log('채팅 웹소켓 연결 성공');
+                const data = {
+                    'type': 'lookup',
+                    'data': {
+                        'offset': 0,
+                        'limit': 5,
+                    }
+                };
+                ws.send(JSON.stringify(data));
             }
             ws.onmessage = function(event) {
-                const data = JSON.parse(event.data);
-                if (data.type === 'message') {
-                    state.chatHistories.push(data.history);
-                } else if (data.type === 'lookup') {
-                    
-                } else if (data.type === 'file') {
-                    state.chatHistories.push(data.history);
-                } else if (data.type === 'invite') {
+                const json = JSON.parse(event.data);
+                if (json.type === 'message') {
+                    state.chatHistories.push(json.data.history);
+                } else if (json.type === 'lookup') {
+                    console.log(json.data.histories);
+                } else if (json.type === 'file') {
+                    state.chatHistories.push(json.data.history);
+                } else if (json.type === 'invite') {
 
-                } else if (data.type === 'update') {
+                } else if (json.type === 'update') {
 
-                } else if (data.type === 'terminate') {
+                } else if (json.type === 'terminate') {
 
                 }
             }
@@ -67,15 +75,20 @@ export default {
 <template>
     <div class="chat-body-list" v-if="state.chatHistories">
         <div v-for="obj in state.chatHistories" :key="obj.id" class="chat-list">
-            <div v-if="obj.user_profile.image !== null" class="chat-profile" @click="onClickProfile(obj.user_profile)" :style="{
-                backgroundImage: 'url(' + getDefaultProfileImage(obj.user_profile) + ')',
-                backgroundRepeat: 'no-repeat',
-                backgroundSize: 'cover'
-            }"></div>
-            <div v-else class="chat-profile-default">
-                <p><ui-icon style="width: 100%; height: 100%; color: #b3e5fc">person</ui-icon></p>
+            <div>
+                <div v-if="obj.user_profile.image !== null" class="chat-profile" @click="onClickProfile(obj.user_profile)" :style="{
+                    backgroundImage: 'url(' + getDefaultProfileImage(obj.user_profile) + ')',
+                    backgroundRepeat: 'no-repeat',
+                    backgroundSize: 'cover'
+                }"></div>
+                <div v-else class="chat-profile-default">
+                    <p><ui-icon style="width: 100%; height: 100%; color: #b3e5fc">person</ui-icon></p>
+                </div>
             </div>
-            <p>{{ obj.user_profile.nickname }}</p>
+            <div>
+                <p style="margin-bottom: 7px;"><b>{{ obj.user_profile.nickname }}</b></p>
+                <p>{{ obj.contents }}</p>
+            </div>
         </div>
     </div>
 </template>
@@ -85,7 +98,7 @@ export default {
     display: flex;
     flex-direction: row;
     justify-content: flex-start;
-    align-items: center;
+    align-items: flex-start;
     padding: 15px;
     cursor: pointer;
 }
@@ -94,11 +107,15 @@ export default {
     background-color: #f5f5f5;
 }
 
+.chat-list p {
+    margin: 0;
+}
+
 .chat-profile-default {
-    width: 40px; 
+    width: 40px;
     height: 40px; 
     margin: 0 10px 0 0;
-    border-radius: 50%; 
+    border-radius: 10%; 
     background-color: #81d4fa;
     display: flex;
     flex-direction: row;

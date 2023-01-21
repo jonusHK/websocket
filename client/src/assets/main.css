@@ -157,6 +157,7 @@ html, body, #app {
   height: 100%;
   resize: horizontal;
   overflow: auto;
+  border-left: 1px solid #e0e0e0;
 }
 
 .chat-body-detail {
