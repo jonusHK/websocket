@@ -211,7 +211,6 @@ export default {
 
 .chat-room-info {
     width: 100%;
-    padding-right: 10px;
     display: flex;
     flex-direction: row;
     justify-content: space-between;
@@ -244,7 +243,7 @@ export default {
 }
 
 .chat-room-info-meta {
-    width: 100px;
+    width: 90px;
 }
 
 .chat-room-info-meta div {
