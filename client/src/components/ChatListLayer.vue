@@ -114,9 +114,12 @@ export default {
             }
             return '';
         }
-        const getChatRoomCreated = function(ts) {
+        const getLastChatHistoryCreated = function(obj) {
+            if (obj === null) {
+                return null;
+            }
             const now = proxy.$dayjs();
-            const dt = proxy.$dayjs.unix(ts);
+            const dt = proxy.$dayjs.unix(obj.timestamp);
             if (now.get('year') === dt.get('year')) {
                 if (now.get('month') === dt.get('month') && now.get('date') === dt.get('date')) {
                     return dt.format('A h:mm');
@@ -139,7 +142,7 @@ export default {
             getBackgroundPosition,
             getChatRoomImage,
             getLastChatHistory,
-            getChatRoomCreated,
+            getLastChatHistoryCreated,
         }
     }
 }
@@ -156,12 +159,12 @@ export default {
             }" @click="infoChatRoom(obj)"></div>
             <div class="chat-room-info">
                 <div class="chat-room-info-summary">
-                    <p><b>{{ obj.name }}</b></p>
-                    <p>{{ getLastChatHistory(obj) }}</p>
+                    <p class="chat-room-info-name"><b>{{ obj.name }}</b></p>
+                    <p class="chat-room-info-last-chat">{{ getLastChatHistory(obj) }}</p>
                 </div>
                 <div class="chat-room-info-meta">
-                    <div class="chat-room-info-time">{{ getChatRoomCreated(obj.timestamp) }}</div>
-                    <div>
+                    <div class="chat-room-info-time">{{ getLastChatHistoryCreated(obj.last_chat_history) }}</div>
+                    <div v-if="obj.unread_msg_cnt > 0">
                         <div class="unread-msg-cnt-icon-div">
                             <p class="unread-msg-cnt-icon"></p>
                         </div>
@@ -208,11 +211,26 @@ export default {
 
 .chat-room-info {
     width: 100%;
-    padding-right: 10px;
     display: flex;
     flex-direction: row;
     justify-content: space-between;
     align-items: center;
+}
+
+.chat-room-info-name {
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.chat-room-info-last-chat {
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.chat-room-info-summary {
+    overflow: hidden;
 }
 
 .chat-room-info-summary p {
@@ -222,6 +240,10 @@ export default {
 
 .chat-room-info-summary p:nth-child(2) {
     color: #757575;
+}
+
+.chat-room-info-meta {
+    width: 90px;
 }
 
 .chat-room-info-meta div {

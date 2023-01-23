@@ -174,7 +174,7 @@ async def user_profile_image_upload(
         session,
         [file],
         root='user_profile/',
-        user_profile_id=user_profile_id,
+        uploaded_by_id=user_profile_id,
         type=ProfileImageType.get_by_name(image_type),
         is_default=is_default,
         bucket_name=settings.aws_storage_bucket_name

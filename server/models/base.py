@@ -170,7 +170,7 @@ class S3Media(TimestampMixin, ConvertMixin, Base):
     @classmethod
     async def new(
         cls, session: AsyncSession, file: UploadFile | WebSocketFileS, root: str = None,
-        uploaded_by_id=None, upload=False, thumbnail=False, **kwargs
+        uploaded_by_id: int = None, upload=False, thumbnail=False, **kwargs
     ):
         uid = uuid.uuid4().hex
 
@@ -290,10 +290,8 @@ class S3Media(TimestampMixin, ConvertMixin, Base):
     @classmethod
     async def files_to_models(
         cls, session: AsyncSession, files: List[UploadFile | WebSocketFileS], root: str = None,
-        upload=False, thumbnail=False, **kwargs
+        uploaded_by_id: int = None, upload=False, thumbnail=False, **kwargs
     ):
-        uploaded_by_id = kwargs.get('user_profile_id')
-
         for file in files:
             origin, thumb = await cls.new(
                 session, file,
