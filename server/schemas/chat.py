@@ -45,7 +45,7 @@ class ChatReceiveDataS(BaseModel):
     is_read: Optional[bool] = None
     offset: Optional[int] = None
     limit: Optional[int] = None
-    order_by: List[str] = ['-created']
+    order_by: List[str] = ['created']
     timestamp: Optional[float | int] = None
     is_active: bool = True
 

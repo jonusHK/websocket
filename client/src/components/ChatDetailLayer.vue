@@ -1,5 +1,5 @@
 <script>
-import { reactive, watch, onMounted, getCurrentInstance, toRef, nextTick } from 'vue';
+import { reactive, watch, onMounted, getCurrentInstance, toRef, nextTick, onUpdated } from 'vue';
 import constants from '../constants';
 
 const { VITE_SERVER_HOST } = import.meta.env;
@@ -14,7 +14,14 @@ export default {
         const { proxy } = getCurrentInstance();
         const state = reactive({
             roomId: toRef(props, 'chatRoomId'),
-            chatHistories: []
+            chatHistories: [],
+            load: {
+                offset: 0,
+                limit: 15,
+            },
+            chatBodyScrollHeight: 0,
+            newMessage: false,
+            bottomFlag: true,
         });
         const ws = new WebSocket(`ws://localhost:8000/api/v1/chats/conversation/${proxy.$store.getters['user/getProfileId']}/${state.roomId}`);
         const onClickProfile = function(userProfile) {
@@ -26,24 +33,60 @@ export default {
             }
             return userProfile.image.url;
         }
+        const loadMore = function() {
+            state.load.offset = state.load.offset + state.load.limit;
+            const data = {
+                'type': 'lookup',
+                'data': {
+                    'offset': state.load.offset,
+                    'limit': state.load.limit,
+                }
+            };
+            ws.send(JSON.stringify(data));
+        }
+        const onScrollChatHistories = function(e) {
+            const { scrollHeight, scrollTop, clientHeight } = e.target;
+            state.newMessage = false;
+            state.chatBodyScrollHeight = scrollHeight;
+            if (scrollTop + clientHeight === scrollHeight) {
+                state.bottomFlag = true;
+            } else {
+                state.bottomFlag = false;
+                if (scrollTop === 0) {
+                    loadMore();
+                }
+            }
+        }
+        const moveChatBodyPosition = function() {
+            if (state.bottomFlag === true) {
+                state.chatBodyScrollHeight = 0;
+            }
+            state.chatBodyScrollHeight = window.$('.chat-detail-body-list').prop('scrollHeight') - state.chatBodyScrollHeight;
+            if (state.bottomFlag === true || state.newMessage === false) {
+                window.$('.chat-detail-body-list').scrollTop(state.chatBodyScrollHeight);
+            }
+        }
         onMounted(() => {
             ws.onopen = function(event) {
                 console.log('채팅 웹소켓 연결 성공');
                 const data = {
                     'type': 'lookup',
                     'data': {
-                        'offset': 0,
-                        'limit': 5,
+                        'offset': state.load.offset,
+                        'limit': state.load.limit,
                     }
                 };
                 ws.send(JSON.stringify(data));
+                state.bottomFlag = true;
+                moveChatBodyPosition();
             }
             ws.onmessage = function(event) {
                 const json = JSON.parse(event.data);
                 if (json.type === 'message') {
                     state.chatHistories.push(json.data.history);
+                    state.newMessage = true;
                 } else if (json.type === 'lookup') {
-                    console.log(json.data.histories);
+                    state.chatHistories = [...json.data.histories, ...state.chatHistories];
                 } else if (json.type === 'file') {
                     state.chatHistories.push(json.data.history);
                 } else if (json.type === 'invite') {
@@ -63,17 +106,29 @@ export default {
                 proxy.$router.replace('/login');
             }
         })
+        onUpdated(() => {
+            moveChatBodyPosition();
+            const data = {
+                'type': 'lookup',
+                'data': {
+                    'is_read': true
+                }
+            };
+            ws.send(JSON.stringify(data));
+        })
         return {
             state,
             onClickProfile,
             getDefaultProfileImage,
+            onScrollChatHistories,
+            moveChatBodyPosition,
         }
     }
 }
 </script>
 
 <template>
-    <div class="chat-body-list" v-if="state.chatHistories">
+    <div class="chat-body-list chat-detail-body-list" v-if="state.chatHistories" @scroll="onScrollChatHistories">
         <div v-for="obj in state.chatHistories" :key="obj.id" class="chat-list">
             <div>
                 <div v-if="obj.user_profile.image !== null" class="chat-profile" @click="onClickProfile(obj.user_profile)" :style="{
