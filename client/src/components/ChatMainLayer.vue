@@ -27,7 +27,7 @@ export default {
         chat: false,
       },
       userProfileId: null,
-      chatRoomId: null,
+      chatRoom: null,
       followings: [],
       chatRooms: [],
       totalUnreadMsgCnt: 0,
@@ -84,7 +84,9 @@ export default {
       for (const key in state.chatBodyInfoView) {
         state.chatBodyInfoView[key] = false;
       }
-      state.chatRoomId = chatRoomId;
+      state.chatRoom = _.filter(state.chatRooms, function(r) {
+        return r.id === chatRoomId;
+      })[0];
     }
     const chatInfo = function(chatRoomId) {
       for (const key in state.chatBodyInfoView) {
@@ -94,7 +96,9 @@ export default {
           state.chatBodyInfoView[key] = false;
         }
       }
-      state.chatRoomId = chatRoomId;
+      state.chatRoom = _.filter(state.chatRooms, function(r) {
+        return r.id === chatRoomId;
+      })[0];
     }
     const closeChatInfo = function() {
       state.chatBodyInfoView['chat'] = false;
@@ -219,12 +223,12 @@ export default {
         />
         <ChatDetailLayer
           v-if="state.chatBodyDetailView['chat']"
-          :chatRoomId="state.chatRoomId"
+          :chatRoom="state.chatRoom"
           @followingInfo="followingInfo"
         />
         <ChatInfoLayer
           v-if="state.chatBodyInfoView['chat']"
-          :chatRoomId="state.chatRoomId"
+          :chatRoom="state.chatRoom"
           @closeChatInfo="closeChatInfo"
         />
       </div>

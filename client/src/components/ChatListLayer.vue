@@ -258,6 +258,7 @@ export default {
 }
 
 .chat-room-info-time {
+    font-size: 14px;
     color: #757575;
 }
 

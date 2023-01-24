@@ -45,17 +45,16 @@ class ChatReceiveDataS(BaseModel):
     is_read: Optional[bool] = None
     offset: Optional[int] = None
     limit: Optional[int] = None
-    order_by: List[str] = ['created']
     timestamp: Optional[float | int] = None
     is_active: bool = True
 
 
 class ChatSendDataS(BaseModel):
-    from server.core.externals.redis.schemas import RedisChatHistoryByRoomS
+    from server.core.externals.redis.schemas import RedisChatHistoryByRoomS, RedisChatHistoryPatchS
 
     history: Optional[RedisChatHistoryByRoomS] = None
     histories: Optional[List[RedisChatHistoryByRoomS]] = None
-    history_ids: Optional[List[int]] = None
+    patch_histories: Optional[List[RedisChatHistoryPatchS]] = None
 
 
 class ChatReceiveFormS(BaseModel):

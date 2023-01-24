@@ -49,14 +49,22 @@ class RedisUserProfileByRoomS(RedisUserProfileS):
     ...
 
 
+class RedisChatHistoryPatchS(BaseModel):
+    id: int
+    user_profile_id: int
+    is_active: bool
+    read_user_ids: List[int] = []
+
+
 class RedisChatHistoryByRoomS(BaseModel):
     id: int
-    user_profile: RedisUserProfileS
+    user_profile_id: int
     contents: Optional[str] = None
     type: str
     files: Optional[List[RedisChatHistoryFileS]] = []
     read_user_ids: List[int] = []
     timestamp: float | int
+    date: str
     is_active: bool
 
 

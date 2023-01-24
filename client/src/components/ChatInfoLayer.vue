@@ -8,12 +8,12 @@ const { VITE_SERVER_HOST } = import.meta.env;
 export default {
     name: 'ChatInfoLayer',
     props: {
-        chatRoomId: Number,
+        chatRoom: Object,
     },
     setup (props, { emit }) {
         const { proxy } = getCurrentInstance();
         const state = reactive({
-            roomId: toRef(props, 'chatRoomId'),
+            room: toRef(props, 'chatRoom'),
         });
     }
 }
