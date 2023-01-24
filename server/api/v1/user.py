@@ -157,7 +157,7 @@ async def other_profile_detail(
 
 
 # 유저 프로필, 배경 이미지 업로드
-@router.post("/profile/image/upload", dependencies=[Depends(cookie)])
+@router.post('/profile/image/upload', dependencies=[Depends(cookie)])
 async def user_profile_image_upload(
     file: UploadFile,
     user_profile_id: int = Form(),
@@ -195,7 +195,7 @@ async def user_profile_image_upload(
         for o in objects:
             o.close()
 
-    # TODO 레디스 업데이트
+    # TODO 파일 URL -> CDN 변경하고나서 Redis 업데이트
 
     return [UserProfileImageS.from_orm(o) for o in objects]
 
