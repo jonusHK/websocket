@@ -158,6 +158,9 @@ async def chat_room(
                                     date=chat_histories_db[0].created.date().isoformat(),
                                     is_active=chat_histories_db[0].is_active
                                 )
+                                await RedisChatHistoriesByRoomS.zadd(
+                                    redis_handler.redis, room_by_profile_redis, last_chat_history
+                                )
 
                         obj: Dict[str, Any] = jsonable_encoder(room_by_profile_redis)
                         obj.update(jsonable_encoder({
@@ -616,7 +619,7 @@ async def chat(
                                     for h in target_histories_redis:
                                         patch_histories_redis.append(RedisChatHistoryPatchS(
                                             id=h.id,
-                                            user_profile_id=h.user_profile.id,
+                                            user_profile_id=h.user_profile_id,
                                             is_active=h.is_active,
                                             read_user_ids=h.read_user_ids
                                         ))
@@ -678,7 +681,7 @@ async def chat(
                                             for h in update_target_redis:
                                                 patch_histories_redis.append(RedisChatHistoryPatchS(
                                                     id=h.id,
-                                                    user_profile_id=h.user_profile.id,
+                                                    user_profile_id=h.user_profile_id,
                                                     is_active=h.is_active,
                                                     read_user_ids=h.read_user_ids
                                                 ))
@@ -697,7 +700,7 @@ async def chat(
                                     for h in updated_histories_db:
                                         patch_histories_redis.append(RedisChatHistoryPatchS(
                                             id=h.id,
-                                            user_profile_id=h.user_profile.id,
+                                            user_profile_id=h.user_profile_id,
                                             is_active=h.is_active,
                                             read_user_ids=[
                                                 m.user_profile_id for m in h.user_profile_mapping if m.is_read
@@ -801,17 +804,43 @@ async def chat(
                                     await session.refresh(o)
 
                             files_s: List[RedisChatHistoryFileS] = await redis_handler.generate_presigned_files(
-                                ChatHistoryFile, chat_files_db)
+                                ChatHistoryFile, chat_files_db
+                            )
                             chat_history_redis: RedisChatHistoryByRoomS = RedisChatHistoryByRoomS(
                                 id=chat_history_db.id,
                                 user_profile_id=user_profile_id,
                                 files=files_s,
+                                read_user_ids=[user_profile_id],
                                 type=chat_history_db.type.name.lower(),
                                 timestamp=now.timestamp(),
                                 date=now.date().isoformat(),
                                 is_active=chat_history_db.is_active
                             )
                             await RedisChatHistoriesByRoomS.zadd(redis_handler.redis, room_id, chat_history_redis)
+
+                            # 각 유저 별 해당 방의 unread_msg_cnt 업데이트
+                            for p in user_profiles_redis:
+                                _unread_msg_cnt = 1
+                                _room_by_profile_redis, _ = await redis_handler.get_room_by_user_profile(
+                                    room_id, p.id, crud_room_user_mapping, sync=True
+                                )
+                                if _room_by_profile_redis:
+                                    async with redis_handler.lock(key=RedisChatRoomsByUserProfileS.get_lock_key(p.id)):
+                                        async with redis_handler.pipeline(transaction=True) as pipe:
+                                            pipe = await RedisChatRoomsByUserProfileS.zrem(
+                                                pipe, p.id, _room_by_profile_redis
+                                            )
+                                            _unread_msg_cnt += _room_by_profile_redis.unread_msg_cnt
+                                            pipe = await RedisChatRoomsByUserProfileS.zadd(
+                                                pipe, p.id, RedisChatRoomsByUserProfileS.schema(
+                                                    id=_room_by_profile_redis.id,
+                                                    name=_room_by_profile_redis.name,
+                                                    unread_msg_cnt=_unread_msg_cnt,
+                                                    timestamp=now.timestamp()
+                                                )
+                                            )
+                                            await pipe.execute()
+
                             broadcast_response_s = ChatSendFormS(
                                 type=request_s.type,
                                 data=ChatSendDataS(history=chat_history_redis)
@@ -1078,18 +1107,6 @@ async def chat(
                     while True:
                         message: dict = await p.get_message(ignore_subscribe_messages=True)
                         if message:
-                            # sub = json.loads(message.get('data'))
-                            # if sub['type'].upper() in (ChatType.MESSAGE.name, ChatType.FILE.name):
-                            #     async with async_session() as session:
-                            #         crud_user_profile = UserProfileCRUD(session)
-                            #         history = sub['data']['history']
-                            #         chat_user_profile: UserProfile = await crud_user_profile.get(
-                            #             conditions=(UserProfile.id == history['user_profile']['id'],),
-                            #             options=[selectinload(UserProfile.followers)]
-                            #         )
-                            #         history['user_profile']['nickname'] = \
-                            #             chat_user_profile.get_nickname_by_other(user_profile_id)
-
                             await ws.send_json(json.loads(message.get('data')))
                 except asyncio.CancelledError as exc:
                     await p.unsubscribe()
@@ -1124,47 +1141,45 @@ async def chat_followings(websocket: WebSocket, user_profile_id: int):
     while True:
         try:
             async with async_session() as session:
-                crud_user_profile = UserProfileCRUD(session)
-
                 duplicated_followings: List[RedisFollowingByUserProfileS] = \
                     await RedisFollowingsByUserProfileS.smembers(redis_handler.redis, user_profile_id)
                 followings: List[RedisFollowingByUserProfileS] = []
                 if duplicated_followings:
                     for key, items in groupby(duplicated_followings, key=lambda x: x.id):
                         followings.append(list(items)[-1])
-                else:
-                    user_profile: UserProfile = await crud_user_profile.get(
-                        conditions=(
-                            UserProfile.id == user_profile_id,
-                            UserProfile.is_active == 1),
-                        options=[
-                            selectinload(UserProfile.followings).
-                            joinedload(UserRelationship.other_profile).
-                            selectinload(UserProfile.images),
-                            selectinload(UserProfile.followings).
-                            joinedload(UserRelationship.other_profile).
-                            selectinload(UserProfile.followers)
-                        ])
-                    if user_profile.followings:
-                        async with redis_handler.lock(
-                            key=RedisFollowingsByUserProfileS.get_lock_key(user_profile_id)
-                        ):
-                            if not await RedisFollowingsByUserProfileS.smembers(
-                                redis_handler.redis, user_profile_id
-                            ):
-                                await RedisFollowingsByUserProfileS.sadd(redis_handler.redis, user_profile_id, *[
-                                    RedisFollowingsByUserProfileS.schema(
-                                        id=f.other_profile_id,
-                                        identity_id=f.other_profile.identity_id,
-                                        nickname=f.other_profile.get_nickname_by_other(user_profile_id),
-                                        type=f.type.name.lower(),
-                                        favorites=f.favorites,
-                                        is_hidden=f.is_hidden,
-                                        is_forbidden=f.is_forbidden,
-                                        files=await redis_handler.generate_presigned_files(
-                                            UserProfileImage, [i for i in f.other_profile.images if i.is_default])
-                                    ) for f in user_profile.followings
-                                ])
+                # else:
+                #     user_profile: UserProfile = await crud_user_profile.get(
+                #         conditions=(
+                #             UserProfile.id == user_profile_id,
+                #             UserProfile.is_active == 1),
+                #         options=[
+                #             selectinload(UserProfile.followings).
+                #             joinedload(UserRelationship.other_profile).
+                #             selectinload(UserProfile.images),
+                #             selectinload(UserProfile.followings).
+                #             joinedload(UserRelationship.other_profile).
+                #             selectinload(UserProfile.followers)
+                #         ])
+                #     if user_profile.followings:
+                #         async with redis_handler.lock(
+                #             key=RedisFollowingsByUserProfileS.get_lock_key(user_profile_id)
+                #         ):
+                #             if not await RedisFollowingsByUserProfileS.smembers(
+                #                 redis_handler.redis, user_profile_id
+                #             ):
+                #                 await RedisFollowingsByUserProfileS.sadd(redis_handler.redis, user_profile_id, *[
+                #                     RedisFollowingsByUserProfileS.schema(
+                #                         id=f.other_profile_id,
+                #                         identity_id=f.other_profile.identity_id,
+                #                         nickname=f.other_profile.get_nickname_by_other(user_profile_id),
+                #                         type=f.type.name.lower(),
+                #                         favorites=f.favorites,
+                #                         is_hidden=f.is_hidden,
+                #                         is_forbidden=f.is_forbidden,
+                #                         files=await redis_handler.generate_presigned_files(
+                #                             UserProfileImage, [i for i in f.other_profile.images if i.is_default])
+                #                     ) for f in user_profile.followings
+                #                 ])
                 await websocket.send_json(jsonable_encoder(followings))
         except (WebSocketDisconnect, ConnectionClosedOK) as e:
             logger.exception(get_log_error(e))

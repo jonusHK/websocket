@@ -1,7 +1,8 @@
 <script>
-import { reactive, watch, onMounted, getCurrentInstance, toRef, nextTick, onUpdated, computed } from 'vue';
+import { ref, reactive, watch, onMounted, getCurrentInstance, toRef, nextTick, onUpdated, computed } from 'vue';
 import constants from '../constants';
 import _ from 'lodash';
+import { useEvent } from 'balm-ui';
 
 const { VITE_SERVER_HOST } = import.meta.env;
 
@@ -13,16 +14,19 @@ export default {
     },
     setup (props, { emit }) {
         const { proxy } = getCurrentInstance();
+        const uploadInput = ref(null);
         const state = reactive({
             room: toRef(props, 'chatRoom'),
             chatHistories: [],
             load: {
                 offset: 0,
-                limit: 15,
+                limit: 50,
             },
             newMessage: false,
             chatBodyScrollHeight: 0,
             bottomFlag: true,
+            uploadFiles: [],
+            contents: '',
         });
         const ws = new WebSocket(`ws://localhost:8000/api/v1/chats/conversation/${proxy.$store.getters['user/getProfileId']}/${state.room.id}`);
         const onClickProfile = function(obj) {
@@ -97,7 +101,35 @@ export default {
             return dt.format('A h:mm');
         }
         const getUnreadCnt = function(obj) {
-            return state.room.user_profiles.length - obj.read_user_ids.length;
+            const unreadCnt = state.room.user_profiles.length - obj.read_user_ids.length;
+            return unreadCnt > 0 ? unreadCnt : null;
+        }
+        const onInputFile = function() {
+            for (const each of uploadInput.value.files) {
+                const fileReader = new FileReader();
+                fileReader.onload = function(event) {
+                    state.uploadFiles.push({
+                        content: event.target.result,
+                        filename: each.name,
+                        content_type: each.type
+                    })
+                }
+                fileReader.readAsDataURL(each);
+            }
+        }
+        const send = function() {
+            if (state.uploadFiles.length > 0) {
+                const data = {
+                    'type': 'file',
+                    'data': {
+                        'files': state.uploadFiles.map(elem => {
+                            elem.content = elem.content.split(',')[1]
+                            return elem
+                        })
+                    }
+                }
+                ws.send(JSON.stringify(data));
+            }
         }
         onMounted(() => {
             ws.onopen = function(event) {
@@ -127,8 +159,8 @@ export default {
                 } else if (json.type === 'update') {
                     const patchHistories = json.data.patch_histories;
                     if (patchHistories !== [] && state.chatHistories !== []) {
-                        for (const h of state.chatHistories) {
-                            for (const p of patchHistories) {
+                        for (const p of patchHistories) {
+                            for (const h of state.chatHistories) {
                                 if (h.id === p.id) {
                                     h.is_active = p.is_active;
                                     h.read_user_ids = p.read_user_ids;
@@ -161,6 +193,7 @@ export default {
             ws.send(JSON.stringify(data));
         })
         return {
+            uploadInput,
             state,
             onClickProfile,
             getUserProfileImage,
@@ -170,39 +203,79 @@ export default {
             getChatUserProfileNickname,
             getChatHistoryCreated,
             getUnreadCnt,
+            onInputFile,
+            send,
         }
     }
 }
 </script>
 
 <template>
-    <div class="chat-body-list chat-detail-body-list" v-if="state.chatHistories" @scroll="onScrollChatHistories">
-        <div v-for="obj in state.chatHistories" :key="obj.id" class="chat-list">
-            <div>
-                <div v-if="getUserProfileImage(obj) !== null" class="chat-profile" @click="onClickProfile(obj)" :style="{
-                    backgroundImage: 'url(' + getDefaultProfileImage(obj) + ')',
-                    backgroundRepeat: 'no-repeat',
-                    backgroundSize: 'cover'
-                }"></div>
-                <div v-else class="chat-profile-default">
-                    <p><ui-icon style="width: 100%; height: 100%; color: #b3e5fc">person</ui-icon></p>
-                </div>
-            </div>
-            <div>
-                <div class="chat-profile-info-meta">
-                    <p><b>{{ getChatUserProfileNickname(obj) }}</b></p>
-                    <p>{{ getChatHistoryCreated(obj) }}</p>
-                    <p>{{ getUnreadCnt(obj) }}</p>
+    <div class="chat-detail-body">
+        <div class="chat-detail-body-list" v-if="state.chatHistories" @scroll="onScrollChatHistories">
+            <div v-for="obj in state.chatHistories" :key="obj.id" class="chat-list">
+                <div>
+                    <div v-if="getUserProfileImage(obj) !== null" class="chat-profile" @click="onClickProfile(obj)" :style="{
+                        backgroundImage: 'url(' + getDefaultProfileImage(obj) + ')',
+                        backgroundRepeat: 'no-repeat',
+                        backgroundSize: 'cover'
+                    }"></div>
+                    <div v-else class="chat-profile-default">
+                        <p><ui-icon style="width: 100%; height: 100%; color: #b3e5fc">person</ui-icon></p>
+                    </div>
                 </div>
                 <div>
-                    <p v-if="obj.contents !== null">{{ obj.contents }}</p>
+                    <div class="chat-profile-info-meta">
+                        <p><b>{{ getChatUserProfileNickname(obj) }}</b></p>
+                        <p>{{ getChatHistoryCreated(obj) }}</p>
+                        <p>{{ getUnreadCnt(obj) }}</p>
+                    </div>
+                    <div>
+                        <p v-if="obj.contents !== null">{{ obj.contents }}</p>
+                        <div v-if="obj.files.length">
+                            <div v-for="file in obj.files" :key="file.chat_history_id" :class="{'file-multiple-preview': obj.files.length > 1, 'file-preview': obj.files.length == 1}">
+                                <img v-if="file.content_type.startsWith('image')" :src="file.url" />
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
+        </div>
+        <div class="chat-input">
+            <input 
+                type="file" 
+                id="file-upload" 
+                multiple="multiple" 
+                accept="image/*" 
+                @change="onInputFile"
+                ref="uploadInput"
+            />
+            <button @click="send">전송</button>
+            <ui-textfield
+                v-model="state.content"
+                input-type="textarea"
+                fullwidth
+                placeholder=""
+                maxlength="140"
+                rows="8"
+            ></ui-textfield>
         </div>
     </div>
 </template>
 
 <style scoped>
+.chat-detail-body {
+  width: 100%;
+  height: 100%;
+  border-left: 1px solid #e0e0e0;
+}
+
+.chat-detail-body-list {
+  width: 100%;
+  height: 80%;
+  overflow: auto;
+}
+
 .chat-list {
     display: flex;
     flex-direction: row;
@@ -259,5 +332,23 @@ export default {
     font-weight: bold;
     font-size: 13px;
     color: #f9a825;
+}
+
+.chat-input {
+    width: 100%;
+    height: 20%;
+    border: 1px solid #e0e0e0;
+    bottom: 0px;
+    background-color: #ffffff;
+}
+
+.file-multiple-preview > img {
+    height: 200px;
+    margin-right: 3px;
+}
+
+.file-preview > img {
+    width: 200px;
+    margin-right: 3px;
 }
 </style>
