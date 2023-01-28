@@ -205,7 +205,7 @@ export default {
     </div>
     <div id="chat-body">
       <div class="chat-body-container">
-        <FollowingListLayer 
+        <FollowingListLayer
           v-if="state.chatBodyListView['following']"
           :followings="state.followings"
           @followingInfo="followingInfo"

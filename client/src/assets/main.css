@@ -155,7 +155,6 @@ html, body, #app {
   width: 100%;
   min-width: 150px;
   height: 100%;
-  resize: horizontal;
   overflow: auto;
   border-left: 1px solid #e0e0e0;
 }

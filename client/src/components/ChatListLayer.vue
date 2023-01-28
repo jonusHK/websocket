@@ -115,11 +115,11 @@ export default {
             return '';
         }
         const getLastChatHistoryCreated = function(obj) {
-            if (obj === null) {
+            if (obj.last_chat_history === null) {
                 return null;
             }
             const now = proxy.$dayjs();
-            const dt = proxy.$dayjs.unix(obj.timestamp);
+            const dt = proxy.$dayjs.unix(obj.last_chat_history.timestamp);
             if (now.get('year') === dt.get('year')) {
                 if (now.get('month') === dt.get('month') && now.get('date') === dt.get('date')) {
                     return dt.format('A h:mm');
@@ -130,6 +130,9 @@ export default {
                 }
             }
             return dt.format('YY-MM-DD.');
+        }
+        const getUnreadMsgCnt = function(obj) {
+            return obj.unread_msg_cnt > 99 ? '99+' : obj.unread_msg_cnt;
         }
         return {
             state,
@@ -143,6 +146,7 @@ export default {
             getChatRoomImage,
             getLastChatHistory,
             getLastChatHistoryCreated,
+            getUnreadMsgCnt,
         }
     }
 }
@@ -163,12 +167,12 @@ export default {
                     <p class="chat-room-info-last-chat">{{ getLastChatHistory(obj) }}</p>
                 </div>
                 <div class="chat-room-info-meta">
-                    <div class="chat-room-info-time">{{ getLastChatHistoryCreated(obj.last_chat_history) }}</div>
+                    <div class="chat-room-info-time">{{ getLastChatHistoryCreated(obj) }}</div>
                     <div v-if="obj.unread_msg_cnt > 0">
                         <div class="unread-msg-cnt-icon-div">
                             <p class="unread-msg-cnt-icon"></p>
                         </div>
-                        <p class="unread-msg-cnt">{{ obj.unread_msg_cnt }}</p>
+                        <p class="unread-msg-cnt">{{ getUnreadMsgCnt(obj) }}</p>
                     </div>
                 </div>
             </div>
@@ -268,15 +272,15 @@ export default {
 }
 
 .unread-msg-cnt-icon {
-    width: 20px;
-    height: 20px;
+    width: 26px;
+    height: 26px;
     border-radius: 50%; 
     background-color: #e53935;
 }
 
 .unread-msg-cnt {
     position: relative;
-    bottom: 23px;
+    bottom: 20px;
     font-size: 14px;
     color: #ffffff;
 }
