@@ -2,7 +2,7 @@
 import { ref, reactive, watch, onMounted, getCurrentInstance, toRef, nextTick, onUpdated, computed } from 'vue';
 import constants from '../constants';
 import _ from 'lodash';
-import { useEvent } from 'balm-ui';
+import { useEvent, useConfirm } from 'balm-ui';
 
 const { VITE_SERVER_HOST } = import.meta.env;
 
@@ -15,6 +15,7 @@ export default {
     setup (props, { emit }) {
         const { proxy } = getCurrentInstance();
         const uploadInput = ref(null);
+        const confirmDialog = useConfirm();
         const state = reactive({
             room: toRef(props, 'chatRoom'),
             chatHistories: [],
@@ -23,7 +24,9 @@ export default {
                 limit: 50,
             },
             newMessage: false,
+            onScroll: false,
             chatBodyScrollHeight: 0,
+            chatBodyClientHeight: 0,
             bottomFlag: true,
             uploadFiles: [],
             contents: '',
@@ -62,7 +65,7 @@ export default {
             ws.send(JSON.stringify(data));
         }
         const onScrollChatHistories = function(e) {
-            state.newMessage = false;
+            state.onScroll = true;
             const { scrollHeight, scrollTop, clientHeight } = e.target;
             state.chatBodyScrollHeight = scrollHeight;
             if (scrollTop + clientHeight === scrollHeight) {
@@ -75,11 +78,14 @@ export default {
             }
         }
         const moveChatBodyPosition = function() {
-            if (state.bottomFlag === true) {
-                state.chatBodyScrollHeight = 0;
-            }
-            if (state.bottomFlag === true || state.newMessage === false) {
-            state.chatBodyScrollHeight = window.$('.chat-detail-body-list').prop('scrollHeight') - state.chatBodyScrollHeight;
+            if (state.bottomFlag === true || state.onScroll === true) {
+                if (state.bottomFlag === true) {
+                    state.chatBodyScrollHeight = 0;
+                }
+                else if (state.newMessage === true) {
+                    return;
+                }
+                state.chatBodyScrollHeight = window.$('.chat-detail-body-list').prop('scrollHeight') - state.chatBodyScrollHeight;
                 window.$('.chat-detail-body-list').scrollTop(state.chatBodyScrollHeight);
             }
         }
@@ -104,20 +110,7 @@ export default {
             const unreadCnt = state.room.user_profiles.length - obj.read_user_ids.length;
             return unreadCnt > 0 ? unreadCnt : null;
         }
-        const onInputFile = function() {
-            for (const each of uploadInput.value.files) {
-                const fileReader = new FileReader();
-                fileReader.onload = function(event) {
-                    state.uploadFiles.push({
-                        content: event.target.result,
-                        filename: each.name,
-                        content_type: each.type
-                    })
-                }
-                fileReader.readAsDataURL(each);
-            }
-        }
-        const send = function() {
+        const sendFiles = function() {
             if (state.uploadFiles.length > 0) {
                 const data = {
                     'type': 'file',
@@ -131,6 +124,49 @@ export default {
                 ws.send(JSON.stringify(data));
             }
         }
+        const onInputFile = function() {
+            for (const each of uploadInput.value.files) {
+                const fileReader = new FileReader();
+                fileReader.onload = function(event) {
+                    state.uploadFiles.push({
+                        content: event.target.result,
+                        filename: each.name,
+                        content_type: each.type
+                    })
+                    if (state.uploadFiles.length === uploadInput.value.files.length) {
+                        sendFiles();
+                        state.uploadFiles = [];
+                        window.$('#file-upload').val('');
+                    }
+                }
+                fileReader.readAsDataURL(each);
+            }
+        }
+        const send = function() {
+            if (state.contents !== '') {
+                const data = {
+                    'type': 'message',
+                    'data': {
+                        'text': state.contents
+                    }
+                };
+                ws.send(JSON.stringify(data));
+            }
+        }
+        const exitRoom = function() {
+            confirmDialog({
+                message: '방을 나가시겠습니까?',
+                acceptText: '네',
+                cancelText: '아니요'
+            }).then((result) => {
+                if (result) {
+                    const data = {
+                        'type': 'terminate'
+                    };
+                    ws.send(JSON.stringify(data));     
+                }
+            });
+        }
         onMounted(() => {
             ws.onopen = function(event) {
                 console.log('채팅 웹소켓 연결 성공');
@@ -143,7 +179,6 @@ export default {
                 };
                 ws.send(JSON.stringify(data));
                 state.bottomFlag = true;
-                moveChatBodyPosition();
             }
             ws.onmessage = function(event) {
                 const json = JSON.parse(event.data);
@@ -153,33 +188,35 @@ export default {
                 } else if (json.type === 'lookup') {
                     state.chatHistories = [...json.data.histories, ...state.chatHistories];
                 } else if (json.type === 'file') {
+                    state.newMessage = true;
                     state.chatHistories.push(json.data.history);
                 } else if (json.type === 'invite') {
 
                 } else if (json.type === 'update') {
                     const patchHistories = json.data.patch_histories;
                     if (patchHistories !== [] && state.chatHistories !== []) {
-                        for (const p of patchHistories) {
-                            for (const h of state.chatHistories) {
-                                if (h.id === p.id) {
-                                    h.is_active = p.is_active;
-                                    h.read_user_ids = p.read_user_ids;
+                        for (let i=0; i < patchHistories.length; i++) {
+                            for (let j=state.chatHistories.length-1; j >=0; j--) {
+                                if (state.chatHistories[j].id === patchHistories[i].id) {
+                                    state.chatHistories[j].is_active = patchHistories[i].is_active;
+                                    state.chatHistories[j].read_user_ids = patchHistories[i].read_user_ids;
                                     break;
                                 }
                             }
                         }
                     }
                 } else if (json.type === 'terminate') {
-
+                    state.newMessage = true;
+                    state.chatHistories.push(json.data.history);
                 }
             }
             ws.onclose = function(event) {
                 console.log('close - ', event);
-                proxy.$router.replace('/login');
+                proxy.$router.replace('/');
             }
             ws.onerror = function(event) {
                 console.log('error - ', event);
-                proxy.$router.replace('/login');
+                proxy.$router.replace('/');
             }
         })
         onUpdated(() => {
@@ -204,7 +241,9 @@ export default {
             getChatHistoryCreated,
             getUnreadCnt,
             onInputFile,
+            sendFiles,
             send,
+            exitRoom,
         }
     }
 }
@@ -213,8 +252,8 @@ export default {
 <template>
     <div class="chat-detail-body">
         <div class="chat-detail-body-list" v-if="state.chatHistories" @scroll="onScrollChatHistories">
-            <div v-for="obj in state.chatHistories" :key="obj.id" class="chat-list">
-                <div>
+            <div v-for="obj in state.chatHistories" :key="obj.id" class="chat-histories">
+                <div v-if="obj.type !== 'notice'" class="chat-history">
                     <div v-if="getUserProfileImage(obj) !== null" class="chat-profile" @click="onClickProfile(obj)" :style="{
                         backgroundImage: 'url(' + getDefaultProfileImage(obj) + ')',
                         backgroundRepeat: 'no-repeat',
@@ -223,42 +262,58 @@ export default {
                     <div v-else class="chat-profile-default">
                         <p><ui-icon style="width: 100%; height: 100%; color: #b3e5fc">person</ui-icon></p>
                     </div>
-                </div>
-                <div>
-                    <div class="chat-profile-info-meta">
-                        <p><b>{{ getChatUserProfileNickname(obj) }}</b></p>
-                        <p>{{ getChatHistoryCreated(obj) }}</p>
-                        <p>{{ getUnreadCnt(obj) }}</p>
-                    </div>
                     <div>
-                        <p v-if="obj.contents !== null">{{ obj.contents }}</p>
-                        <div v-if="obj.files.length">
-                            <div v-for="file in obj.files" :key="file.chat_history_id" :class="{'file-multiple-preview': obj.files.length > 1, 'file-preview': obj.files.length == 1}">
-                                <img v-if="file.content_type.startsWith('image')" :src="file.url" />
+                        <div class="chat-profile-info-meta">
+                            <p><b>{{ getChatUserProfileNickname(obj) }}</b></p>
+                            <p>{{ getChatHistoryCreated(obj) }}</p>
+                            <p>{{ getUnreadCnt(obj) }}</p>
+                        </div>
+                        <div v-if="obj.is_active === true">
+                            <p v-if="obj.contents !== null">{{ obj.contents }}</p>
+                            <div v-if="obj.files.length">
+                                <div v-for="file in obj.files" :key="file.chat_history_id" :class="{'file-multiple-preview': obj.files.length > 1, 'file-preview': obj.files.length == 1}">
+                                    <!-- TODO 유효기간 만료 시, 처리 -->
+                                    <img v-if="file.content_type.startsWith('image')" :src="file.url" />
+                                </div>
                             </div>
+                        </div>
+                        <div v-else style="text-align: center;">
+                            <p>삭제된 메시지입니다.</p>
                         </div>
                     </div>
                 </div>
+                <div v-else style="text-align: center;">
+                    <p>{{ obj.contents }}</p>
+                </div>
             </div>
         </div>
-        <div class="chat-input">
-            <input 
-                type="file" 
-                id="file-upload" 
-                multiple="multiple" 
-                accept="image/*" 
-                @change="onInputFile"
-                ref="uploadInput"
-            />
-            <button @click="send">전송</button>
-            <ui-textfield
-                v-model="state.content"
-                input-type="textarea"
-                fullwidth
-                placeholder=""
-                maxlength="140"
-                rows="8"
-            ></ui-textfield>
+        <div class="chat-input-parent">
+            <div class="chat-input-child">
+                <textarea
+                    v-model="state.contents"
+                    class="chat-input-body"
+                ></textarea>
+                <div class="chat-input-menu">
+                    <div>
+                        <div>
+                            <label for="file-upload" class="icons-preview-code upload-icon">
+                                <ui-icon :size="24">upload</ui-icon>
+                            </label>
+                            <ui-icon class="exit-room-icon" @click="exitRoom">logout</ui-icon>
+                        </div>
+                        <input
+                            v-show="false"
+                            type="file"
+                            id="file-upload"
+                            multiple="multiple"
+                            accept="image/*"
+                            @change="onInputFile"
+                            ref="uploadInput"
+                        />
+                        <ui-button outlined @click="send" style="color: #757575;">전송</ui-button>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </template>
@@ -272,25 +327,28 @@ export default {
 
 .chat-detail-body-list {
   width: 100%;
-  height: 80%;
+  height: calc(100% - 150px);
   overflow: auto;
 }
 
-.chat-list {
-    display: flex;
-    flex-direction: row;
-    justify-content: flex-start;
-    align-items: flex-start;
+.chat-histories {
     padding: 15px;
     cursor: pointer;
 }
 
-.chat-list:hover {
+.chat-histories:hover {
     background-color: #f5f5f5;
 }
 
-.chat-list p {
+.chat-histories p {
     margin: 0;
+}
+
+.chat-history {
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-start;
+    align-items: flex-start;
 }
 
 .chat-profile-default {
@@ -334,12 +392,46 @@ export default {
     color: #f9a825;
 }
 
-.chat-input {
+.chat-input-parent {
+    position: relative;
     width: 100%;
-    height: 20%;
+    height: 150px;
     border: 1px solid #e0e0e0;
-    bottom: 0px;
     background-color: #ffffff;
+}
+
+.chat-input-child {
+    position: absolute;
+    width: 100%;
+}
+
+.chat-input-body {
+    width: calc(100% - 6px);
+    font-size: 15px;
+    font-family: '굴림', Gulim, Arial, sans-serif;
+    height: 90px;
+    border: none;
+    resize: none;
+}
+
+.chat-input-menu {
+    padding: 10px;
+}
+
+.chat-input-menu > div {
+    display: flex;
+    justify-content: space-between;
+}
+
+.upload-icon {
+    cursor: pointer;
+    color: #757575;
+    margin-right: 10px;
+}
+
+.exit-room-icon {
+    cursor: pointer;
+    color: #757575;
 }
 
 .file-multiple-preview > img {

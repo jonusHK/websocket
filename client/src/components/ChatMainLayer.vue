@@ -134,11 +134,11 @@ export default {
       }
       chatRoomListSocket.onclose = function(event) {
           console.log('close - ', event);
-          proxy.$router.replace('/login');
+          proxy.$router.replace('/');
       }
       chatRoomListSocket.onerror = function(event) {
           console.log('error - ', event);
-          proxy.$router.replace('/login');
+          proxy.$router.replace('/');
       }
     });
     return {

@@ -70,7 +70,6 @@ class RedisChatHistoryByRoomS(BaseModel):
 
 class RedisChatRoomInfoS(BaseModel):
     id: int
-    user_cnt: int
     type: str
     user_profile_ids: List[int]
     user_profile_files: Optional[List[RedisUserImageFileS]] = []
