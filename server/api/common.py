@@ -138,7 +138,7 @@ class RedisHandler:
                     async def _transaction(pipeline: Pipeline):
                         return await RedisChatRoomsInfoS.sadd(
                             pipeline, None, RedisChatRoomsInfoS.schema(
-                                id=room_db.id, type=room_db.type.name.lower(), user_cnt=len(room_db.user_profiles),
+                                id=room_db.id, type=room_db.type.name.lower(),
                                 user_profile_ids=[m.user_profile_id for m in room_db.user_profiles],
                                 user_profile_files=await self.generate_user_profile_images(
                                     [m.user_profile for m in room_db.user_profiles], only_default=True

@@ -76,9 +76,8 @@ export default {
             if (_.has(state.chatRoomImageUrls, obj.id)) {
                 return state.chatRoomImageUrls[obj.id];
             }
-            const urlCnt = obj.user_cnt - 1;
             let urls = [];
-            if (obj.user_profile_files.length > 0) {
+            if (obj.user_profile_files !== null && obj.user_profile_files.length > 0) {
                 for (const file of obj.user_profile_files) {
                     if (
                         file.use_type === 'user_profile_image' 
@@ -89,9 +88,11 @@ export default {
                     }
                 }
             }
-            const requiredUrlCnt = urlCnt - urls.length;
-            for (const i of Array(requiredUrlCnt).keys()) {
-                urls.push(defaultChatRoomImage);
+            const requiredUrlCnt = obj.user_profiles.length - urls.length;
+            if (requiredUrlCnt > 0) {
+                for (const i of Array(requiredUrlCnt).keys()) {
+                    urls.push(defaultChatRoomImage);
+                }
             }
             if (urls.length > 0) {
                 state.chatRoomImageUrls[obj.id] = urls;

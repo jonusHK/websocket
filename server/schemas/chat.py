@@ -59,7 +59,7 @@ class ChatSendDataS(BaseModel):
 
 class ChatReceiveFormS(BaseModel):
     type: str
-    data: ChatReceiveDataS
+    data: Optional[ChatReceiveDataS] = None
 
     @validator("type")
     def get_type(cls, v):
