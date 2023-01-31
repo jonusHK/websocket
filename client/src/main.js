@@ -12,6 +12,7 @@ import validatorRules from './config/validator-rules';
 import './assets/main.css';
 import dayjs from 'dayjs';
 import 'dayjs/locale/ko';
+import $confirm from 'balm-ui/plugins/confirm';
 
 const app = createApp(App);
 
@@ -26,6 +27,7 @@ app.use(store);
 app.use(router);
 app.use(BalmUI, {
     $validator: validatorRules,
+    $confirm: {}
 });
 app.use(BalmUIPlus);
 app.use(VueResizeObserver);
