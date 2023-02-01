@@ -95,6 +95,30 @@ export default {
             }
         })
       }
+      const moveChatRoomDetail = function() {
+        proxy.$axios.post(VITE_SERVER_HOST + '/chats/rooms/create', JSON.stringify({
+            user_profile_id: state.loginProfileId,
+            target_profile_ids: [state.profileId],
+            type: 'public'
+        }), {
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then((res) => {
+            if (res.status === 200) {
+                emit('moveChatRoomDetail', res.data.data.id);
+            }
+        })
+        .catch((err) => {
+            const error_obj = {
+                state: 'error',
+                stateOutlined: true,
+                message: err.response.data.message
+            }
+            proxy.$alert(error_obj);
+        });
+      }
       watch(
         () => props.userProfileId,
         (cur, prev) => {
@@ -111,6 +135,7 @@ export default {
         closeFollowingInfo,
         followingHidden,
         followingForbidden,
+        moveChatRoomDetail,
       }
     }
 }
@@ -149,7 +174,7 @@ export default {
                     <p>친구 추가</p>
                 </div>
                 <div v-else class="profile-interaction-btn">
-                    <div>
+                    <div @click="moveChatRoomDetail()">
                         <p><ui-icon>chat_bubble_outline</ui-icon></p>
                         <p>1:1 대화</p>
                     </div>
@@ -237,7 +262,7 @@ export default {
     flex-direction: column;
     align-items: center;
     flex: 1 1 0;
-    width: 50px;
+    width: 60px;
     margin: 20px;
     cursor: pointer;
 }

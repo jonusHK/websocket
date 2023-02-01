@@ -63,6 +63,9 @@ export default {
     const closeFollowingInfo = function() {
       state.chatBodyInfoView['following'] = false;
     }
+    const moveChatRoomDetail = function(chatRoomId) {
+      chatDetail(chatRoomId);
+    }
     const getTotalUnreadMsgCnt = function(cnt) {
       state.totalUnreadMsgCnt = cnt;
     }
@@ -146,6 +149,7 @@ export default {
       onChangeChatMenuType,
       followingInfo,
       closeFollowingInfo,
+      moveChatRoomDetail,
       getTotalUnreadMsgCnt,
       chatDetail,
       chatInfo,
@@ -214,6 +218,7 @@ export default {
           v-if="state.chatBodyInfoView['following']"
           :userProfileId="state.userProfileId"
           @closeFollowingInfo="closeFollowingInfo"
+          @moveChatRoomDetail="moveChatRoomDetail"
         />
         <ChatListLayer
           v-if="state.chatBodyListView['chat']"
