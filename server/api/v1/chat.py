@@ -241,7 +241,8 @@ async def chat_room_create(
                     _, pipe = await redis_handler.get_user_profiles_in_room(
                         _room.id, profile_id, crud_room_user_mapping, pipe=pipe, sync=True
                     )
-                await pipe.execute()
+                if pipe:
+                    await pipe.execute()
             return ChatRoomS.from_orm(_room)
 
     # 채팅방 생성 이후 유저와 채팅방 연결
