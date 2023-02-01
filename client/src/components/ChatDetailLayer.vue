@@ -30,6 +30,7 @@ export default {
             bottomFlag: true,
             uploadFiles: [],
             contents: '',
+            showInvitePopup: false,
         });
         const ws = new WebSocket(`ws://localhost:8000/api/v1/chats/conversation/${proxy.$store.getters['user/getProfileId']}/${state.room.id}`);
         const onClickProfile = function(obj) {
@@ -288,6 +289,12 @@ export default {
             </div>
         </div>
         <div class="chat-input-parent">
+            <div
+                v-show="state.showInvitePopup"
+                class="invite-following-popup"
+            >
+                <p>대화상대 초대</p>
+            </div>
             <div class="chat-input-child">
                 <textarea
                     v-model="state.contents"
@@ -295,11 +302,28 @@ export default {
                 ></textarea>
                 <div class="chat-input-menu">
                     <div>
-                        <div>
+                        <div class="chat-input-icon">
                             <label for="file-upload" class="icons-preview-code upload-icon">
-                                <ui-icon :size="24">upload</ui-icon>
+                                <ui-icon 
+                                    v-tooltip="'파일 업로드'"
+                                    aria-describedby="file-upload-tooltip"
+                                >upload
+                                </ui-icon>
                             </label>
-                            <ui-icon class="exit-room-icon" @click="exitRoom">logout</ui-icon>
+                            <ui-icon
+                                class="invite-following"
+                                @click="state.showInvitePopup = true"
+                                v-tooltip="'대화상대 초대'"
+                                aria-describedby="invite-following-tooltip"
+                            >add_box
+                            </ui-icon>
+                            <ui-icon 
+                                class="exit-room-icon" 
+                                @click="exitRoom"
+                                v-tooltip="'채팅방 나가기'"
+                                aria-describedby="exit-room-tooltip"
+                            >logout
+                            </ui-icon>
                         </div>
                         <input
                             v-show="false"
@@ -423,10 +447,37 @@ export default {
     justify-content: space-between;
 }
 
+.chat-input-icon {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+}
+
 .upload-icon {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
     cursor: pointer;
     color: #757575;
     margin-right: 10px;
+}
+
+.invite-following {
+    cursor: pointer;
+    color: #757575;
+    margin-right: 10px;
+}
+
+.invite-following-popup {
+    position: absolute;
+    bottom: 152px;
+    display: inline-block;
+    opacity: 1;
+    border: 1px solid #e0e0e0;
+    border-radius: 10%;
+    box-shadow: 1px 2px 5px 0px #757575;
+    box-sizing: border-box;
+    z-index: 1;
 }
 
 .exit-room-icon {
