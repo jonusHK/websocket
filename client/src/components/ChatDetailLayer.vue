@@ -11,6 +11,7 @@ export default {
     name: 'ChatDetailLayer',
     props: {
         chatRoom: Object,
+        followings: Array,
     },
     setup (props, { emit }) {
         const { proxy } = getCurrentInstance();
@@ -18,39 +19,50 @@ export default {
         const confirmDialog = useConfirm();
         const state = reactive({
             room: toRef(props, 'chatRoom'),
+            followings: toRef(props, 'followings'),
             chatHistories: [],
             load: {
                 offset: 0,
                 limit: 50,
             },
-            newMessage: false,
-            onScroll: false,
-            chatBodyScrollHeight: 0,
-            chatBodyClientHeight: 0,
             bottomFlag: true,
             uploadFiles: [],
             contents: '',
             showInvitePopup: false,
+            searchFollowingNickname: '',
+            selectedFollowingIds: [],
         });
         const ws = new WebSocket(`ws://localhost:8000/api/v1/chats/conversation/${proxy.$store.getters['user/getProfileId']}/${state.room.id}`);
-        const onClickProfile = function(obj) {
-            emit('followingInfo', obj.user_profile_id);
+        const onClickProfileId = function(followingId) {
+            emit('followingInfo', followingId);
         }
-        const getUserProfileImage = function(obj) {
+        const getUserProfileImageByChat = function(obj) {
             const profiles = _.filter(state.room.user_profiles, function(p) {
                 return p.id === obj.user_profile_id;
             });
-            return profiles !== [] ? profiles[0].image : null;
+            return profiles.length > 0 ? profiles[0].image : null;
         }
-        const getDefaultProfileImage = function(obj) {
+        const getDefaultProfileImageByChat = function(obj) {
             const profiles = _.filter(state.room.user_profiles, function(p) {
                 return p.id === obj.user_profile_id;
             });
-            if (profiles !== []) {
+            if (profiles.length > 0) {
                 if (profiles[0].image === null) {
                     return null;
                 }
                 return profiles[0].image.url;
+            }
+            return null;
+        }
+        const getDefaultProfileImage = function(obj) {
+            if (obj.files.length > 0) {
+                for (const i in obj.files) {
+                    const file = obj.files[i];
+                    if (file.use_type === 'user_profile_image' && file.is_default === true) {
+                        return file.url;
+                    }
+                }
+                return null;
             }
             return null;
         }
@@ -66,10 +78,8 @@ export default {
             ws.send(JSON.stringify(data));
         }
         const onScrollChatHistories = function(e) {
-            state.onScroll = true;
             const { scrollHeight, scrollTop, clientHeight } = e.target;
-            state.chatBodyScrollHeight = scrollHeight;
-            if (scrollTop + clientHeight === scrollHeight) {
+            if (scrollTop + clientHeight + 1 >= scrollHeight) {
                 state.bottomFlag = true;
             } else {
                 state.bottomFlag = false;
@@ -79,22 +89,16 @@ export default {
             }
         }
         const moveChatBodyPosition = function() {
-            if (state.bottomFlag === true || state.onScroll === true) {
-                if (state.bottomFlag === true) {
-                    state.chatBodyScrollHeight = 0;
-                }
-                else if (state.newMessage === true) {
-                    return;
-                }
-                state.chatBodyScrollHeight = window.$('.chat-detail-body-list').prop('scrollHeight') - state.chatBodyScrollHeight;
-                window.$('.chat-detail-body-list').scrollTop(state.chatBodyScrollHeight);
+            if (state.bottomFlag === true) {
+                const height = window.$('.chat-detail-body-list').prop('scrollHeight');
+                window.$('.chat-detail-body-list').scrollTop(height);
             }
         }
         const getChatUserProfileNickname = function(obj) {
             const profiles = _.filter(state.room.user_profiles, function(p) {
                 return p.id === obj.user_profile_id;
             });
-            if (profiles !== []) {
+            if (profiles.length > 0) {
                 return profiles[0].nickname;
             } else {
                 return '알 수 없는 유저'
@@ -143,7 +147,7 @@ export default {
                 fileReader.readAsDataURL(each);
             }
         }
-        const send = function() {
+        const send = function(e) {
             if (state.contents !== '') {
                 const data = {
                     'type': 'message',
@@ -152,6 +156,11 @@ export default {
                     }
                 };
                 ws.send(JSON.stringify(data));
+                window.$('.chat-input-body').focus();
+                state.contents = '';
+                if (e !== undefined) {
+                    e.preventDefault();
+                }
             }
         }
         const exitRoom = function() {
@@ -168,6 +177,32 @@ export default {
                 }
             });
         }
+        const onCancelInviteFollowing = function() {
+            state.showInvitePopup = false;
+            state.searchFollowingNickname = '';
+            state.selectedFollowingIds = [];
+        }
+        const onConfirmInviteFollowing = function() {
+            if (state.selectedFollowingIds.length > 0) {
+                const data = {
+                    'type': 'invite',
+                    'data': {
+                        'target_profile_ids': state.selectedFollowingIds,
+                    }
+                }
+                ws.send(JSON.stringify(data));
+                onCancelInviteFollowing();
+            } else {
+                proxy.$alert({
+                    message: '초대할 친구를 선택해주세요.',
+                    state: 'warn',
+                    stateOutlined: true
+                })
+            }
+        }
+        const stopTheEvent = function(e) {
+            e.stopPropagation();
+        }
         onMounted(() => {
             ws.onopen = function(event) {
                 console.log('채팅 웹소켓 연결 성공');
@@ -180,22 +215,21 @@ export default {
                 };
                 ws.send(JSON.stringify(data));
                 state.bottomFlag = true;
+                window.$('.chat-input-body').focus();
             }
             ws.onmessage = function(event) {
                 const json = JSON.parse(event.data);
                 if (json.type === 'message') {
-                    state.newMessage = true;
                     state.chatHistories.push(json.data.history);
                 } else if (json.type === 'lookup') {
                     state.chatHistories = [...json.data.histories, ...state.chatHistories];
                 } else if (json.type === 'file') {
-                    state.newMessage = true;
                     state.chatHistories.push(json.data.history);
                 } else if (json.type === 'invite') {
-
+                    state.chatHistories.push(json.data.history);
                 } else if (json.type === 'update') {
                     const patchHistories = json.data.patch_histories;
-                    if (patchHistories !== [] && state.chatHistories !== []) {
+                    if (patchHistories.length > 0 && state.chatHistories.length > 0) {
                         for (let i=0; i < patchHistories.length; i++) {
                             for (let j=state.chatHistories.length-1; j >=0; j--) {
                                 if (state.chatHistories[j].id === patchHistories[i].id) {
@@ -207,21 +241,19 @@ export default {
                         }
                     }
                 } else if (json.type === 'terminate') {
-                    state.newMessage = true;
                     state.chatHistories.push(json.data.history);
                 }
             }
             ws.onclose = function(event) {
                 console.log('close - ', event);
-                proxy.$router.replace('/');
+                proxy.$router.push({ path: '/', name: 'Home', query: {} });
             }
             ws.onerror = function(event) {
                 console.log('error - ', event);
-                proxy.$router.replace('/');
+                proxy.$router.push({ path: '/', name: 'Home', query: {} });
             }
         })
         onUpdated(() => {
-            moveChatBodyPosition();
             const data = {
                 'type': 'update',
                 'data': {
@@ -229,12 +261,27 @@ export default {
                 }
             };
             ws.send(JSON.stringify(data));
+            nextTick(() => {
+                setTimeout(() => moveChatBodyPosition(), 50);
+            });
+        })
+        const followingsNotInRoom = computed(() => {
+            return _.filter(state.followings, function(f) {
+                return !_.includes(_.map(state.room.user_profiles, 'id'), f.id);
+            })
+        })
+        const searchedFollowings = computed(() => {
+            const searchedFollowings = _.filter(followingsNotInRoom.value, function(f) {
+                return _.includes(f.nickname, state.searchFollowingNickname);
+            });
+            return searchedFollowings;
         })
         return {
             uploadInput,
             state,
-            onClickProfile,
-            getUserProfileImage,
+            onClickProfileId,
+            getUserProfileImageByChat,
+            getDefaultProfileImageByChat,
             getDefaultProfileImage,
             onScrollChatHistories,
             moveChatBodyPosition,
@@ -245,6 +292,11 @@ export default {
             sendFiles,
             send,
             exitRoom,
+            onCancelInviteFollowing,
+            onConfirmInviteFollowing,
+            stopTheEvent,
+            followingsNotInRoom,
+            searchedFollowings,
         }
     }
 }
@@ -255,8 +307,8 @@ export default {
         <div class="chat-detail-body-list" v-if="state.chatHistories" @scroll="onScrollChatHistories">
             <div v-for="obj in state.chatHistories" :key="obj.id" class="chat-histories">
                 <div v-if="obj.type !== 'notice'" class="chat-history">
-                    <div v-if="getUserProfileImage(obj) !== null" class="chat-profile" @click="onClickProfile(obj)" :style="{
-                        backgroundImage: 'url(' + getDefaultProfileImage(obj) + ')',
+                    <div v-if="getUserProfileImageByChat(obj) !== null" class="chat-profile" @click="onClickProfileId(obj.user_profile_id)" :style="{
+                        backgroundImage: 'url(' + getDefaultProfileImageByChat(obj) + ')',
                         backgroundRepeat: 'no-repeat',
                         backgroundSize: 'cover'
                     }"></div>
@@ -293,12 +345,64 @@ export default {
                 v-show="state.showInvitePopup"
                 class="invite-following-popup"
             >
-                <p>대화상대 초대</p>
+                <div>
+                    <div class="invite-following-popup-title">
+                        <span><b>대화상대 선택</b></span>
+                    </div>
+                    <div class="invite-following-popup-input">
+                        <ui-textfield v-model="state.searchFollowingNickname" outlined>
+                            <template #before>
+                                <ui-textfield-icon>search</ui-textfield-icon>
+                            </template>
+                        </ui-textfield>
+                    </div>
+                    <div class="invite-following-popup-list">
+                        <div v-if="state.searchFollowingNickname === ''" class="following-list-container">
+                            <div v-for="following in followingsNotInRoom" :key="following.id" class="following-list" @click="onClickProfileId(following.id)">
+                                <div v-if="getDefaultProfileImage(following) !== null" class="following-profile" :style="{
+                                    backgroundImage: 'url(' + getDefaultProfileImage(following) + ')',
+                                    backgroundRepeat: 'no-repeat',
+                                    backgroundSize: 'cover'
+                                }"></div>
+                                <div v-else class="following-profile-default">
+                                    <p><ui-icon style="width: 100%; height: 100%; color: #b3e5fc">person</ui-icon></p>
+                                </div>
+                                <p>{{ following.nickname }}</p>
+                                <input type="checkbox" v-model="state.selectedFollowingIds" :value="following.id" @click.stop="stopTheEvent" />
+                            </div>
+                        </div>
+                        <div v-else-if="searchedFollowings" class="following-list-container">
+                            <div v-for="following in searchedFollowings" :key="following.id" class="following-list" @click="onClickProfileId(following.id)">
+                                <div v-if="getDefaultProfileImage(following) !== null" class="following-profile" :style="{
+                                    backgroundImage: 'url(' + getDefaultProfileImage(following) + ')',
+                                    backgroundRepeat: 'no-repeat',
+                                    backgroundSize: 'cover'
+                                }"></div>
+                                <div v-else class="following-profile-default">
+                                    <p><ui-icon style="width: 100%; height: 100%; color: #b3e5fc">person</ui-icon></p>
+                                </div>
+                                <p>{{ following.nickname }}</p>
+                            </div>
+                        </div>
+                        <div v-else class="invite-following-popup-list">검색 결과와 일치하는 친구가 없습니다.</div>
+                        <div class="invite-following-btn">
+                            <div class="invite-following-btn-container">
+                                <div>
+                                    <ui-button @click="onCancelInviteFollowing" style="margin-right: 5px;">취소</ui-button>
+                                </div>
+                                <div>
+                                    <ui-button raised @click="onConfirmInviteFollowing" style="margin-right: 5px;">확인</ui-button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
             <div class="chat-input-child">
                 <textarea
                     v-model="state.contents"
                     class="chat-input-body"
+                    @keypress.enter="send"
                 ></textarea>
                 <div class="chat-input-menu">
                     <div>
@@ -470,14 +574,64 @@ export default {
 
 .invite-following-popup {
     position: absolute;
-    bottom: 152px;
+    width: 90%;
+    height: 400px;
+    left: -5px;
+    bottom: 150px;
     display: inline-block;
-    opacity: 1;
+    background-color: #ffffff;
     border: 1px solid #e0e0e0;
-    border-radius: 10%;
+    border-radius: 3%;
     box-shadow: 1px 2px 5px 0px #757575;
     box-sizing: border-box;
     z-index: 1;
+}
+
+.invite-following-popup > div {
+    width: 100%;
+    height: 100%;
+}
+
+.invite-following-popup-title {
+    height: 20px;
+    padding: 15px;
+    text-align: center;
+}
+
+.invite-following-popup-input {
+    height: 60px;
+    padding: 10px;
+}
+
+.invite-following-popup-input > div {
+    width: 100%;
+}
+
+.invite-following-popup-input > .material-icons {
+    margin-left: 0;
+}
+
+.invite-following-popup-list {
+    width: 100%;
+    height: calc(100% - 130px);
+}
+
+.following-list-container {
+    overflow: auto;
+    height: 200px;
+}
+
+.invite-following-btn {
+    width: 100%;
+    height: calc(100% - 200px);
+    text-align: center;
+}
+
+.invite-following-btn-container {
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 .exit-room-icon {

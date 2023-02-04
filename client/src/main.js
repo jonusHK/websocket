@@ -28,7 +28,8 @@ app.use(router);
 app.use(BalmUI, {
     $validator: validatorRules,
     $confirm: {},
-    UiTooltip: {}
+    UiTooltip: {},
+    UiCheckbox: {},
 });
 app.use(BalmUIPlus);
 app.use(VueResizeObserver);
