@@ -50,7 +50,7 @@ export default {
         const getBackgroundSize = function(urls) {
             const size = urls.length;
             if (size === 1) {
-                return 'cover';
+                return '170%';
             } else if (size === 2) {
                 return '50%, 50%';
             } else if (size === 3) {
@@ -63,7 +63,7 @@ export default {
         const getBackgroundPosition = function(urls) {
             const size = urls.length;
             if (size === 1) {
-                return '100%';
+                return 'center center';
             } else if (size === 2) {
                 return 'left center, right center';
             } else if (size === 3) {
@@ -88,7 +88,7 @@ export default {
                     }
                 }
             }
-            const requiredUrlCnt = obj.user_profiles.length - urls.length;
+            const requiredUrlCnt = obj.user_profiles.length - urls.length - 1;
             if (requiredUrlCnt > 0) {
                 for (const i of Array(requiredUrlCnt).keys()) {
                     urls.push(defaultChatRoomImage);
@@ -195,27 +195,15 @@ export default {
     background-color: #f5f5f5;
 }
 
-.chat-room-image-default {
-    width: 40px; 
-    height: 40px; 
-    margin: 0 10px 0 0;
-    border-radius: 50%; 
-    background-color: #81d4fa;
-    display: flex;
-    flex-direction: row;
-    justify-content: center;
-    align-items: center;
-}
-
 .chat-room-image {
     width: 40px; 
     height: 40px; 
-    margin: 0 10px 0 0; 
     border-radius: 20%; 
 }
 
 .chat-room-info {
     width: 100%;
+    margin-left: 10px;
     display: flex;
     flex-direction: row;
     justify-content: space-between;

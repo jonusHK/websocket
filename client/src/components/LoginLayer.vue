@@ -79,8 +79,8 @@ export default {
         <div class="menu-login-layout">
             <p class="text menu-title">로그인</p>
             <div class="menu-form-layout">
-                <ui-textfield v-model="state.email" class="menu-textfield">이메일 주소</ui-textfield>
-                <ui-textfield input-type="password" v-model="state.password" class="menu-textfield">비밀번호</ui-textfield>
+                <ui-textfield v-model="state.email" class="menu-textfield" @keypress.enter="login">이메일 주소</ui-textfield>
+                <ui-textfield input-type="password" v-model="state.password" class="menu-textfield" @keypress.enter="login">비밀번호</ui-textfield>
                 <div>
                     <ui-button raised @click="login" style="margin-right: 5px;">로그인</ui-button>
                 </div>

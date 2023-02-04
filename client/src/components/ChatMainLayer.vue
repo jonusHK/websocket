@@ -29,9 +29,10 @@ export default {
       userProfileId: null,
       chatRoom: null,
       followings: [],
+      copiedFollowings: [],
       chatRooms: [],
       totalUnreadMsgCnt: 0,
-    })
+    });
     if (proxy.$store.state.user.userId === '' || proxy.$store.state.user.userIsActive === false) {
       proxy.$router.replace('/login');
     }
@@ -114,7 +115,10 @@ export default {
           const followings = _.orderBy(JSON.parse(event.data), ['nickname'], ['asc']);
           state.followings = _.filter(followings, function(f) {
               return f.is_hidden === false && f.is_forbidden === false;
-          });    
+          });
+          if (state.copiedFollowings.length === 0) {
+            state.copiedFollowings = _.cloneDeep(state.followings);
+          }
       }
       followingListSocket.onclose = function(event) {
           console.log('close - ', event);
@@ -229,6 +233,7 @@ export default {
         <ChatDetailLayer
           v-if="state.chatBodyDetailView['chat']"
           :chatRoom="state.chatRoom"
+          :followings="state.copiedFollowings"
           @followingInfo="followingInfo"
         />
         <ChatInfoLayer

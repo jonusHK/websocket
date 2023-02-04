@@ -1,7 +1,7 @@
 import datetime
 import json
 from json import JSONDecodeError
-from typing import Any, TypeVar, Mapping, Sequence, Dict, Optional, Coroutine, Awaitable
+from typing import Any, TypeVar, Mapping, Sequence, Optional, Awaitable
 
 from aioredis import Redis
 from aioredis.client import Pipeline
@@ -47,6 +47,15 @@ class TransactionMixin:
         return target if isinstance(target, Pipeline) else await target
 
 
+class DeleteMixin:
+    @classmethod
+    async def delete(cls, redis: Redis, *key_param):
+        assert hasattr(cls, 'get_key'), 'Must have `KeyMixin` class.'
+        assert hasattr(cls, 'execute'), 'Must have `TransactionMixin` class.'
+        keys = [getattr(cls, 'get_key')(k) for k in key_param]
+        return await getattr(cls, 'execute')(redis.delete(*keys))
+
+
 class ConvertFormatMixin:
     @classmethod
     def decode(cls, value: Any):
@@ -73,7 +82,7 @@ class ConvertFormatMixin:
         raise AssertionError('Type should be `list` or `dict`.')
 
 
-class SetCollectionMixin(KeyMixin, ValueMixin, TransactionMixin, ConvertFormatMixin):
+class SetCollectionMixin(KeyMixin, ValueMixin, TransactionMixin, ConvertFormatMixin, DeleteMixin):
     @classmethod
     async def sadd(cls, redis: Redis, key_param: Any | None, *args):
         key = cls.get_key(key_param)
@@ -105,7 +114,7 @@ class SetCollectionMixin(KeyMixin, ValueMixin, TransactionMixin, ConvertFormatMi
         await redis.sismember(key, value)
 
 
-class ListCollectionMixin(KeyMixin, ValueMixin, TransactionMixin, ConvertFormatMixin):
+class ListCollectionMixin(KeyMixin, ValueMixin, TransactionMixin, ConvertFormatMixin, DeleteMixin):
     @classmethod
     async def lpush(cls, redis: Redis, key_param: Any | None, *args):
         key = cls.get_key(key_param)
@@ -171,7 +180,7 @@ class ListCollectionMixin(KeyMixin, ValueMixin, TransactionMixin, ConvertFormatM
         return await cls.execute(redis.ltrim(key, start, end))
 
 
-class StringCollectionMixin(KeyMixin, ValueMixin, TransactionMixin, ConvertFormatMixin):
+class StringCollectionMixin(KeyMixin, ValueMixin, TransactionMixin, ConvertFormatMixin, DeleteMixin):
     @classmethod
     async def set(cls, redis: Redis, key_param: Any | None, value: Any, **kwargs):
         key = cls.get_key(key_param)
@@ -212,7 +221,6 @@ class StringCollectionMixin(KeyMixin, ValueMixin, TransactionMixin, ConvertForma
         key = cls.get_key(key_param)
         result = cls.decode(await redis.getrange(key, start, end))
         return cls.to_schema(result)
-
 
     @classmethod
     async def incr(cls, redis: Redis, key_param: Any | None, amount: int = 1):
@@ -266,7 +274,7 @@ class StringCollectionMixin(KeyMixin, ValueMixin, TransactionMixin, ConvertForma
         return await cls.execute(redis.append(key, value))
 
 
-class SortedSetCollectionMixin(KeyMixin, ValueMixin, TransactionMixin, ConvertFormatMixin):
+class SortedSetCollectionMixin(KeyMixin, ValueMixin, TransactionMixin, ConvertFormatMixin, DeleteMixin):
     @classmethod
     async def zadd(cls, redis: Redis, key_param: Any | None, data: Any, **kwargs):
         key = cls.get_key(key_param)
