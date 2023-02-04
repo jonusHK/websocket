@@ -54,35 +54,4 @@ export default {
 </template>
 
 <style scoped>
-.following-list {
-    display: flex;
-    flex-direction: row;
-    justify-content: flex-start;
-    align-items: center;
-    padding: 15px;
-    cursor: pointer;
-}
-
-.following-list:hover {
-    background-color: #f5f5f5;
-}
-
-.following-profile-default {
-    width: 40px; 
-    height: 40px; 
-    margin: 0 10px 0 0;
-    border-radius: 50%; 
-    background-color: #81d4fa;
-    display: flex;
-    flex-direction: row;
-    justify-content: center;
-    align-items: center;
-}
-
-.following-profile {
-    width: 40px; 
-    height: 40px; 
-    margin: 0 10px 0 0; 
-    border-radius: 50%; 
-}
 </style>
