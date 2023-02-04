@@ -1026,8 +1026,8 @@ async def chat(
                                     async with redis_handler.lock(key=RedisUserProfilesByRoomS.get_lock_key()):
                                         for profile_id in room_redis.user_profile_ids:
                                             if profile_id == user_profile_id:
-                                                pipe = await RedisUserProfilesByRoomS.srem(
-                                                    pipe, (room_id, user_profile_id), user_profile_redis
+                                                pipe = await RedisUserProfilesByRoomS.delete(
+                                                    pipe, (room_id, user_profile_id)
                                                 )
                                             else:
                                                 profiles_redis: List[RedisUserProfileByRoomS] = \
