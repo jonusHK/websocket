@@ -14,10 +14,8 @@ export default {
     },
     setup (props, { emit }) {
         const { proxy } = getCurrentInstance();
-        const ws = new WebSocket(`ws://localhost:8000/api/v1/chats/rooms/${proxy.$store.getters['user/getProfileId']}`);
         const state = reactive({
-            chatRooms: toRef(props, 'chatRooms'),
-            chatRoomImageUrls: {},
+            chatRooms: [],
         });
         const detailChatRoom = function(room) {
             emit('chatDetail', room.id);
@@ -73,9 +71,6 @@ export default {
             }
         }
         const getChatRoomImage = function(obj) {
-            if (_.has(state.chatRoomImageUrls, obj.id)) {
-                return state.chatRoomImageUrls[obj.id];
-            }
             let urls = [];
             if (obj.user_profile_files !== null && obj.user_profile_files.length > 0) {
                 for (const file of obj.user_profile_files) {
@@ -93,9 +88,6 @@ export default {
                 for (const i of Array(requiredUrlCnt).keys()) {
                     urls.push(defaultChatRoomImage);
                 }
-            }
-            if (urls.length > 0) {
-                state.chatRoomImageUrls[obj.id] = urls;
             }
             return urls.length > 4 ? urls.slice(0, 4) : urls;
         }
@@ -135,6 +127,12 @@ export default {
         const getUnreadMsgCnt = function(obj) {
             return obj.unread_msg_cnt > 99 ? '99+' : obj.unread_msg_cnt;
         }
+        watch(
+            () => props.chatRooms,
+            (cur, prev) => {
+                state.chatRooms = cur;
+            },
+        )
         return {
             state,
             proxy,

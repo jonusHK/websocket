@@ -18,8 +18,8 @@ export default {
         const uploadInput = ref(null);
         const confirmDialog = useConfirm();
         const state = reactive({
-            room: toRef(props, 'chatRoom'),
             followings: toRef(props, 'followings'),
+            room: toRef(props, 'chatRoom'),
             chatHistories: [],
             load: {
                 offset: 0,
@@ -246,11 +246,11 @@ export default {
             }
             ws.onclose = function(event) {
                 console.log('close - ', event);
-                proxy.$router.push({ path: '/', name: 'Home', query: {} });
+                emit('exitChatRoom');
             }
             ws.onerror = function(event) {
                 console.log('error - ', event);
-                proxy.$router.push({ path: '/', name: 'Home', query: {} });
+                emit('exitChatRoom');
             }
         })
         onUpdated(() => {
@@ -382,6 +382,7 @@ export default {
                                     <p><ui-icon style="width: 100%; height: 100%; color: #b3e5fc">person</ui-icon></p>
                                 </div>
                                 <p>{{ following.nickname }}</p>
+                                <input type="checkbox" v-model="state.selectedFollowingIds" :value="following.id" @click.stop="stopTheEvent" />
                             </div>
                         </div>
                         <div v-else class="invite-following-popup-list">검색 결과와 일치하는 친구가 없습니다.</div>
