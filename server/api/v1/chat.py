@@ -1019,8 +1019,10 @@ async def chat(
                                     )
 
                                 async with redis_handler.pipeline(transaction=True) as pipe:
+                                    rooms_by_profile_redis: List[RedisChatRoomByUserProfileS] = \
+                                        await RedisChatRoomsByUserProfileS.zrange(redis_handler.redis, user_profile_id)
                                     pipe = await RedisChatRoomsByUserProfileS.zrem(
-                                        pipe, user_profile_id, room_by_profile_redis
+                                        pipe, user_profile_id, *[r for r in rooms_by_profile_redis if r.id == room_id]
                                     )
 
                                     async with redis_handler.lock(key=RedisUserProfilesByRoomS.get_lock_key()):
