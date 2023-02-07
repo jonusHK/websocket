@@ -1,5 +1,5 @@
 <script>
-import { reactive, computed, onMounted, getCurrentInstance } from 'vue';
+import { reactive, computed, watch, onMounted, getCurrentInstance } from 'vue';
 import FollowingListLayer from './FollowingListLayer.vue';
 import FollowingInfoLayer from './FollowingInfoLayer.vue';
 import ChatListLayer from './ChatListLayer.vue';
@@ -27,6 +27,7 @@ export default {
         chat: false,
       },
       userProfileId: null,
+      chatRoomId: null,
       chatRoom: null,
       followings: [],
       copiedFollowings: [],
@@ -35,6 +36,11 @@ export default {
     });
     if (proxy.$store.state.user.userId === '' || proxy.$store.state.user.userIsActive === false) {
       proxy.$router.replace('/login');
+    }
+    const initData = function() {
+      state.userProfileId = null;
+      state.chatRoomId = null;
+      state.chatRoom = null;
     }
     const onChangeChatMenuType = (type) => {
       for (const key in state.chatBodyListView) {
@@ -50,6 +56,7 @@ export default {
       for (const key in state.chatBodyInfoView) {
         state.chatBodyInfoView[key] = false;
       }
+      initData();
     }
     const followingInfo = function(userProfileId) {
       for (const key in state.chatBodyInfoView) {
@@ -63,9 +70,6 @@ export default {
     }
     const closeFollowingInfo = function() {
       state.chatBodyInfoView['following'] = false;
-    }
-    const moveChatRoomDetail = function(chatRoomId) {
-      chatDetail(chatRoomId);
     }
     const getTotalUnreadMsgCnt = function(cnt) {
       state.totalUnreadMsgCnt = cnt;
@@ -88,9 +92,11 @@ export default {
       for (const key in state.chatBodyInfoView) {
         state.chatBodyInfoView[key] = false;
       }
+      state.chatRoomId = chatRoomId;
       state.chatRoom = _.filter(state.chatRooms, function(r) {
-        return r.id === chatRoomId;
+        return r.id === state.chatRoomId;
       })[0];
+      state.copiedFollowings = _.cloneDeep(state.followings);
     }
     const chatInfo = function(chatRoomId) {
       for (const key in state.chatBodyInfoView) {
@@ -100,9 +106,7 @@ export default {
           state.chatBodyInfoView[key] = false;
         }
       }
-      state.chatRoom = _.filter(state.chatRooms, function(r) {
-        return r.id === chatRoomId;
-      })[0];
+      state.chatRoomId = chatRoomId;
     }
     const closeChatInfo = function() {
       state.chatBodyInfoView['chat'] = false;
@@ -116,9 +120,6 @@ export default {
           state.followings = _.filter(followings, function(f) {
               return f.is_hidden === false && f.is_forbidden === false;
           });
-          if (state.copiedFollowings.length === 0) {
-            state.copiedFollowings = _.cloneDeep(state.followings);
-          }
       }
       followingListSocket.onclose = function(event) {
           console.log('close - ', event);
@@ -153,7 +154,6 @@ export default {
       onChangeChatMenuType,
       followingInfo,
       closeFollowingInfo,
-      moveChatRoomDetail,
       getTotalUnreadMsgCnt,
       chatDetail,
       chatInfo,
@@ -222,7 +222,7 @@ export default {
           v-if="state.chatBodyInfoView['following']"
           :userProfileId="state.userProfileId"
           @closeFollowingInfo="closeFollowingInfo"
-          @moveChatRoomDetail="moveChatRoomDetail"
+          @moveChatRoomDetail="chatDetail"
         />
         <ChatListLayer
           v-if="state.chatBodyListView['chat']"
@@ -234,11 +234,13 @@ export default {
           v-if="state.chatBodyDetailView['chat']"
           :chatRoom="state.chatRoom"
           :followings="state.copiedFollowings"
+          @exitChatRoom="onChangeChatMenuType('chat')"
+          @chatDetail="chatDetail"
           @followingInfo="followingInfo"
         />
         <ChatInfoLayer
           v-if="state.chatBodyInfoView['chat']"
-          :chatRoom="state.chatRoom"
+          :chatRoomId="state.chatRoomId"
           @closeChatInfo="closeChatInfo"
         />
       </div>
