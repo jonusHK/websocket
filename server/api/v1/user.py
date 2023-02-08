@@ -5,13 +5,14 @@ from uuid import uuid4, UUID
 from aioredis import Redis
 from fastapi import APIRouter, Depends, HTTPException, Response, status, UploadFile, Body, Form
 from fastapi.encoders import jsonable_encoder
+from sqlalchemy import or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload, joinedload
 
 from server.api import ExceptionHandlerRoute
 from server.api.common import AuthValidator, RedisHandler
 from server.core.authentications import SessionData, backend, cookie, verifier
-from server.core.enums import ProfileImageType, RelationshipType, ResponseCode
+from server.core.enums import ProfileImageType, RelationshipType, ResponseCode, IntValueEnum, FollowType
 from server.core.exceptions import ClassifiableException
 from server.core.externals.redis import AioRedis
 from server.core.externals.redis.schemas import RedisFollowingsByUserProfileS, RedisFollowingByUserProfileS
@@ -20,7 +21,8 @@ from server.crud.user import UserCRUD, UserProfileCRUD, UserRelationshipCRUD
 from server.db.databases import get_async_session, settings
 from server.models import UserSession, UserProfileImage, User, UserProfile, UserRelationship
 from server.schemas.user import UserS, UserSessionS, UserCreateS, UserProfileImageS, UserProfileS, UserRelationshipS, \
-    LoginUserS, UserRelationshipUpdateS, UserProfileSearchS, UserProfileSearchImageS, UserProfileSearchResponseS
+    LoginUserS, UserRelationshipUpdateS, UserProfileSearchS, UserProfileSearchImageS, UserProfileSearchResponseS, \
+    UserRelationshipSearchS, UserRelationshipSearchResponseS
 
 router = APIRouter(route_class=ExceptionHandlerRoute)
 
@@ -199,30 +201,29 @@ async def user_profile_image_upload(
 
 
 @router.get('/profiles', dependencies=[Depends(cookie)],)
-async def list_user_profiles(
-    id: Optional[int] = None,
+async def search_user_profiles(
+    user_profile_id: Optional[int] = None,
     identity_id: Optional[str] = None,
     nickname: Optional[str] = None,
     session: AsyncSession = Depends(get_async_session),
 ):
     crud_profile = UserProfileCRUD(session)
 
-    s = UserProfileSearchS(
-        id=id,
+    request_s = UserProfileSearchS(
+        id=user_profile_id,
         identity_id=identity_id,
         nickname=nickname,
     )
 
-    if not s.values_except_null():
+    if not request_s.values_except_null():
         raise HTTPException(detail='Not exists any params.', status_code=status.HTTP_404_NOT_FOUND)
 
-    conditions = [UserProfile.is_active.__eq__(True)]
-    for k, v in s.values_except_null().items():
+    conditions = [UserProfile.is_active == 1]
+    for k, v in request_s.values_except_null().items():
         if k == 'nickname':
-            UserProfile.identity_id.like(v)
-            conditions.append(getattr(UserProfile, k).like(v))
+            conditions.append(getattr(UserProfile, k).ilike(f'%{v}%'))
         else:
-            conditions.append(getattr(UserProfile, k).__eq__(v))
+            conditions.append(getattr(UserProfile, k) == v)
 
     user_profiles: List[UserProfile] = await crud_profile.list(
         conditions=tuple(conditions),
@@ -422,29 +423,121 @@ async def delete_relationship(
 @router.get('/relationship/{user_profile_id}/search', dependencies=[Depends(cookie)])
 async def search_relationship(
     user_profile_id: int,
-    nickname: str,
+    nickname: Optional[str] = None,
+    follow_type: Optional[int] = FollowType.FOLLOWING.value,
+    relationship_type: Optional[int] = None,
+    favorites: Optional[bool] = None,
+    is_hidden: Optional[bool] = False,
+    is_forbidden: Optional[bool] = False,
     user_session: UserSession = Depends(verifier),
     session=Depends(get_async_session)
 ):
-    crud_user_profile = UserProfileCRUD(session)
+    crud_relationship = UserRelationshipCRUD(session)
 
     # 권한 검증
-    AuthValidator.validate_user_profile(user_session, user_profile_id)
+    profile: UserProfile = AuthValidator.validate_user_profile(user_session, user_profile_id)
 
-    user_profile: UserProfile = await crud_user_profile.get(
-        conditions=(
-            UserProfile.id == user_profile_id,
-            UserProfile.is_active == 1),
+    request_s = UserRelationshipSearchS(
+        nickname=nickname,
+        follow_type=follow_type,
+        relationship_type=relationship_type,
+        favorites=favorites,
+        is_hidden=is_hidden,
+        is_forbidden=is_forbidden
+    )
+
+    conditions = []
+
+    for k, v in request_s.values_except_null().items():
+        if isinstance(v, IntValueEnum):
+            if isinstance(v, FollowType):
+                if v == FollowType.FOLLOWING:
+                    conditions.append(UserRelationship.my_profile_id == user_profile_id)
+                elif v == FollowType.FOLLOWER:
+                    conditions.append(UserRelationship.other_profile_id == user_profile_id)
+            else:
+                if k == 'relationship_type':
+                    conditions.append(UserRelationship.type == v)
+                else:
+                    conditions.append(getattr(UserRelationship, k) == v)
+        elif k == 'nickname':
+            continue
+        else:
+            conditions.append(getattr(UserRelationship, k) == v)
+
+    if not request_s.follow_type:
+        conditions.append(or_(
+            UserRelationship.my_profile_id == user_profile_id,
+            UserRelationship.other_profile_id == user_profile_id
+        ))
+
+    if request_s.nickname:
+        if request_s.follow_type == FollowType.FOLLOWING:
+            conditions.append(
+                UserRelationship.other_profile_nickname.ilike(f'%{request_s.nickname}%'),
+            )
+        elif request_s.follow_type == FollowType.FOLLOWER:
+            conditions.append(
+                UserRelationship.my_profile.has(UserProfile.nickname.ilike(f'%{request_s.nickname}%')),
+            )
+        else:
+            conditions.append(or_(
+                UserRelationship.other_profile_nickname.ilike(f'%{request_s.nickname}%'),
+                UserRelationship.my_profile.has(UserProfile.nickname.ilike(f'%{request_s.nickname}%'))
+            ))
+
+    relationships: List[UserRelationship] = await crud_relationship.list(
+        conditions=tuple(conditions),
         options=[
-            selectinload(UserProfile.followings).
-            joinedload(UserRelationship.other_profile).
-            selectinload(UserProfile.images)
+            joinedload(UserRelationship.my_profile)
+            .selectinload(UserProfile.images),
+            joinedload(UserRelationship.my_profile)
+            .selectinload(UserProfile.followers),
+            joinedload(UserRelationship.other_profile)
+            .selectinload(UserProfile.images),
+            joinedload(UserRelationship.other_profile)
+            .selectinload(UserProfile.followers)
         ]
     )
-    searched_profiles: List[UserProfile] = [
-        f.other_profile for f in user_profile.followings
-        if nickname in f.other_profile_nickname and
-        f.is_active and not f.is_hidden and not f.is_forbidden
-    ]
 
-    return [UserProfileS.from_orm(p) for p in searched_profiles]
+    result: List[UserRelationshipSearchResponseS] = []
+    for r in relationships:
+        if request_s.follow_type:
+            profiles: List[UserProfile] = [
+                r.my_profile if request_s.follow_type == FollowType.FOLLOWER
+                else r.other_profile
+            ]
+        else:
+            profiles: List[UserProfile] = [r.my_profile, r.other_profile]
+
+        for p in profiles:
+            image_urls = await UserProfileImage.asynchronous_presigned_url(*p.images)
+            images = [
+                UserProfileSearchImageS(
+                    id=im.id,
+                    url=next((u['url'] for u in image_urls if u['id'] == im.id), None),
+                    type=im.type,
+                    is_default=im.is_default,
+                    is_active=im.is_active
+                ) for im in p.images
+            ]
+            result.append(
+                UserRelationshipSearchResponseS(
+                    id=r.id,
+                    profile=UserProfileSearchResponseS(
+                        id=p.id,
+                        user_id=p.user_id,
+                        identity_id=p.identity_id,
+                        nickname=p.get_nickname_by_other(profile.id),
+                        status_message=p.status_message,
+                        images=images,
+                        is_default=p.is_default,
+                        is_active=p.is_active
+                    ),
+                    type=r.type,
+                    favorites=r.favorites,
+                    is_hidden=r.is_hidden,
+                    is_forbidden=r.is_forbidden
+                )
+            )
+    return result

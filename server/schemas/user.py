@@ -5,7 +5,7 @@ from typing import Optional, List
 
 from pydantic import BaseModel, validator
 
-from server.core.enums import ProfileImageType, RelationshipType
+from server.core.enums import ProfileImageType, RelationshipType, FollowType
 from server.schemas import ConvertMixinS
 from server.schemas.base import S3MediaBaseS
 
@@ -142,8 +142,44 @@ class UserProfileSearchResponseS(BaseModel):
     nickname: str
     status_message: Optional[str] = None
     images: Optional[List[UserProfileSearchImageS]] = []
-    is_default: bool = False
-    is_active: bool = True
+    is_default: bool
+    is_active: bool
+
+
+class UserRelationshipSearchS(ConvertMixinS, BaseModel):
+    nickname: Optional[str] = None
+    follow_type: Optional[int] = None
+    relationship_type: Optional[int] = None
+    favorites: Optional[bool] = None
+    is_hidden: Optional[bool] = None
+    is_forbidden: Optional[bool] = None
+
+    @validator('follow_type')
+    def validate_follow_type(cls, value: int | None):
+        if value:
+            enum = FollowType(value)
+            if not enum:
+                raise ValueError('Invalid `follow_type`.')
+            return enum
+        return value
+
+    @validator('relationship_type')
+    def validate_relationship_type(cls, value: int | None):
+        if value:
+            enum = RelationshipType(value)
+            if not enum:
+                raise ValueError('Invalid `relationship_type`.')
+            return enum
+        return value
+
+
+class UserRelationshipSearchResponseS(BaseModel):
+    id: int
+    profile: UserProfileSearchResponseS
+    type: RelationshipType
+    favorites: bool
+    is_hidden: bool
+    is_forbidden: bool
 
 
 class UserSessionBaseS(BaseModel):

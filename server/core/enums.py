@@ -71,6 +71,11 @@ class RelationshipType(IntValueEnum):
     __default__ = FRIEND
 
 
+class FollowType(IntValueEnum):
+    FOLLOWING = '팔로잉'
+    FOLLOWER = '팔로워'
+
+
 class ProfileImageType(IntValueEnum):
     PROFILE = "프로필 이미지"
     BACKGROUND = "배경 이미지"
