@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from uuid import uuid4, UUID
 
 from aioredis import Redis
@@ -20,7 +20,7 @@ from server.crud.user import UserCRUD, UserProfileCRUD, UserRelationshipCRUD
 from server.db.databases import get_async_session, settings
 from server.models import UserSession, UserProfileImage, User, UserProfile, UserRelationship
 from server.schemas.user import UserS, UserSessionS, UserCreateS, UserProfileImageS, UserProfileS, UserRelationshipS, \
-    LoginUserS, UserRelationshipUpdateS
+    LoginUserS, UserRelationshipUpdateS, UserProfileSearchS, UserProfileSearchImageS, UserProfileSearchResponseS
 
 router = APIRouter(route_class=ExceptionHandlerRoute)
 
@@ -141,9 +141,7 @@ async def other_profile_detail(
         'nickname': other_profile.get_nickname_by_other(user_profile_id)
     })
     if other_profile.images:
-        presigned_images: List[Dict[str, Any]] = [
-            r.result() for r in await UserProfileImage.asynchronous_presigned_url(*other_profile.images)
-        ]
+        presigned_images: List[Dict[str, Any]] = await UserProfileImage.asynchronous_presigned_url(*other_profile.images)
         for image in other_profile_dict['images']:
             image.update({
                 'url': next((im['url'] for im in presigned_images if im['id'] == image['id']), None)
@@ -198,6 +196,64 @@ async def user_profile_image_upload(
     # TODO 파일 URL -> CDN 변경하고나서 Redis 업데이트
 
     return [UserProfileImageS.from_orm(o) for o in objects]
+
+
+@router.get('/profiles', dependencies=[Depends(cookie)],)
+async def list_user_profiles(
+    id: Optional[int] = None,
+    identity_id: Optional[str] = None,
+    nickname: Optional[str] = None,
+    session: AsyncSession = Depends(get_async_session),
+):
+    crud_profile = UserProfileCRUD(session)
+
+    s = UserProfileSearchS(
+        id=id,
+        identity_id=identity_id,
+        nickname=nickname,
+    )
+
+    if not s.values_except_null():
+        raise HTTPException(detail='Not exists any params.', status_code=status.HTTP_404_NOT_FOUND)
+
+    conditions = [UserProfile.is_active.__eq__(True)]
+    for k, v in s.values_except_null().items():
+        if k == 'nickname':
+            UserProfile.identity_id.like(v)
+            conditions.append(getattr(UserProfile, k).like(v))
+        else:
+            conditions.append(getattr(UserProfile, k).__eq__(v))
+
+    user_profiles: List[UserProfile] = await crud_profile.list(
+        conditions=tuple(conditions),
+        options=[selectinload(UserProfile.images)]
+    )
+
+    result: List[UserProfileSearchResponseS] = []
+    for p in user_profiles:
+        image_urls = await UserProfileImage.asynchronous_presigned_url(*p.images)
+        images = [
+            UserProfileSearchImageS(
+                id=im.id,
+                url=next((u['url'] for u in image_urls if u['id'] == im.id), None),
+                type=im.type,
+                is_default=im.is_default,
+                is_active=im.is_active
+            ) for im in p.images
+        ]
+        result.append(
+            UserProfileSearchResponseS(
+                id=p.id,
+                user_id=p.user_id,
+                identity_id=p.identity_id,
+                nickname=p.nickname,
+                status_message=p.status_message,
+                images=images,
+                is_default=p.is_default,
+                is_active=p.is_active
+            )
+        )
+    return result
 
 
 @router.post(

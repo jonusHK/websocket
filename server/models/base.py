@@ -149,7 +149,7 @@ class S3Media(TimestampMixin, ConvertMixin, Base):
                 }
 
         done, _ = await asyncio.wait([_generate(attr) async for attr in _kwargs()])
-        return done
+        return [r.result() for r in done]
 
     @classmethod
     async def is_exists(
