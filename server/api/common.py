@@ -76,9 +76,7 @@ class RedisHandler:
 
         files_s: List[schema] = []
         if iterable:
-            urls: List[Dict[str, Any]] = [
-                r.result() for r in await model.asynchronous_presigned_url(*iterable)
-            ]
+            urls: List[Dict[str, Any]] = await model.asynchronous_presigned_url(*iterable)
             for m in iterable:
                 model_to_dict = m.to_dict()
                 model_to_dict.update({

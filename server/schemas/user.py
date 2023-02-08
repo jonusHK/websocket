@@ -121,6 +121,31 @@ class UserProfileS(UserProfileBaseS):
         }
 
 
+class UserProfileSearchS(ConvertMixinS, BaseModel):
+    id: Optional[int] = None
+    identity_id: Optional[str] = None
+    nickname: Optional[str] = None
+
+
+class UserProfileSearchImageS(BaseModel):
+    id: int
+    url: str
+    type: ProfileImageType
+    is_default: bool
+    is_active: bool
+
+
+class UserProfileSearchResponseS(BaseModel):
+    id: int
+    user_id: int
+    identity_id: str
+    nickname: str
+    status_message: Optional[str] = None
+    images: Optional[List[UserProfileSearchImageS]] = []
+    is_default: bool = False
+    is_active: bool = True
+
+
 class UserSessionBaseS(BaseModel):
     user_id: int
     session_id: str
