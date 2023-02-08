@@ -128,6 +128,9 @@ class S3Media(TimestampMixin, ConvertMixin, Base):
         aws_secret_access_key: str = settings.aws_secret_access_key,
         expiration=7 * 24 * 60 * 60  # 7일
     ):
+        if not media:
+            return []
+
         s3 = cls.get_s3_client(aws_access_key_id, aws_secret_access_key)
 
         async def _generate(attr):

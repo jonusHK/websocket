@@ -30,8 +30,13 @@ class AuthValidator:
     @classmethod
     def validate_user_profile(cls, user_session: UserSession, user_profile_id):
         assert hasattr(user_session, 'user') and hasattr(user_session.user, 'profiles')
-        if not next((p for p in user_session.user.profiles if p.id == user_profile_id and p.is_active), None):
+        profile: UserProfile = next((
+            p for p in user_session.user.profiles if p.id == user_profile_id and p.is_active),
+            None
+        )
+        if not profile:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+        return profile
 
     async def get_user_by_websocket(self, websocket: WebSocket) -> User:
         signed_session_id = websocket.cookies[COOKIE_NAME]
