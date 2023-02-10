@@ -99,14 +99,14 @@ export default {
         proxy.$axios.post(VITE_SERVER_HOST + '/chats/rooms/create', JSON.stringify({
             user_profile_id: state.loginProfileId,
             target_profile_ids: [state.profileId],
-            type: 'public'
+            type: 1
         }), {
             headers: {
                 'Content-Type': 'application/json',
             }
         })
         .then((res) => {
-            if (res.status === 200) {
+            if (res.status === 201) {
                 emit('moveChatRoomDetail', res.data.data.id);
             }
         })
@@ -157,7 +157,8 @@ export default {
                     :style="{
                         backgroundImage: 'url(' + state.profileDefaultImage + ')',
                         backgroundRepeat: 'no-repeat',
-                        backgroundSize: 'cover'
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center center',
                     }"
                 ></div>
                 <div v-else class="profile-image-default">
