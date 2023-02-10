@@ -127,6 +127,9 @@ export default {
         const getUnreadMsgCnt = function(obj) {
             return obj.unread_msg_cnt > 99 ? '99+' : obj.unread_msg_cnt;
         }
+        const getUserCnt = function(obj) {
+            return obj.user_profiles.length > 2 ? obj.user_profiles.length : null;
+        }
         watch(
             () => props.chatRooms,
             (cur, prev) => {
@@ -146,6 +149,7 @@ export default {
             getLastChatHistory,
             getLastChatHistoryCreated,
             getUnreadMsgCnt,
+            getUserCnt,
         }
     }
 }
@@ -162,7 +166,7 @@ export default {
             }" @click="infoChatRoom(obj)"></div>
             <div class="chat-room-info">
                 <div class="chat-room-info-summary">
-                    <p class="chat-room-info-name"><b>{{ obj.name }}</b></p>
+                    <p class="chat-room-info-name"><b>{{ obj.name }}</b><span class="chat-room-info-user-cnt">&nbsp;&nbsp;{{ getUserCnt(obj) }}</span></p>
                     <p class="chat-room-info-last-chat">{{ getLastChatHistory(obj) }}</p>
                 </div>
                 <div class="chat-room-info-meta">
@@ -212,6 +216,10 @@ export default {
     text-overflow: ellipsis;
     overflow: hidden;
     white-space: nowrap;
+}
+
+.chat-room-info-user-cnt {
+    color: #9e9e9e;
 }
 
 .chat-room-info-last-chat {
