@@ -43,7 +43,8 @@ export default {
             <div v-if="getDefaultProfileImage(obj) !== null" class="following-profile" :style="{
                 backgroundImage: 'url(' + getDefaultProfileImage(obj) + ')',
                 backgroundRepeat: 'no-repeat',
-                backgroundSize: 'cover'
+                backgroundSize: 'cover',
+                backgroundPosition: 'center center',
             }"></div>
             <div v-else class="following-profile-default">
                 <p><ui-icon style="width: 100%; height: 100%; color: #b3e5fc">person</ui-icon></p>

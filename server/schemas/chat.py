@@ -8,27 +8,16 @@ from server.core.enums import ChatType, ChatRoomType
 class ChatRoomCreateParamS(BaseModel):
     user_profile_id: int
     target_profile_ids: List[int]
-    type: str
+    type: Optional[int] = ChatRoomType.PUBLIC.value
 
-    @classmethod
-    def convert_type(cls, value):
-        enum = None
-        if isinstance(value, ChatRoomType):
-            enum = value
-        elif isinstance(value, str):
-            enum = ChatRoomType.get_by_name(value)
-        elif isinstance(value, int):
+    @validator('type', always=True)
+    def validate_type(cls, value: str | None):
+        if value:
             enum = ChatRoomType(value)
-
-        if enum is None:
-            raise ValueError('Invalid type.')
-        return enum
-
-    @root_validator
-    def validate_all(cls, values):
-        room_type = cls.convert_type(values['type'])
-        values.update({'type': room_type})
-        return values
+            if enum is None:
+                raise ValueError('Invalid type.')
+            return enum
+        return value
 
 
 class ChatReceiveFileS(BaseModel):
@@ -50,11 +39,16 @@ class ChatReceiveDataS(BaseModel):
 
 
 class ChatSendDataS(BaseModel):
-    from server.core.externals.redis.schemas import RedisChatHistoryByRoomS, RedisChatHistoryPatchS
+    from server.core.externals.redis.schemas import (
+        RedisChatHistoryByRoomS,
+        RedisChatHistoryPatchS,
+        RedisUserProfileByRoomS
+    )
 
     history: Optional[RedisChatHistoryByRoomS] = None
     histories: Optional[List[RedisChatHistoryByRoomS]] = None
     patch_histories: Optional[List[RedisChatHistoryPatchS]] = None
+    user_profiles: Optional[List[RedisUserProfileByRoomS]] = None
 
 
 class ChatReceiveFormS(BaseModel):

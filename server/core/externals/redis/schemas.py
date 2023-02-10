@@ -73,7 +73,6 @@ class RedisChatRoomInfoS(BaseModel):
     type: str
     user_profile_ids: List[int]
     user_profile_files: Optional[List[RedisUserImageFileS]] = []
-    is_active: bool
 
 
 class RedisChatRoomByUserProfileS(BaseModel):

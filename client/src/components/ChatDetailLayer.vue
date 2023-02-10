@@ -11,14 +11,14 @@ export default {
     name: 'ChatDetailLayer',
     props: {
         chatRoom: Object,
-        followings: Array,
     },
     setup (props, { emit }) {
         const { proxy } = getCurrentInstance();
         const uploadInput = ref(null);
         const confirmDialog = useConfirm();
         const state = reactive({
-            followings: toRef(props, 'followings'),
+            loginProfileId: proxy.$store.getters['user/getProfileId'],
+            followingsNotInRoom: [],
             room: toRef(props, 'chatRoom'),
             chatHistories: [],
             load: {
@@ -31,8 +31,9 @@ export default {
             showInvitePopup: false,
             searchFollowingNickname: '',
             selectedFollowingIds: [],
+            scrollHeight: 0,
         });
-        const ws = new WebSocket(`ws://localhost:8000/api/v1/chats/conversation/${proxy.$store.getters['user/getProfileId']}/${state.room.id}`);
+        const ws = new WebSocket(`ws://localhost:8000/api/v1/chats/conversation/${state.loginProfileId}/${state.room.id}`);
         const onClickProfileId = function(followingId) {
             emit('followingInfo', followingId);
         }
@@ -55,11 +56,12 @@ export default {
             return null;
         }
         const getDefaultProfileImage = function(obj) {
-            if (obj.files.length > 0) {
-                for (const i in obj.files) {
-                    const file = obj.files[i];
-                    if (file.use_type === 'user_profile_image' && file.is_default === true) {
-                        return file.url;
+            if (obj.profile.images.length > 0) {
+                for (const i in obj.profile.images) {
+                    const image = obj.profile.images[i];
+                    // type -> 1: 프로필 이미지 2: 배경 이미지
+                    if (image.type === 1 && image.is_default === true) {
+                        return image.url;
                     }
                 }
                 return null;
@@ -83,6 +85,7 @@ export default {
                 state.bottomFlag = true;
             } else {
                 state.bottomFlag = false;
+                state.scrollHeight = scrollHeight;
                 if (scrollTop === 0) {
                     loadMore();
                 }
@@ -90,7 +93,11 @@ export default {
         }
         const moveChatBodyPosition = function() {
             if (state.bottomFlag === true) {
-                const height = window.$('.chat-detail-body-list').prop('scrollHeight');
+                state.scrollHeight = 0;
+            }
+            const currentScrollHeight = window.$('.chat-detail-body-list').prop('scrollHeight');
+            if (currentScrollHeight !== state.scrollHeight) {
+                const height = window.$('.chat-detail-body-list').prop('scrollHeight') - state.scrollHeight;
                 window.$('.chat-detail-body-list').scrollTop(height);
             }
         }
@@ -197,10 +204,10 @@ export default {
                     message: '초대할 친구를 선택해주세요.',
                     state: 'warn',
                     stateOutlined: true
-                })
+                });
             }
         }
-        const stopTheEvent = function(e) {
+        const stopEvent = function(e) {
             e.stopPropagation();
         }
         onMounted(() => {
@@ -219,14 +226,8 @@ export default {
             }
             ws.onmessage = function(event) {
                 const json = JSON.parse(event.data);
-                if (json.type === 'message') {
-                    state.chatHistories.push(json.data.history);
-                } else if (json.type === 'lookup') {
+                if (json.type === 'lookup') {
                     state.chatHistories = [...json.data.histories, ...state.chatHistories];
-                } else if (json.type === 'file') {
-                    state.chatHistories.push(json.data.history);
-                } else if (json.type === 'invite') {
-                    state.chatHistories.push(json.data.history);
                 } else if (json.type === 'update') {
                     const patchHistories = json.data.patch_histories;
                     if (patchHistories.length > 0 && state.chatHistories.length > 0) {
@@ -240,16 +241,22 @@ export default {
                             }
                         }
                     }
-                } else if (json.type === 'terminate') {
+                } else {
+                    // type => message, file, invite, terminate
+                    if (_.includes(['invite', 'terminate'], json.type) === true) {
+                        emit('chatDetail', state.room.id);
+                    }
                     state.chatHistories.push(json.data.history);
                 }
             }
             ws.onclose = function(event) {
-                console.log('close - ', event);
+                console.log('chat socket close - ', event);
+                ws.close();
                 emit('exitChatRoom');
             }
             ws.onerror = function(event) {
-                console.log('error - ', event);
+                console.log('chat socket error - ', event);
+                ws.close();
                 emit('exitChatRoom');
             }
         })
@@ -265,17 +272,28 @@ export default {
                 setTimeout(() => moveChatBodyPosition(), 50);
             });
         })
-        const followingsNotInRoom = computed(() => {
-            return _.filter(state.followings, function(f) {
-                return !_.includes(_.map(state.room.user_profiles, 'id'), f.id);
-            })
-        })
         const searchedFollowings = computed(() => {
-            const searchedFollowings = _.filter(followingsNotInRoom.value, function(f) {
-                return _.includes(f.nickname, state.searchFollowingNickname);
+            const searchedFollowings = _.filter(state.followingsNotInRoom, function(f) {
+                return _.includes(f.profile.nickname, state.searchFollowingNickname);
             });
             return searchedFollowings;
         })
+        watch(
+            () => state.showInvitePopup,
+            (cur, prev) => {
+                if (cur === true) {
+                    emit('chatDetail', state.room.id);
+                    proxy.$axios.get(VITE_SERVER_HOST + `/users/relationship/${state.loginProfileId}/search`)
+                    .then((res) => {
+                        if (res.status === 200) {
+                            state.followingsNotInRoom = _.filter(res.data.data, function(f) {
+                                return !_.includes(_.map(state.room.user_profiles, 'id'), f.profile.id);
+                            })
+                        }
+                    })
+                }
+            },
+        )
         return {
             uploadInput,
             state,
@@ -294,8 +312,7 @@ export default {
             exitRoom,
             onCancelInviteFollowing,
             onConfirmInviteFollowing,
-            stopTheEvent,
-            followingsNotInRoom,
+            stopEvent,
             searchedFollowings,
         }
     }
@@ -310,7 +327,8 @@ export default {
                     <div v-if="getUserProfileImageByChat(obj) !== null" class="chat-profile" @click="onClickProfileId(obj.user_profile_id)" :style="{
                         backgroundImage: 'url(' + getDefaultProfileImageByChat(obj) + ')',
                         backgroundRepeat: 'no-repeat',
-                        backgroundSize: 'cover'
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center center',
                     }"></div>
                     <div v-else class="chat-profile-default">
                         <p><ui-icon style="width: 100%; height: 100%; color: #b3e5fc">person</ui-icon></p>
@@ -358,34 +376,36 @@ export default {
                     </div>
                     <div class="invite-following-popup-list">
                         <div v-if="state.searchFollowingNickname === ''" class="following-list-container">
-                            <div v-for="following in followingsNotInRoom" :key="following.id" class="following-list" @click="onClickProfileId(following.id)">
+                            <div v-for="following in state.followingsNotInRoom" :key="following.profile.id" class="following-list" @click="onClickProfileId(following.profile.id)">
                                 <div v-if="getDefaultProfileImage(following) !== null" class="following-profile" :style="{
                                     backgroundImage: 'url(' + getDefaultProfileImage(following) + ')',
                                     backgroundRepeat: 'no-repeat',
-                                    backgroundSize: 'cover'
+                                    backgroundSize: 'cover',
+                                    backgroundPosition: 'center center',
                                 }"></div>
                                 <div v-else class="following-profile-default">
                                     <p><ui-icon style="width: 100%; height: 100%; color: #b3e5fc">person</ui-icon></p>
                                 </div>
-                                <p>{{ following.nickname }}</p>
-                                <input type="checkbox" v-model="state.selectedFollowingIds" :value="following.id" @click.stop="stopTheEvent" />
+                                <p>{{ following.profile.nickname }}</p>
+                                <input type="checkbox" v-model="state.selectedFollowingIds" :value="following.profile.id" @click.stop="stopEvent" />
                             </div>
                         </div>
                         <div v-else-if="searchedFollowings" class="following-list-container">
-                            <div v-for="following in searchedFollowings" :key="following.id" class="following-list" @click="onClickProfileId(following.id)">
+                            <div v-for="following in searchedFollowings" :key="following.profile.id" class="following-list" @click="onClickProfileId(following.profile.id)">
                                 <div v-if="getDefaultProfileImage(following) !== null" class="following-profile" :style="{
                                     backgroundImage: 'url(' + getDefaultProfileImage(following) + ')',
                                     backgroundRepeat: 'no-repeat',
-                                    backgroundSize: 'cover'
+                                    backgroundSize: 'cover',
+                                    backgroundPosition: 'center center',
                                 }"></div>
                                 <div v-else class="following-profile-default">
                                     <p><ui-icon style="width: 100%; height: 100%; color: #b3e5fc">person</ui-icon></p>
                                 </div>
-                                <p>{{ following.nickname }}</p>
-                                <input type="checkbox" v-model="state.selectedFollowingIds" :value="following.id" @click.stop="stopTheEvent" />
+                                <p>{{ following.profile.nickname }}</p>
+                                <input type="checkbox" v-model="state.selectedFollowingIds" :value="following.profile.id" @click.stop="stopEvent" />
                             </div>
                         </div>
-                        <div v-else class="invite-following-popup-list">검색 결과와 일치하는 친구가 없습니다.</div>
+                        <div v-else class="following-list-container">검색 결과와 일치하는 친구가 없습니다.</div>
                         <div class="invite-following-btn">
                             <div class="invite-following-btn-container">
                                 <div>
