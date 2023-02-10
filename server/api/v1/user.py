@@ -128,7 +128,7 @@ async def other_profile_detail(
     session=Depends(get_async_session)
 ):
     # 권한 검증
-    AuthValidator.validate_user_profile(user_session, user_profile_id)
+    AuthValidator.get_user_profile(user_session, user_profile_id)
 
     crud = UserProfileCRUD(session)
     other_profile: UserProfile = await crud.get(
@@ -167,7 +167,7 @@ async def user_profile_image_upload(
     session=Depends(get_async_session)
 ):
     # 권한 검증
-    AuthValidator.validate_user_profile(user_session, user_profile_id)
+    AuthValidator.get_user_profile(user_session, user_profile_id)
 
     objects: List[UserProfileImage] = []
     async for o in UserProfileImage.files_to_models(
@@ -273,7 +273,7 @@ async def create_relationship(
     crud_relationship = UserRelationshipCRUD(session)
 
     # 권한 검증
-    AuthValidator.validate_user_profile(user_session, user_profile_id)
+    AuthValidator.get_user_profile(user_session, user_profile_id)
 
     other_profile: UserProfile = await crud_user_profile.get(
         conditions=(
@@ -292,20 +292,26 @@ async def create_relationship(
             selectinload(UserProfile.followings)
         ])
     relation_type: RelationshipType = RelationshipType.get_by_name(relation_type)
-    if next((f for f in user_profile.followings if
-             f.other_profile_id == other_profile_id and f.type == relation_type), None):
+    if next((
+        f for f in user_profile.followings if
+        f.other_profile_id == other_profile_id and f.type == relation_type),
+        None
+    ):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Already following relationship.')
 
     relationship = await crud_relationship.create(
         my_profile_id=user_profile_id,
         other_profile_id=other_profile_id,
         other_profile_nickname=other_profile.nickname,
-        type=relation_type)
+        type=relation_type
+    )
     await session.commit()
     await session.refresh(relationship)
 
     # Redis 데이터 추가
-    await RedisFollowingsByUserProfileS.sadd(redis_handler.redis, user_profile_id,
+    await RedisFollowingsByUserProfileS.sadd(
+        redis_handler.redis,
+        user_profile_id,
         RedisFollowingsByUserProfileS.schema(
             id=other_profile_id,
             identity_id=other_profile.identity_id,
@@ -315,7 +321,10 @@ async def create_relationship(
             is_hidden=relationship.is_hidden,
             is_forbidden=relationship.is_forbidden,
             files=await redis_handler.generate_presigned_files(
-                UserProfileImage, [i for i in other_profile_images if i.is_default])))
+                UserProfileImage, [i for i in other_profile_images if i.is_default]
+            )
+        )
+    )
 
     return UserRelationshipS.from_orm(relationship)
 
@@ -332,7 +341,7 @@ async def update_relationship(
     crud = UserRelationshipCRUD(session)
 
     # 권한 검증
-    AuthValidator.validate_user_profile(user_session, user_profile_id)
+    AuthValidator.get_user_profile(user_session, user_profile_id)
 
     values = data.values_except_null()
     conditions = (
@@ -401,7 +410,7 @@ async def delete_relationship(
     crud = UserRelationshipCRUD(session)
 
     # 권한 검증
-    AuthValidator.validate_user_profile(user_session, user_profile_id)
+    AuthValidator.get_user_profile(user_session, user_profile_id)
 
     await crud.delete(
         conditions=(
@@ -435,7 +444,7 @@ async def search_relationship(
     crud_relationship = UserRelationshipCRUD(session)
 
     # 권한 검증
-    profile: UserProfile = AuthValidator.validate_user_profile(user_session, user_profile_id)
+    profile: UserProfile = AuthValidator.get_user_profile(user_session, user_profile_id)
 
     request_s = UserRelationshipSearchS(
         nickname=nickname,
