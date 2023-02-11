@@ -99,7 +99,6 @@ export default {
         state.chatBodyInfoView[key] = false;
       }
       state.chatRoomId = chatRoomId;
-      console.log('state.chatRooms - ', state.chatRooms)
       state.chatRoom = _.filter(state.chatRooms, function(r) {
         return r.id === state.chatRoomId;
       })[0];
@@ -223,6 +222,9 @@ export default {
         }
       })
     }
+    const getOneToOneBtnName = function() {
+      return state.addUserProfile.id === state.loginProfileId ? '나와의 채팅' : '1:1 대화';
+    }
     onMounted(() => {
       followingListSocket.onopen = function(event) {
           console.log('친구 목록 웹소켓 연결 성공');
@@ -275,6 +277,7 @@ export default {
       onConfirmAddUserProfile,
       moveChatRoomDetail,
       searchProfile,
+      getOneToOneBtnName,
     }
   },
   components: {
@@ -383,7 +386,7 @@ export default {
                     <ui-button raised @click="onConfirmAddUserProfile" style="margin-right: 5px;">친구 추가</ui-button>
                 </div>
                 <div v-else>
-                  <ui-button raised @click="moveChatRoomDetail" style="margin-right: 5px;">1:1 대화</ui-button>
+                  <ui-button raised @click="moveChatRoomDetail" style="margin-right: 5px;">{{ getOneToOneBtnName() }}</ui-button>
                 </div>
               </div>
             </div>
@@ -413,6 +416,7 @@ export default {
         <ChatDetailLayer
           v-if="state.chatBodyDetailView['chat']"
           :chatRoom="state.chatRoom"
+          :chatRoomId="state.chatRoomId"
           @exitChatRoom="onChangeChatMenuType('chat')"
           @chatDetail="chatDetail"
           @followingInfo="followingInfo"

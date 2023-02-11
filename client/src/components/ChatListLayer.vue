@@ -48,7 +48,7 @@ export default {
         const getBackgroundSize = function(urls) {
             const size = urls.length;
             if (size === 1) {
-                return '170%';
+                return '100%';
             } else if (size === 2) {
                 return '50%, 50%';
             } else if (size === 3) {
@@ -83,7 +83,7 @@ export default {
                     }
                 }
             }
-            const requiredUrlCnt = obj.user_profiles.length - urls.length - 1;
+            const requiredUrlCnt = obj.user_profiles.length === 1 ? obj.user_profiles.length - urls.length : obj.user_profiles.length - urls.length - 1;
             if (requiredUrlCnt > 0) {
                 for (const i of Array(requiredUrlCnt).keys()) {
                     urls.push(defaultChatRoomImage);
@@ -200,7 +200,7 @@ export default {
 .chat-room-image {
     width: 40px; 
     height: 40px; 
-    border-radius: 20%; 
+    border-radius: 50%; 
 }
 
 .chat-room-info {
