@@ -22,6 +22,9 @@ class ChatRoom(TimestampMixin, ConvertMixin, Base):
 
 class ChatRoomUserAssociation(TimestampMixin, ConvertMixin, Base):
     __tablename__ = "chat_room_user_association"
+    __table_args__ = (
+        UniqueConstraint('room_id', 'user_profile_id', name='unique association for both room_id and user_profile_id.'),
+    )
 
     room_id = Column(BigInteger, ForeignKey("chat_rooms.id", ondelete="CASCADE"), primary_key=True)
     user_profile_id = Column(BigInteger, ForeignKey("user_profiles.id", ondelete="CASCADE"), primary_key=True)

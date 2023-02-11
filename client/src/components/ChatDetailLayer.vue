@@ -6,11 +6,11 @@ import { useEvent, useConfirm } from 'balm-ui';
 
 const { VITE_SERVER_HOST } = import.meta.env;
 
-
 export default {
     name: 'ChatDetailLayer',
     props: {
         chatRoom: Object,
+        chatRoomId: Number,
     },
     setup (props, { emit }) {
         const { proxy } = getCurrentInstance();
@@ -20,6 +20,7 @@ export default {
             loginProfileId: proxy.$store.getters['user/getProfileId'],
             followingsNotInRoom: [],
             room: toRef(props, 'chatRoom'),
+            roomId: toRef(props, 'chatRoomId'),
             chatHistories: [],
             load: {
                 offset: 0,
@@ -33,7 +34,28 @@ export default {
             selectedFollowingIds: [],
             scrollHeight: 0,
         });
-        const ws = new WebSocket(`ws://localhost:8000/api/v1/chats/conversation/${state.loginProfileId}/${state.room.id}`);
+        const isConnected = ref(false);
+        const wsUrl = ref(`ws://localhost:8000/api/v1/chats/conversation/${state.loginProfileId}/${state.roomId}`);
+        const ws = ref(new WebSocket(wsUrl.value));
+        const wsSend = function(data) {
+            if (ws.value.readyState === WebSocket.OPEN) {
+                ws.value.send(JSON.stringify(data));
+            }
+        }
+        const initData = function() {
+            state.load = {
+                offset: 0,
+                limit: 50,
+            };
+            state.bottomFlag = true;
+            state.uploadFiles = [];
+            state.chatHistories = [];
+            state.contents = '';
+            state.showInvitePopup = false;
+            state.searchFollowingNickname = '';
+            state.selectedFollowingIds = [];
+            state.scrollHeight = 0;
+        }
         const onClickProfileId = function(followingId) {
             emit('followingInfo', followingId);
         }
@@ -77,7 +99,7 @@ export default {
                     'limit': state.load.limit,
                 }
             };
-            ws.send(JSON.stringify(data));
+            wsSend(data);
         }
         const onScrollChatHistories = function(e) {
             const { scrollHeight, scrollTop, clientHeight } = e.target;
@@ -133,7 +155,7 @@ export default {
                         })
                     }
                 }
-                ws.send(JSON.stringify(data));
+                wsSend(data);
             }
         }
         const onInputFile = function() {
@@ -154,7 +176,7 @@ export default {
                 fileReader.readAsDataURL(each);
             }
         }
-        const send = function(e) {
+        const sendMessage = function(e) {
             if (state.contents !== '') {
                 const data = {
                     'type': 'message',
@@ -162,7 +184,7 @@ export default {
                         'text': state.contents
                     }
                 };
-                ws.send(JSON.stringify(data));
+                wsSend(data);
                 window.$('.chat-input-body').focus();
                 state.contents = '';
                 if (e !== undefined) {
@@ -180,7 +202,7 @@ export default {
                     const data = {
                         'type': 'terminate'
                     };
-                    ws.send(JSON.stringify(data));     
+                    wsSend(data);
                 }
             });
         }
@@ -197,7 +219,7 @@ export default {
                         'target_profile_ids': state.selectedFollowingIds,
                     }
                 }
-                ws.send(JSON.stringify(data));
+                wsSend(data);
                 onCancelInviteFollowing();
             } else {
                 proxy.$alert({
@@ -210,9 +232,10 @@ export default {
         const stopEvent = function(e) {
             e.stopPropagation();
         }
-        onMounted(() => {
-            ws.onopen = function(event) {
+        const connectWebsocket = function() {
+            ws.value.onopen = function(event) {
                 console.log('채팅 웹소켓 연결 성공');
+                isConnected.value = true;
                 const data = {
                     'type': 'lookup',
                     'data': {
@@ -220,11 +243,11 @@ export default {
                         'limit': state.load.limit,
                     }
                 };
-                ws.send(JSON.stringify(data));
+                wsSend(data);
                 state.bottomFlag = true;
                 window.$('.chat-input-body').focus();
             }
-            ws.onmessage = function(event) {
+            ws.value.onmessage = function(event) {
                 const json = JSON.parse(event.data);
                 if (json.type === 'lookup') {
                     state.chatHistories = [...json.data.histories, ...state.chatHistories];
@@ -249,16 +272,17 @@ export default {
                     state.chatHistories.push(json.data.history);
                 }
             }
-            ws.onclose = function(event) {
+            ws.value.onclose = function(event) {
                 console.log('chat socket close - ', event);
-                ws.close();
-                emit('exitChatRoom');
+                isConnected.value = false;
             }
-            ws.onerror = function(event) {
+            ws.value.onerror = function(event) {
                 console.log('chat socket error - ', event);
-                ws.close();
-                emit('exitChatRoom');
+                isConnected.value = false;
             }
+        }
+        onMounted(() => {
+            connectWebsocket();
         })
         onUpdated(() => {
             const data = {
@@ -267,7 +291,7 @@ export default {
                     'is_read': true
                 }
             };
-            ws.send(JSON.stringify(data));
+            wsSend(data);
             nextTick(() => {
                 setTimeout(() => moveChatBodyPosition(), 50);
             });
@@ -294,6 +318,23 @@ export default {
                 }
             },
         )
+        watch(
+            () => props.chatRoomId,
+            (cur) => {
+                initData();
+                wsUrl.value = `ws://localhost:8000/api/v1/chats/conversation/${state.loginProfileId}/${cur}`;
+            },
+        )
+        watch(
+            () => wsUrl.value,
+            (newUrl) => {
+                if (ws.value) {
+                    ws.value.close();
+                }
+                ws.value = new WebSocket(newUrl);
+                connectWebsocket();
+            }
+        )
         return {
             uploadInput,
             state,
@@ -308,19 +349,20 @@ export default {
             getUnreadCnt,
             onInputFile,
             sendFiles,
-            send,
+            sendMessage,
             exitRoom,
             onCancelInviteFollowing,
             onConfirmInviteFollowing,
             stopEvent,
             searchedFollowings,
+            isConnected,
         }
     }
 }
 </script>
 
 <template>
-    <div class="chat-detail-body">
+    <div v-if="isConnected" class="chat-detail-body">
         <div class="chat-detail-body-list" v-if="state.chatHistories" @scroll="onScrollChatHistories">
             <div v-for="obj in state.chatHistories" :key="obj.id" class="chat-histories">
                 <div v-if="obj.type !== 'notice'" class="chat-history">
@@ -423,7 +465,7 @@ export default {
                 <textarea
                     v-model="state.contents"
                     class="chat-input-body"
-                    @keypress.enter="send"
+                    @keypress.enter="sendMessage"
                 ></textarea>
                 <div class="chat-input-menu">
                     <div>
@@ -459,7 +501,7 @@ export default {
                             @change="onInputFile"
                             ref="uploadInput"
                         />
-                        <ui-button outlined @click="send" style="color: #757575;">전송</ui-button>
+                        <ui-button outlined @click="sendMessage" style="color: #757575;">전송</ui-button>
                     </div>
                 </div>
             </div>

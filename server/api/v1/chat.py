@@ -93,13 +93,12 @@ async def chat_rooms(
                 )
                 result = []
                 if duplicated_rooms_by_profile_redis:
+                    duplicated_rooms_by_profile_redis.sort(key=lambda x: (x.id, -x.timestamp))
                     rooms_by_profile_redis: List[RedisChatRoomByUserProfileS] = []
                     for key, items in groupby(duplicated_rooms_by_profile_redis, key=lambda x: x.id):
                         items = list(items)
-                        if len(items) > 1:
-                            items.sort(key=lambda x: x.timestamp, reverse=True)
-                        rooms_by_profile_redis.append(items[0])
-
+                        rooms_by_profile_redis.append(items[-1])
+                    rooms_by_profile_redis.sort(key=lambda x: x.timestamp, reverse=True)
                     room_ids: List[int] = [r.id for r in rooms_by_profile_redis]
                     total_rooms, _ = await redis_handler.get_rooms(crud_room, sync=True)
                     rooms: List[RedisChatRoomInfoS] = [
@@ -225,11 +224,11 @@ async def chat_room_create(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail='Not exists all for target profile ids.')
 
-    mapping_profile_ids: List[int] = data.target_profile_ids + [data.user_profile_id]
+    mapping_profile_ids: List[int] = list(set(data.target_profile_ids + [data.user_profile_id]))
 
-    # 1:1 방 생성 시, 기존 방 있다면 리턴
-    if len(mapping_profile_ids) == 2:
-        _room_rows: List[Row] = await crud_room_user_mapping.list(
+    # 1:1 방 혹은 나와의 채팅방 생성 시, 기존 방 있다면 리턴
+    if len(mapping_profile_ids) <= 2:
+        _room_mapping_rows: List[Row] = await crud_room_user_mapping.list(
             join=[(ChatRoom, ChatRoomUserAssociation.room_id == ChatRoom.id)],
             with_only_columns=(
                 ChatRoom,
@@ -239,8 +238,8 @@ async def chat_room_create(
                 ChatRoomUserAssociation.user_profile_id.in_(mapping_profile_ids)),
             group_by=(ChatRoomUserAssociation.room_id,),
             having=(func.count(ChatRoomUserAssociation.user_profile_id) == len(mapping_profile_ids)))
-        if _room_rows:
-            _room = _room_rows[-1]['ChatRoom']
+        if _room_mapping_rows:
+            _room = _room_mapping_rows[-1]['ChatRoom']
             async with redis_handler.pipeline(transaction=True) as pipe:
                 for profile_id in mapping_profile_ids:
                     _, pipe = await redis_handler.get_room_by_user_profile(
