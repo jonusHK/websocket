@@ -1,5 +1,5 @@
 <script>
-import { ref, reactive, watch, onMounted, getCurrentInstance, toRef, nextTick, onUpdated, computed } from 'vue';
+import { ref, reactive, watch, onMounted, onUnmounted, getCurrentInstance, toRef, nextTick, onUpdated, computed } from 'vue';
 import constants from '../constants';
 import _ from 'lodash';
 import { useEvent, useConfirm } from 'balm-ui';
@@ -18,7 +18,6 @@ export default {
         const confirmDialog = useConfirm();
         const state = reactive({
             loginProfileId: proxy.$store.getters['user/getProfileId'],
-            followingsNotInRoom: [],
             room: toRef(props, 'chatRoom'),
             roomId: toRef(props, 'chatRoomId'),
             chatHistories: [],
@@ -32,6 +31,7 @@ export default {
             showInvitePopup: false,
             searchFollowingNickname: '',
             selectedFollowingIds: [],
+            followingsNotInRoom: [],
             scrollHeight: 0,
         });
         const isConnected = ref(false);
@@ -284,6 +284,11 @@ export default {
         onMounted(() => {
             connectWebsocket();
         })
+        onUnmounted(() => {
+            if (ws.value.readyState === WebSocket.OPEN) {
+                ws.value.close();
+            }
+        })
         onUpdated(() => {
             const data = {
                 'type': 'update',
@@ -484,7 +489,7 @@ export default {
                                 aria-describedby="invite-following-tooltip"
                             >add_box
                             </ui-icon>
-                            <ui-icon 
+                            <ui-icon
                                 class="exit-room-icon" 
                                 @click="exitRoom"
                                 v-tooltip="'채팅방 나가기'"

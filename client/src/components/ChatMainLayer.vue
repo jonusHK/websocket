@@ -1,5 +1,5 @@
 <script>
-import { reactive, computed, watch, onMounted, getCurrentInstance, nextTick } from 'vue';
+import { reactive, onMounted, computed, getCurrentInstance, nextTick } from 'vue';
 import FollowingListLayer from './FollowingListLayer.vue';
 import FollowingInfoLayer from './FollowingInfoLayer.vue';
 import ChatListLayer from './ChatListLayer.vue';
@@ -39,6 +39,10 @@ export default {
       addUserProfile: null,
       searchedProfileIdentityId: '',
       isAlreadyFollowing: false,
+      showCreateRoomPopup: false,
+      searchFollowingNickname: '',
+      selectedFollowingIds: [],
+
     });
     if (proxy.$store.state.user.userId === '' || proxy.$store.state.user.userIsActive === false) {
       proxy.$router.replace('/login');
@@ -47,6 +51,14 @@ export default {
       state.userProfileId = null;
       state.chatRoomId = null;
       state.chatRoom = null;
+      state.showAddUserPopup = false;
+      state.searchProfileIdentityId = '';
+      state.searchedProfileIdentityId = '';
+      state.isAlreadyFollowing = false;
+      state.addUserProfile = null;
+      state.showCreateRoomPopup = false;
+      state.searchFollowingNickname = '';
+      state.selectedFollowingIds = [];
     }
     const onChangeChatMenuType = (type) => {
       for (const key in state.chatBodyListView) {
@@ -76,9 +88,6 @@ export default {
     }
     const closeFollowingInfo = function() {
       state.chatBodyInfoView['following'] = false;
-    }
-    const getTotalUnreadMsgCnt = function(cnt) {
-      state.totalUnreadMsgCnt = cnt;
     }
     const chatDetail = function(chatRoomId) {
       for (const key in state.chatBodyListView) {
@@ -116,10 +125,10 @@ export default {
     const closeChatInfo = function() {
       state.chatBodyInfoView['chat'] = false;
     }
-    const getDefaultProfileImage = function(obj) {
-      if (obj.images.length > 0) {
-          for (const i in obj.images) {
-              const image = obj.images[i];
+    const getDefaultProfileImage = function(images) {
+      if (images.length > 0) {
+          for (const i in images) {
+              const image = images[i];
               // type -> 1: 프로필 이미지 2: 배경 이미지
               if (image.type === 1 && image.is_default === true) {
                   return image.url;
@@ -225,6 +234,65 @@ export default {
     const getOneToOneBtnName = function() {
       return state.addUserProfile.id === state.loginProfileId ? '나와의 채팅' : '1:1 대화';
     }
+    const searchedFollowings = computed(() => {
+      const searchedFollowings = _.filter(state.followings, function(f) {
+          return _.includes(f.nickname, state.searchFollowingNickname);
+      });
+      return searchedFollowings;
+    })
+    const stopEvent = function(e) {
+      e.stopPropagation();
+    }
+    const onClickProfileId = function(followingId) {
+      followingInfo(followingId);
+    }
+    const onCancelCreateRoom = function() {
+      state.showCreateRoomPopup = false;
+      state.searchFollowingNickname = '';
+      state.selectedFollowingIds = [];
+    }
+    const onConfirmCreateRoom = function() {
+      if (state.selectedFollowingIds.length > 0) {
+        proxy.$axios.post(VITE_SERVER_HOST + '/chats/rooms/create', JSON.stringify({
+          user_profile_id: state.loginProfileId,
+          target_profile_ids: state.selectedFollowingIds
+        }), {
+          headers: {
+              'Content-Type': 'application/json',
+          }
+        })
+        .then((res) => {
+          if (res.status === 201) {
+            nextTick(() => {
+                setTimeout(() => chatDetail(res.data.data.id), 100);
+            });
+          } else {
+            const error_obj = {
+              state: 'error',
+              stateOutlined: true,
+              message: err.response.data.message
+            }
+          }
+        })
+        .catch((err) => {
+          const error_obj = {
+              state: 'error',
+              stateOutlined: true,
+              message: err
+          }
+          proxy.$alert(error_obj);
+        })
+        .finally(() => {
+          onCancelCreateRoom();
+        });
+      } else {
+        proxy.$alert({
+            message: '초대할 친구를 선택해주세요.',
+            state: 'warn',
+            stateOutlined: true
+        });
+      }
+    }
     onMounted(() => {
       followingListSocket.onopen = function(event) {
           console.log('친구 목록 웹소켓 연결 성공');
@@ -268,7 +336,6 @@ export default {
       onChangeChatMenuType,
       followingInfo,
       closeFollowingInfo,
-      getTotalUnreadMsgCnt,
       chatDetail,
       chatInfo,
       closeChatInfo,
@@ -278,6 +345,11 @@ export default {
       moveChatRoomDetail,
       searchProfile,
       getOneToOneBtnName,
+      stopEvent,
+      searchedFollowings,
+      onClickProfileId,
+      onCancelCreateRoom,
+      onConfirmCreateRoom,
     }
   },
   components: {
@@ -334,10 +406,18 @@ export default {
         >search
         </ui-icon> -->
         <ui-icon
+          v-if="state.chatBodyListView['following'] === true" 
           v-tooltip="'친구 추가'"
           aria-describedby="add-user-tooltip"
           @click="state.showAddUserPopup = true"
         >person_add_alt_1
+        </ui-icon>
+        <ui-icon
+          v-else-if="state.chatBodyListView['chat'] === true"
+          v-tooltip="'채팅방 생성'"
+          aria-describedby="add-user-tooltip"
+          @click="state.showCreateRoomPopup = true"
+        >add_comment
         </ui-icon>
       </div>
       <div v-show="state.showAddUserPopup" class="chat-header-btn-parent">
@@ -361,8 +441,8 @@ export default {
             <div class="add-user-popup-result">
               <div v-if="state.searchedProfileIdentityId !== ''">
                 <div v-if="state.addUserProfile !== null" class="add-user-container">
-                  <div v-if="getDefaultProfileImage(state.addUserProfile) !== null" class="add-user-profile" :style="{
-                      backgroundImage: 'url(' + getDefaultProfileImage(state.addUserProfile) + ')',
+                  <div v-if="getDefaultProfileImage(state.addUserProfile.images) !== null" class="add-user-profile" :style="{
+                      backgroundImage: 'url(' + getDefaultProfileImage(state.addUserProfile.images) + ')',
                       backgroundRepeat: 'no-repeat',
                       backgroundSize: 'cover',
                       backgroundPosition: 'center center',
@@ -393,6 +473,65 @@ export default {
           </div>
         </div>
       </div>
+      <div v-show="state.showCreateRoomPopup" class="chat-header-btn-parent">
+        <div class="invite-following-popup">
+          <div>
+            <div class="invite-following-popup-title">
+              <span><b>대화상대 선택</b></span>
+            </div>
+            <div class="invite-following-popup-input">
+              <ui-textfield v-model="state.searchFollowingNickname" outlined>
+                <template #before>
+                  <ui-textfield-icon>search</ui-textfield-icon>
+                </template>
+              </ui-textfield>
+            </div>
+            <div class="invite-following-popup-list">
+              <div v-if="state.searchFollowingNickname === ''" class="following-list-container">
+                <div v-for="following in state.followings" :key="following.id" class="following-list" @click="onClickProfileId(following.id)">
+                  <div v-if="getDefaultProfileImage(following.files) !== null" class="following-profile" :style="{
+                      backgroundImage: 'url(' + getDefaultProfileImage(following.files) + ')',
+                      backgroundRepeat: 'no-repeat',
+                      backgroundSize: 'cover',
+                      backgroundPosition: 'center center',
+                  }"></div>
+                  <div v-else class="following-profile-default">
+                    <p><ui-icon style="width: 100%; height: 100%; color: #b3e5fc">person</ui-icon></p>
+                  </div>
+                  <p>{{ following.nickname }}</p>
+                  <input type="checkbox" v-model="state.selectedFollowingIds" :value="following.id" @click.stop="stopEvent" />
+                </div>
+              </div>
+              <div v-else-if="searchedFollowings" class="following-list-container">
+                <div v-for="following in searchedFollowings" :key="following.id" class="following-list" @click="onClickProfileId(following.id)">
+                  <div v-if="getDefaultProfileImage(following.files) !== null" class="following-profile" :style="{
+                      backgroundImage: 'url(' + getDefaultProfileImage(following.files) + ')',
+                      backgroundRepeat: 'no-repeat',
+                      backgroundSize: 'cover',
+                      backgroundPosition: 'center center',
+                  }"></div>
+                  <div v-else class="following-profile-default">
+                    <p><ui-icon style="width: 100%; height: 100%; color: #b3e5fc">person</ui-icon></p>
+                  </div>
+                  <p>{{ following.nickname }}</p>
+                  <input type="checkbox" v-model="state.selectedFollowingIds" :value="following.id" @click.stop="stopEvent" />
+                </div>
+              </div>
+              <div v-else class="following-list-container">검색 결과와 일치하는 친구가 없습니다.</div>
+              <div class="invite-following-btn">
+                <div class="invite-following-btn-container">
+                  <div>
+                    <ui-button @click="onCancelCreateRoom" style="margin-right: 5px;">취소</ui-button>
+                  </div>
+                  <div>
+                    <ui-button raised @click="onConfirmCreateRoom" style="margin-right: 5px;">확인</ui-button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
     <div id="chat-body">
       <div class="chat-body-container">
@@ -417,7 +556,6 @@ export default {
           v-if="state.chatBodyDetailView['chat']"
           :chatRoom="state.chatRoom"
           :chatRoomId="state.chatRoomId"
-          @exitChatRoom="onChangeChatMenuType('chat')"
           @chatDetail="chatDetail"
           @followingInfo="followingInfo"
         />
@@ -490,10 +628,6 @@ export default {
   align-items: center;
 }
 
-.add-user-item {
-
-}
-
 .add-user-profile {
   width: 130px;
   height: 130px;
@@ -523,6 +657,68 @@ export default {
   display: flex;
   justify-content: center;
   align-items: center;
+}
+
+.invite-following-popup {
+  position: absolute;
+  width: 300px;
+  height: 400px;
+  right: 0;
+  top: 10px;
+  display: inline-block;
+  background-color: #ffffff;
+  border: 1px solid #e0e0e0;
+  border-radius: 3%;
+  box-shadow: 1px 2px 5px 0px #757575;
+  box-sizing: border-box;
+  z-index: 1;
+}
+
+.invite-following-popup > div {
+    width: 100%;
+    height: 100%;
+}
+
+.invite-following-popup-title {
+    height: 20px;
+    padding: 15px;
+    text-align: center;
+}
+
+.invite-following-popup-input {
+    height: 60px;
+    padding: 10px;
+}
+
+.invite-following-popup-input > div {
+    width: 100%;
+}
+
+.invite-following-popup-input > .material-icons {
+    margin-left: 0;
+}
+
+.invite-following-popup-list {
+    width: 100%;
+    height: calc(100% - 130px);
+}
+
+.following-list-container {
+    overflow: auto;
+    height: 200px;
+}
+
+.invite-following-btn {
+    width: 100%;
+    height: calc(100% - 200px);
+    text-align: center;
+}
+
+.invite-following-btn-container {
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 </style>
