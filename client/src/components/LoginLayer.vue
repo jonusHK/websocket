@@ -13,7 +13,7 @@ export default {
         });
         const login = () => {
             try {
-                proxy.$axios.post(VITE_SERVER_HOST + "/users/login", JSON.stringify({
+                proxy.$axios.post(VITE_SERVER_HOST + "/v1/users/login", JSON.stringify({
                     uid: state.email,
                     password: state.password,
                 }), {

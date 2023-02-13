@@ -59,7 +59,7 @@ export default {
                 return;
             }
             try {
-                proxy.$axios.post(VITE_SERVER_HOST + '/users/signup', JSON.stringify({
+                proxy.$axios.post(VITE_SERVER_HOST + '/v1/users/signup', JSON.stringify({
                     name: state.formData.name,
                     mobile: state.formData.mobile,
                     email: state.formData.email,

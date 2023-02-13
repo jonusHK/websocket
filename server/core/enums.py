@@ -65,8 +65,9 @@ class IntValueEnum(Enum, metaclass=IntValueEnumMeta):
 
 
 class RelationshipType(IntValueEnum):
-    FRIEND = "친구"
-    FAMILY = "가족"
+    FRIEND = '친구'
+    FAMILY = '가족'
+    SELF = '본인'
 
     __default__ = FRIEND
 

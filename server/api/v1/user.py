@@ -49,6 +49,7 @@ async def signup(user_s: UserCreateS, session: AsyncSession = Depends(get_async_
 
     crud_user = UserCRUD(session)
     crud_user_profile = UserProfileCRUD(session)
+    crud_relationship = UserRelationshipCRUD(session)
     try:
         await crud_user.get(conditions=(User.uid == user_s.email,))
     except HTTPException:
@@ -68,8 +69,47 @@ async def signup(user_s: UserCreateS, session: AsyncSession = Depends(get_async_
             identity_id=identity_id,
             nickname=user.name,
             is_default=True))
+    await session.flush()
+
+    user_profile_id: int = user.profiles[0].id
+    relationship: UserRelationship = await crud_relationship.create(
+        my_profile_id=user_profile_id,
+        other_profile_id=user_profile_id,
+        other_profile_nickname=user.profiles[0].nickname,
+        type=RelationshipType.SELF
+    )
     await session.commit()
     await session.refresh(user)
+
+    user_profile: UserProfile = await crud_user_profile.get(
+        conditions=(
+            UserProfile.id == user_profile_id,
+            UserProfile.is_active == 1
+        ),
+        options=[
+            selectinload(UserProfile.images),
+            selectinload(UserProfile.followers)
+        ])
+    profile_images: List[UserProfileImage] = user_profile.images
+
+    # Redis 데이터 추가
+    redis_handler = RedisHandler()
+    await RedisFollowingsByUserProfileS.sadd(
+        redis_handler.redis,
+        user_profile_id,
+        RedisFollowingsByUserProfileS.schema(
+            id=user_profile_id,
+            identity_id=user_profile.identity_id,
+            nickname=user_profile.nickname,
+            type=relationship.type.name.lower(),
+            favorites=relationship.favorites,
+            is_hidden=relationship.is_hidden,
+            is_forbidden=relationship.is_forbidden,
+            files=await redis_handler.generate_presigned_files(
+                UserProfileImage, [i for i in profile_images if i.is_default]
+            )
+        )
+    )
 
     return UserS.from_orm(user)
 
@@ -150,7 +190,7 @@ async def other_profile_detail(
             })
     relationship = next((m for m in other_profile.followers if m.my_profile_id == user_profile_id), None)
     other_profile_dict.update({
-        'relationship': relationship.type.name.lower() if relationship else None
+        'relationship': relationship.type.value if relationship else None
     })
 
     return other_profile_dict
@@ -264,7 +304,7 @@ async def search_user_profiles(
 async def create_relationship(
     user_profile_id: int,
     other_profile_id: int,
-    relation_type: str = Body(embed=True, default=RelationshipType.FRIEND.name.lower()),
+    relation_type: str = Body(embed=True, default=RelationshipType.FRIEND.value),
     user_session: UserSession = Depends(verifier),
     session=Depends(get_async_session)
 ):
@@ -291,7 +331,9 @@ async def create_relationship(
         options=[
             selectinload(UserProfile.followings)
         ])
-    relation_type: RelationshipType = RelationshipType.get_by_name(relation_type)
+    relation_type: RelationshipType = RelationshipType(relation_type)
+    if not relation_type:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Invalid `relation_type`.')
     if next((
         f for f in user_profile.followings if
         f.other_profile_id == other_profile_id and f.type == relation_type),

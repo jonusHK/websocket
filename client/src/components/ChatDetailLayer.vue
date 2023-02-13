@@ -206,11 +206,6 @@ export default {
                 }
             });
         }
-        const onCancelInviteFollowing = function() {
-            state.showInvitePopup = false;
-            state.searchFollowingNickname = '';
-            state.selectedFollowingIds = [];
-        }
         const onConfirmInviteFollowing = function() {
             if (state.selectedFollowingIds.length > 0) {
                 const data = {
@@ -220,7 +215,7 @@ export default {
                     }
                 }
                 wsSend(data);
-                onCancelInviteFollowing();
+                state.showInvitePopup = false;
             } else {
                 proxy.$alert({
                     message: '초대할 친구를 선택해주세요.',
@@ -309,10 +304,10 @@ export default {
         })
         watch(
             () => state.showInvitePopup,
-            (cur, prev) => {
-                if (cur === true) {
+            (cur) => {
+                if (cur) {
                     emit('chatDetail', state.room.id);
-                    proxy.$axios.get(VITE_SERVER_HOST + `/users/relationship/${state.loginProfileId}/search`)
+                    proxy.$axios.get(VITE_SERVER_HOST + `/v1/users/relationship/${state.loginProfileId}/search`)
                     .then((res) => {
                         if (res.status === 200) {
                             state.followingsNotInRoom = _.filter(res.data.data, function(f) {
@@ -320,6 +315,9 @@ export default {
                             })
                         }
                     })
+                } else {
+                    state.searchFollowingNickname = '';
+                    state.selectedFollowingIds = [];
                 }
             },
         )
@@ -356,7 +354,6 @@ export default {
             sendFiles,
             sendMessage,
             exitRoom,
-            onCancelInviteFollowing,
             onConfirmInviteFollowing,
             stopEvent,
             searchedFollowings,
@@ -369,9 +366,9 @@ export default {
 <template>
     <div v-if="isConnected" class="chat-detail-body">
         <div class="chat-detail-body-list" v-if="state.chatHistories" @scroll="onScrollChatHistories">
-            <div v-for="obj in state.chatHistories" :key="obj.id" class="chat-histories">
+            <div v-for="obj in state.chatHistories" :key="obj.id" class="chat-histories" @click="onClickProfileId(obj.user_profile_id)">
                 <div v-if="obj.type !== 'notice'" class="chat-history">
-                    <div v-if="getUserProfileImageByChat(obj) !== null" class="chat-profile" @click="onClickProfileId(obj.user_profile_id)" :style="{
+                    <div v-if="getUserProfileImageByChat(obj) !== null" class="chat-profile" :style="{
                         backgroundImage: 'url(' + getDefaultProfileImageByChat(obj) + ')',
                         backgroundRepeat: 'no-repeat',
                         backgroundSize: 'cover',
@@ -412,7 +409,7 @@ export default {
             >
                 <div>
                     <div class="invite-following-popup-title">
-                        <span><b>대화상대 선택</b></span>
+                        <span><b>대화상대 초대</b></span>
                     </div>
                     <div class="invite-following-popup-input">
                         <ui-textfield v-model="state.searchFollowingNickname" outlined>
@@ -456,7 +453,7 @@ export default {
                         <div class="invite-following-btn">
                             <div class="invite-following-btn-container">
                                 <div>
-                                    <ui-button @click="onCancelInviteFollowing" style="margin-right: 5px;">취소</ui-button>
+                                    <ui-button @click="state.showInvitePopup = false" style="margin-right: 5px;">취소</ui-button>
                                 </div>
                                 <div>
                                     <ui-button raised @click="onConfirmInviteFollowing" style="margin-right: 5px;">확인</ui-button>
@@ -484,7 +481,7 @@ export default {
                             </label>
                             <ui-icon
                                 class="invite-following"
-                                @click="state.showInvitePopup = true"
+                                @click="state.showInvitePopup = !state.showInvitePopup"
                                 v-tooltip="'대화상대 초대'"
                                 aria-describedby="invite-following-tooltip"
                             >add_box
@@ -517,6 +514,7 @@ export default {
 <style scoped>
 .chat-detail-body {
   width: 100%;
+  min-width: 300px;
   height: 100%;
   border-left: 1px solid #e0e0e0;
 }
@@ -642,10 +640,10 @@ export default {
 
 .invite-following-popup {
     position: absolute;
-    width: 90%;
+    width: 300px;
     height: 400px;
-    left: -5px;
-    bottom: 150px;
+    left: 10px;
+    bottom: 50px;
     display: inline-block;
     background-color: #ffffff;
     border: 1px solid #e0e0e0;
