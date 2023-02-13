@@ -13,7 +13,7 @@ from aioredis.client import PubSub
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi import WebSocket, WebSocketDisconnect
 from fastapi.encoders import jsonable_encoder
-from sqlalchemy import func
+from sqlalchemy import func, and_
 from sqlalchemy.engine import Row
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
@@ -36,7 +36,7 @@ from server.crud.service import ChatRoomUserAssociationCRUD, ChatRoomCRUD, ChatH
 from server.crud.user import UserProfileCRUD
 from server.db.databases import get_async_session, settings, async_session
 from server.models import User, UserProfile, ChatRoom, ChatRoomUserAssociation, ChatHistory, \
-    ChatHistoryUserAssociation, ChatHistoryFile
+    ChatHistoryUserAssociation, ChatHistoryFile, UserRelationship, UserProfileImage
 from server.schemas.base import WebSocketFileS
 from server.schemas.chat import ChatSendFormS, ChatSendDataS, ChatReceiveFormS, ChatRoomCreateParamS
 from server.schemas.service import ChatRoomS
@@ -224,33 +224,37 @@ async def chat_room_create(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail='Not exists all for target profile ids.')
 
-    mapping_profile_ids: List[int] = list(set(data.target_profile_ids + [data.user_profile_id]))
+    mapping_profile_ids: Set[int] = set(data.target_profile_ids + [data.user_profile_id])
 
     # 1:1 방 혹은 나와의 채팅방 생성 시, 기존 방 있다면 리턴
     if len(mapping_profile_ids) <= 2:
-        _room_mapping_rows: List[Row] = await crud_room_user_mapping.list(
-            join=[(ChatRoom, ChatRoomUserAssociation.room_id == ChatRoom.id)],
-            with_only_columns=(
-                ChatRoom,
-                func.count(ChatRoomUserAssociation.user_profile_id).label('profile_cnt')),
-            conditions=(
-                ChatRoom.is_active == 1,
-                ChatRoomUserAssociation.user_profile_id.in_(mapping_profile_ids)),
-            group_by=(ChatRoomUserAssociation.room_id,),
-            having=(func.count(ChatRoomUserAssociation.user_profile_id) == len(mapping_profile_ids)))
-        if _room_mapping_rows:
-            _room = _room_mapping_rows[-1]['ChatRoom']
+        active_rooms: List[ChatRoom] = await crud_room.list(
+            conditions=(ChatRoom.is_active == 1,),
+            options=[selectinload(ChatRoom.user_profiles).load_only('user_profile_id')],
+            order_by=(ChatRoom.created.desc(),)
+        )
+        room: ChatRoom | None = None
+        for r in active_rooms:
+            if r.user_profiles:
+                profile_ids: Set[int] = {m.user_profile_id for m in r.user_profiles}
+                if (
+                    len(profile_ids) == len(mapping_profile_ids)
+                    and len(profile_ids - mapping_profile_ids) == 0
+                ):
+                    room = r
+                    break
+        if room:
             async with redis_handler.pipeline(transaction=True) as pipe:
                 for profile_id in mapping_profile_ids:
                     _, pipe = await redis_handler.get_room_by_user_profile(
-                        _room.id, profile_id, crud_room_user_mapping, pipe=pipe, sync=True
+                        room.id, profile_id, crud_room_user_mapping, pipe=pipe, sync=True
                     )
                     _, pipe = await redis_handler.get_user_profiles_in_room(
-                        _room.id, profile_id, crud_room_user_mapping, pipe=pipe, sync=True
+                        room.id, profile_id, crud_room_user_mapping, pipe=pipe, sync=True
                     )
                 if pipe:
                     await pipe.execute()
-            return ChatRoomS.from_orm(_room)
+            return ChatRoomS.from_orm(room)
 
     # 채팅방 생성 이후 유저와 채팅방 연결
     room: ChatRoom = await crud_room.create(type=data.type)
@@ -1177,40 +1181,42 @@ async def chat_followings(websocket: WebSocket, user_profile_id: int):
             if duplicated_followings:
                 for key, items in groupby(duplicated_followings, key=lambda x: x.id):
                     followings.append(list(items)[-1])
-                # else:
-                #     user_profile: UserProfile = await crud_user_profile.get(
-                #         conditions=(
-                #             UserProfile.id == user_profile_id,
-                #             UserProfile.is_active == 1),
-                #         options=[
-                #             selectinload(UserProfile.followings).
-                #             joinedload(UserRelationship.other_profile).
-                #             selectinload(UserProfile.images),
-                #             selectinload(UserProfile.followings).
-                #             joinedload(UserRelationship.other_profile).
-                #             selectinload(UserProfile.followers)
-                #         ])
-                #     if user_profile.followings:
-                #         async with redis_handler.lock(
-                #             key=RedisFollowingsByUserProfileS.get_lock_key(user_profile_id)
-                #         ):
-                #             if not await RedisFollowingsByUserProfileS.smembers(
-                #                 redis_handler.redis, user_profile_id
-                #             ):
-                #                 await RedisFollowingsByUserProfileS.sadd(redis_handler.redis, user_profile_id, *[
-                #                     RedisFollowingsByUserProfileS.schema(
-                #                         id=f.other_profile_id,
-                #                         identity_id=f.other_profile.identity_id,
-                #                         nickname=f.other_profile.get_nickname_by_other(user_profile_id),
-                #                         type=f.type.name.lower(),
-                #                         favorites=f.favorites,
-                #                         is_hidden=f.is_hidden,
-                #                         is_forbidden=f.is_forbidden,
-                #                         files=await redis_handler.generate_presigned_files(
-                #                             UserProfileImage, [i for i in f.other_profile.images if i.is_default])
-                #                     ) for f in user_profile.followings
-                #                 ])
-                await websocket.send_json(jsonable_encoder(followings))
+
+            if not followings:
+                crud_user_profile = UserProfileCRUD(session)
+                user_profile: UserProfile = await crud_user_profile.get(
+                    conditions=(
+                        UserProfile.id == user_profile_id,
+                        UserProfile.is_active == 1),
+                    options=[
+                        selectinload(UserProfile.followings).
+                        joinedload(UserRelationship.other_profile).
+                        selectinload(UserProfile.images),
+                        selectinload(UserProfile.followings).
+                        joinedload(UserRelationship.other_profile).
+                        selectinload(UserProfile.followers)
+                    ])
+                if user_profile.followings:
+                    async with redis_handler.lock(
+                        key=RedisFollowingsByUserProfileS.get_lock_key(user_profile_id)
+                    ):
+                        if not await RedisFollowingsByUserProfileS.smembers(
+                            redis_handler.redis, user_profile_id
+                        ):
+                            await RedisFollowingsByUserProfileS.sadd(redis_handler.redis, user_profile_id, *[
+                                RedisFollowingsByUserProfileS.schema(
+                                    id=f.other_profile_id,
+                                    identity_id=f.other_profile.identity_id,
+                                    nickname=f.other_profile.get_nickname_by_other(user_profile_id),
+                                    type=f.type.name.lower(),
+                                    favorites=f.favorites,
+                                    is_hidden=f.is_hidden,
+                                    is_forbidden=f.is_forbidden,
+                                    files=await redis_handler.generate_presigned_files(
+                                        UserProfileImage, [i for i in f.other_profile.images if i.is_default])
+                                ) for f in user_profile.followings
+                            ])
+            await websocket.send_json(jsonable_encoder(followings))
         except (WebSocketDisconnect, ConnectionClosedOK) as e:
             logger.exception(get_log_error(e))
             raise e
