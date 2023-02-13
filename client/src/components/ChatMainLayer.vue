@@ -1,11 +1,12 @@
 <script>
-import { reactive, onMounted, computed, getCurrentInstance, nextTick } from 'vue';
+import { reactive, onMounted, computed, getCurrentInstance, nextTick, watch } from 'vue';
 import FollowingListLayer from './FollowingListLayer.vue';
 import FollowingInfoLayer from './FollowingInfoLayer.vue';
 import ChatListLayer from './ChatListLayer.vue';
 import ChatDetailLayer from './ChatDetailLayer.vue';
 import ChatInfoLayer from './ChatInfoLayer.vue';
 import _ from 'lodash';
+import { looseIndexOf } from '@vue/shared';
 const { VITE_SERVER_HOST } = import.meta.env;
 
 export default {
@@ -42,7 +43,7 @@ export default {
       showCreateRoomPopup: false,
       searchFollowingNickname: '',
       selectedFollowingIds: [],
-
+      showSettings: false,
     });
     if (proxy.$store.state.user.userId === '' || proxy.$store.state.user.userIsActive === false) {
       proxy.$router.replace('/login');
@@ -146,7 +147,7 @@ export default {
       state.isAlreadyFollowing = false;
     }
     const moveChatRoomDetail = function() {
-      proxy.$axios.post(VITE_SERVER_HOST + '/chats/rooms/create', JSON.stringify({
+      proxy.$axios.post(VITE_SERVER_HOST + '/v1/chats/rooms/create', JSON.stringify({
         user_profile_id: state.loginProfileId,
         target_profile_ids: [state.addUserProfile.id]
       }), {
@@ -181,7 +182,7 @@ export default {
     }
     const onConfirmAddUserProfile = function() {
       if (state.addUserProfile !== null) {
-        proxy.$axios.post(VITE_SERVER_HOST + `/users/relationship/${state.loginProfileId}/${state.addUserProfile.id}`)
+        proxy.$axios.post(VITE_SERVER_HOST + `/v1/users/relationship/${state.loginProfileId}/${state.addUserProfile.id}`)
         .then((res) => {
           if (res.status === 201) {
             proxy.$alert({
@@ -214,7 +215,7 @@ export default {
       }
     }
     const searchProfile = function(obj) {
-      const url = new URL(VITE_SERVER_HOST + '/users/profiles');
+      const url = new URL(VITE_SERVER_HOST + '/v1/users/profiles');
       url.search = new URLSearchParams(obj);
       proxy.$axios.get(url)
       .then((res) => {
@@ -253,7 +254,7 @@ export default {
     }
     const onConfirmCreateRoom = function() {
       if (state.selectedFollowingIds.length > 0) {
-        proxy.$axios.post(VITE_SERVER_HOST + '/chats/rooms/create', JSON.stringify({
+        proxy.$axios.post(VITE_SERVER_HOST + '/v1/chats/rooms/create', JSON.stringify({
           user_profile_id: state.loginProfileId,
           target_profile_ids: state.selectedFollowingIds
         }), {
@@ -293,15 +294,27 @@ export default {
         });
       }
     }
+    const logout = function() {
+      proxy.$router.replace('/login');
+    }
     onMounted(() => {
       followingListSocket.onopen = function(event) {
           console.log('친구 목록 웹소켓 연결 성공');
       }
       followingListSocket.onmessage = function(event) {
-          const followings = _.orderBy(JSON.parse(event.data), ['nickname'], ['asc']);
-          state.followings = _.filter(followings, function(f) {
+          let followings = _.orderBy(JSON.parse(event.data), ['nickname'], ['asc']);
+          followings = _.filter(followings, function(f) {
               return f.is_hidden === false && f.is_forbidden === false;
           });
+          const self = _.find(followings, function(f) {
+            return f.type === 'self';
+          });
+          const removeIdx = _.indexOf(followings, self);
+          if (removeIdx !== -1) {
+            followings.splice(_.indexOf(followings, self), 1);
+            followings.unshift(self);
+          }
+          state.followings = followings;
       }
       followingListSocket.onclose = function(event) {
           console.log('following list close - ', event);
@@ -350,6 +363,7 @@ export default {
       onClickProfileId,
       onCancelCreateRoom,
       onConfirmCreateRoom,
+      logout,
     }
   },
   components: {
@@ -366,7 +380,7 @@ export default {
   <div id="chat-container">
     <div id="chat-menu">
       <div class="chat-menu-icon">
-        <div>
+        <div class="chat-menu-icon-top-layout">
           <ui-icon
             @click="onChangeChatMenuType('following')"
             :style="{
@@ -390,10 +404,24 @@ export default {
             </ui-badge>
           </p>
         </div>
-        <div>
+        <div class="chat-menu-icon-down-layout">
           <!-- <ui-icon>notifications</ui-icon> -->
           <!-- <ui-icon>notifications_off</ui-icon> -->
-          <ui-icon>settings</ui-icon>
+          <ui-icon
+            @click="state.showSettings = !state.showSettings"
+            :style="{
+              cursor: 'pointer'
+            }"
+          >settings</ui-icon>
+        </div>
+        <div
+          v-show="state.showSettings" class="settings-popup" @click="logout()"
+        >
+          <div class="settings-popup-container">
+            <div class="settings-popup-item">
+              로그아웃
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -406,17 +434,17 @@ export default {
         >search
         </ui-icon> -->
         <ui-icon
-          v-if="state.chatBodyListView['following'] === true" 
+          v-if="state.chatBodyListView['following']" 
           v-tooltip="'친구 추가'"
           aria-describedby="add-user-tooltip"
-          @click="state.showAddUserPopup = true"
+          @click="state.showAddUserPopup = !state.showAddUserPopup"
         >person_add_alt_1
         </ui-icon>
         <ui-icon
-          v-else-if="state.chatBodyListView['chat'] === true"
+          v-else-if="state.chatBodyListView['chat']"
           v-tooltip="'채팅방 생성'"
           aria-describedby="add-user-tooltip"
-          @click="state.showCreateRoomPopup = true"
+          @click="state.showCreateRoomPopup = !state.showCreateRoomPopup"
         >add_comment
         </ui-icon>
       </div>
@@ -477,7 +505,7 @@ export default {
         <div class="invite-following-popup">
           <div>
             <div class="invite-following-popup-title">
-              <span><b>대화상대 선택</b></span>
+              <span><b>채팅방 생성</b></span>
             </div>
             <div class="invite-following-popup-input">
               <ui-textfield v-model="state.searchFollowingNickname" outlined>
@@ -540,12 +568,6 @@ export default {
           :followings="state.followings"
           @followingInfo="followingInfo"
         />
-        <FollowingInfoLayer
-          v-if="state.chatBodyInfoView['following']"
-          :userProfileId="state.userProfileId"
-          @closeFollowingInfo="closeFollowingInfo"
-          @moveChatRoomDetail="chatDetail"
-        />
         <ChatListLayer
           v-if="state.chatBodyListView['chat']"
           :chatRooms="state.chatRooms"
@@ -559,6 +581,12 @@ export default {
           @chatDetail="chatDetail"
           @followingInfo="followingInfo"
         />
+        <FollowingInfoLayer
+          v-if="state.chatBodyInfoView['following']"
+          :userProfileId="state.userProfileId"
+          @closeFollowingInfo="closeFollowingInfo"
+          @moveChatRoomDetail="chatDetail"
+        />
         <ChatInfoLayer
           v-if="state.chatBodyInfoView['chat']"
           :chatRoomId="state.chatRoomId"
@@ -570,6 +598,39 @@ export default {
 </template>
 
 <style scoped>
+.settings-popup {
+  position: fixed;
+  width: 150px;
+  height: 50px;
+  left: 75px;
+  bottom: 40px;
+  display: inline-block;
+  background-color: #ffffff;
+  border: 1px solid #e0e0e0;
+  border-radius: 3%;
+  box-shadow: 1px 2px 5px 0px #757575;
+  box-sizing: border-box;
+  z-index: 1;
+}
+
+.settings-popup:hover {
+  background-color: #f5f5f5;
+}
+
+.settings-popup-container {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  display: flex; 
+  flex-direction: column; 
+  justify-content: center; 
+  align-items: center;
+  cursor: pointer;
+}
+
+.settings-popup-item {
+  margin: 0;
+}
 .chat-header-btn-parent {
   position: relative;
   width: 100%;
