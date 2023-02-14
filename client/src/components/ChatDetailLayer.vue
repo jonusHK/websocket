@@ -1,8 +1,7 @@
 <script>
-import { ref, reactive, watch, onMounted, onUnmounted, getCurrentInstance, toRef, nextTick, onUpdated, computed } from 'vue';
-import constants from '../constants';
+import { ref, reactive, watch, onMounted, onUnmounted, getCurrentInstance, toRef, nextTick, computed } from 'vue';
 import _ from 'lodash';
-import { useEvent, useConfirm } from 'balm-ui';
+import { useConfirm } from 'balm-ui';
 
 const { VITE_SERVER_HOST } = import.meta.env;
 
@@ -26,6 +25,7 @@ export default {
                 limit: 50,
             },
             bottomFlag: true,
+            moveFlag: true,
             uploadFiles: [],
             contents: '',
             showInvitePopup: false,
@@ -109,16 +109,19 @@ export default {
                 state.bottomFlag = false;
                 state.scrollHeight = scrollHeight;
                 if (scrollTop === 0) {
+                    state.moveFlag = true;
                     loadMore();
+                } else {
+                    state.moveFlag = false;
                 }
             }
         }
         const moveChatBodyPosition = function() {
-            if (state.bottomFlag === true) {
-                state.scrollHeight = 0;
-            }
             const currentScrollHeight = window.$('.chat-detail-body-list').prop('scrollHeight');
-            if (currentScrollHeight !== state.scrollHeight) {
+            if (state.bottomFlag || (state.moveFlag && currentScrollHeight !== state.scrollHeight)) {
+                if (state.bottomFlag) {
+                    state.scrollHeight = 0;
+                }
                 const height = window.$('.chat-detail-body-list').prop('scrollHeight') - state.scrollHeight;
                 window.$('.chat-detail-body-list').scrollTop(height);
             }
@@ -156,6 +159,7 @@ export default {
                     }
                 }
                 wsSend(data);
+                state.bottomFlag = true;
             }
         }
         const onInputFile = function() {
@@ -185,6 +189,7 @@ export default {
                     }
                 };
                 wsSend(data);
+                state.bottomFlag = true;
                 window.$('.chat-input-body').focus();
                 state.contents = '';
                 if (e !== undefined) {
@@ -266,6 +271,20 @@ export default {
                     }
                     state.chatHistories.push(json.data.history);
                 }
+
+                if (_.includes(['lookup', 'message', 'file', 'invite'], json.type)) {
+                    const data = {
+                        'type': 'update',
+                        'data': {
+                            'is_read': true
+                        }
+                    };
+                    wsSend(data);
+                    // 스크롤 이동
+                    nextTick(() => {
+                        setTimeout(() => moveChatBodyPosition(), 70);
+                    })
+                }
             }
             ws.value.onclose = function(event) {
                 console.log('chat socket close - ', event);
@@ -283,18 +302,6 @@ export default {
             if (ws.value.readyState === WebSocket.OPEN) {
                 ws.value.close();
             }
-        })
-        onUpdated(() => {
-            const data = {
-                'type': 'update',
-                'data': {
-                    'is_read': true
-                }
-            };
-            wsSend(data);
-            nextTick(() => {
-                setTimeout(() => moveChatBodyPosition(), 50);
-            });
         })
         const searchedFollowings = computed(() => {
             const searchedFollowings = _.filter(state.followingsNotInRoom, function(f) {
@@ -366,15 +373,15 @@ export default {
 <template>
     <div v-if="isConnected" class="chat-detail-body">
         <div class="chat-detail-body-list" v-if="state.chatHistories" @scroll="onScrollChatHistories">
-            <div v-for="obj in state.chatHistories" :key="obj.id" class="chat-histories" @click="onClickProfileId(obj.user_profile_id)">
+            <div v-for="obj in state.chatHistories" :key="obj.id" class="chat-histories">
                 <div v-if="obj.type !== 'notice'" class="chat-history">
                     <div v-if="getUserProfileImageByChat(obj) !== null" class="chat-profile" :style="{
                         backgroundImage: 'url(' + getDefaultProfileImageByChat(obj) + ')',
                         backgroundRepeat: 'no-repeat',
                         backgroundSize: 'cover',
                         backgroundPosition: 'center center',
-                    }"></div>
-                    <div v-else class="chat-profile-default">
+                    }" @click="onClickProfileId(obj.user_profile_id)"></div>
+                    <div v-else class="chat-profile-default" @click="onClickProfileId(obj.user_profile_id)">
                         <p><ui-icon style="width: 100%; height: 100%; color: #b3e5fc">person</ui-icon></p>
                     </div>
                     <div>

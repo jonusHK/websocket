@@ -26,8 +26,8 @@ class CRUDBase:
 
     async def list(
         self,
-        offset=0,
-        limit=100,
+        offset: int = 0,
+        limit: int = 0,
         order_by: Optional[tuple] = None,
         join: Optional[List[tuple]] = None,
         outerjoin: Optional[List[tuple]] = None,
@@ -37,7 +37,14 @@ class CRUDBase:
         having: Optional[BooleanClauseList | BinaryExpression] = None,
         options: Optional[list] = None
     ):
-        stmt = select(self.model).offset(offset).limit(limit)
+        assert offset >= 0
+        assert limit >= 0
+
+        stmt = select(self.model)
+        if offset > 0:
+            stmt = stmt.offset(offset)
+        if limit > 0:
+            stmt = stmt.limit(limit)
         if order_by:
             stmt = stmt.order_by(*order_by)
         if conditions:

@@ -11,11 +11,13 @@ export default {
     name: 'ChatListLayer',
     props: {
         chatRooms: Array,
+        chatRoomId: Number,
     },
     setup (props, { emit }) {
         const { proxy } = getCurrentInstance();
         const state = reactive({
             chatRooms: [],
+            currentChatRoomId: toRef(props, 'chatRoomId'),
         });
         const detailChatRoom = function(room) {
             emit('chatDetail', room.id);
@@ -132,7 +134,7 @@ export default {
         }
         watch(
             () => props.chatRooms,
-            (cur, prev) => {
+            (cur) => {
                 state.chatRooms = cur;
             },
         )
@@ -171,7 +173,7 @@ export default {
                 </div>
                 <div class="chat-room-info-meta">
                     <div class="chat-room-info-time">{{ getLastChatHistoryCreated(obj) }}</div>
-                    <div v-if="obj.unread_msg_cnt > 0">
+                    <div v-if="obj.id !== state.currentChatRoomId && obj.unread_msg_cnt > 0">
                         <div class="unread-msg-cnt-icon-div">
                             <p class="unread-msg-cnt-icon"></p>
                         </div>

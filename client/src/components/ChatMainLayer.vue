@@ -76,6 +76,9 @@ export default {
         state.chatBodyInfoView[key] = false;
       }
       initData();
+      if (type === 'following') {
+        followingInfo(state.loginProfileId);
+      }
     }
     const followingInfo = function(userProfileId) {
       for (const key in state.chatBodyInfoView) {
@@ -298,6 +301,7 @@ export default {
       proxy.$router.replace('/login');
     }
     onMounted(() => {
+      followingInfo(state.loginProfileId);
       followingListSocket.onopen = function(event) {
           console.log('친구 목록 웹소켓 연결 성공');
       }
@@ -331,6 +335,10 @@ export default {
           state.chatRooms = _.orderBy(JSON.parse(event.data), ['timestamp'], 'desc');
           let totalUnreadMsgCnt = 0;
           for (const room of state.chatRooms) {
+              // 현재 조회중인 채팅방의 unread_msg_cnt 값 무시
+              if (state.chatRoomId !== null && state.chatRoomId === room.id) {
+                continue
+              }
               totalUnreadMsgCnt += room.unread_msg_cnt;
           }
           state.totalUnreadMsgCnt = totalUnreadMsgCnt;
@@ -516,18 +524,20 @@ export default {
             </div>
             <div class="invite-following-popup-list">
               <div v-if="state.searchFollowingNickname === ''" class="following-list-container">
-                <div v-for="following in state.followings" :key="following.id" class="following-list" @click="onClickProfileId(following.id)">
-                  <div v-if="getDefaultProfileImage(following.files) !== null" class="following-profile" :style="{
+                <div v-for="following in state.followings" :key="following.id" @click="onClickProfileId(following.id)">
+                  <div v-if="following.id !== state.loginProfileId" class="following-list">
+                    <div v-if="getDefaultProfileImage(following.files) !== null" class="following-profile" :style="{
                       backgroundImage: 'url(' + getDefaultProfileImage(following.files) + ')',
                       backgroundRepeat: 'no-repeat',
                       backgroundSize: 'cover',
                       backgroundPosition: 'center center',
-                  }"></div>
-                  <div v-else class="following-profile-default">
-                    <p><ui-icon style="width: 100%; height: 100%; color: #b3e5fc">person</ui-icon></p>
+                    }"></div>
+                    <div v-else class="following-profile-default">
+                      <p><ui-icon style="width: 100%; height: 100%; color: #b3e5fc">person</ui-icon></p>
+                    </div>
+                    <p>{{ following.nickname }}</p>
+                    <input type="checkbox" v-model="state.selectedFollowingIds" :value="following.id" @click.stop="stopEvent" />
                   </div>
-                  <p>{{ following.nickname }}</p>
-                  <input type="checkbox" v-model="state.selectedFollowingIds" :value="following.id" @click.stop="stopEvent" />
                 </div>
               </div>
               <div v-else-if="searchedFollowings" class="following-list-container">
@@ -571,6 +581,7 @@ export default {
         <ChatListLayer
           v-if="state.chatBodyListView['chat']"
           :chatRooms="state.chatRooms"
+          :chatRoomId="state.chatRoomId"
           @chatDetail="chatDetail"
           @chatInfo="chatInfo"
         />
