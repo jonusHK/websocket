@@ -144,14 +144,12 @@ export default {
       }
       watch(
         () => props.userProfileId,
-        (cur, prev) => {
+        (cur) => {
             getUserProfileDetail(cur);
-            nextTick();
         },
       )
       onMounted(() => {
         getUserProfileDetail(state.profileId);
-        nextTick();
       })
       return {
         state,
@@ -252,14 +250,14 @@ export default {
 }
 
 .profile-image {
-    width: 300px;
-    height: 300px;
+    width: 250px;
+    height: 250px;
     border-radius: 5%;
 }
 
 .profile-image-default {
-    width: 300px;
-    height: 300px;
+    width: 250px;
+    height: 250px;
     border-radius: 5%;
     margin: 0;
     background-color: #81d4fa;
