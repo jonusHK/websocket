@@ -201,15 +201,13 @@ html, body, #app {
 }
 
 .chat-body-info-summary {
-  position: sticky;
   background-color: #ffffff;
-  top: 0;
-  left: 0;
   height: 50px;
   padding-left: 15px;
   padding-right: 15px;
   border-left: 1px solid #e0e0e0;
   border-bottom: 1px solid #e0e0e0;
+  box-sizing: border-box;
 }
 
 .chat-body-info-summary div {
@@ -218,6 +216,7 @@ html, body, #app {
   justify-content:space-between;
   align-items: center;
   height: 100%;
+  font-size: 20px;
 }
 
 .chat-body-info-view {
