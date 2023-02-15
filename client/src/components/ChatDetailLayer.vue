@@ -295,6 +295,9 @@ export default {
                 isConnected.value = false;
             }
         }
+        const getUserCnt = function() {
+            return state.room.user_profiles.length > 2 ? state.room.user_profiles.length : null;
+        }
         onMounted(() => {
             connectWebsocket();
         })
@@ -363,6 +366,7 @@ export default {
             exitRoom,
             onConfirmInviteFollowing,
             stopEvent,
+            getUserCnt,
             searchedFollowings,
             isConnected,
         }
@@ -372,6 +376,11 @@ export default {
 
 <template>
     <div v-if="isConnected" class="chat-detail-body">
+        <div class="chat-body-info-summary">
+            <div>
+                <p><b>{{ state.room.name }}</b><span class="chat-room-info-user-cnt">&nbsp;&nbsp;{{ getUserCnt(obj) }}</span></p>
+            </div>
+        </div>
         <div class="chat-detail-body-list" v-if="state.chatHistories" @scroll="onScrollChatHistories">
             <div v-for="obj in state.chatHistories" :key="obj.id" class="chat-histories">
                 <div v-if="obj.type !== 'notice'" class="chat-history">
@@ -528,7 +537,7 @@ export default {
 
 .chat-detail-body-list {
   width: 100%;
-  height: calc(100% - 150px);
+  height: calc(100% - 200px);
   overflow: auto;
 }
 
@@ -628,6 +637,10 @@ export default {
     display: flex;
     flex-direction: row;
     align-items: center;
+}
+
+.chat-room-info-user-cnt {
+    color: #9e9e9e;
 }
 
 .upload-icon {

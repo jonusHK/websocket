@@ -168,7 +168,7 @@ export default {
 <template>
     <div class="chat-body-info">
         <div class="chat-body-info-summary">
-            <div style="font-size: 20px;">
+            <div>
                 <p><b>프로필</b></p>
                 <ui-icon @click="closeFollowingInfo()" style="color: #9e9e9e; cursor: pointer;">close</ui-icon>
             </div>
