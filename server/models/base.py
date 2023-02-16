@@ -4,7 +4,8 @@ import os
 import uuid
 import warnings
 from io import IOBase, BytesIO
-from typing import List, Optional, Iterable
+from typing import List, Optional, Iterable, Dict, Any
+from urllib.parse import quote_plus
 
 import boto3
 from PIL import Image
@@ -52,6 +53,9 @@ class S3Media(TimestampMixin, ConvertMixin, Base):
     _file: Optional[IOBase | UploadFile | Image.Image] = None
     thumbnail_size = 300
     chunk_size = 1024 * 1024 * 10
+    bucket_cdn_mapper = {
+        settings.aws_storage_bucket_name: settings.aws_cdn_url
+    }
 
     id = Column(BigInteger, primary_key=True, index=True)
     uid = Column(String(32), nullable=False, unique=True)
@@ -121,13 +125,22 @@ class S3Media(TimestampMixin, ConvertMixin, Base):
             self._file = None
 
     @classmethod
+    def get_file_urls(cls, *media: 'S3Media') -> List[Dict[str, Any]]:
+        return [
+            {
+               'id': m.id,
+               'url': '/'.join([cls.bucket_cdn_mapper[m.bucket_name], quote_plus(m.filepath)])
+            } for m in media
+        ]
+
+    @classmethod
     async def asynchronous_presigned_url(
         cls,
         *media: 'S3Media',
         aws_access_key_id: str = settings.aws_access_key,
         aws_secret_access_key: str = settings.aws_secret_access_key,
         expiration=7 * 24 * 60 * 60  # 7일
-    ):
+    ) -> List[Dict[str, Any]]:
         if not media:
             return []
 
@@ -200,7 +213,8 @@ class S3Media(TimestampMixin, ConvertMixin, Base):
             filepath=filepath,
             content_type=content_type,
             uploaded_by_id=uploaded_by_id,
-            **kwargs)
+            **kwargs
+        )
         instance._file = file if isinstance(file, UploadFile) else file.content
         if upload:
             await instance.upload()
@@ -219,7 +233,8 @@ class S3Media(TimestampMixin, ConvertMixin, Base):
                     filepath=f'{root}thumbnail/{filename}',
                     content_type=content_type,
                     uploaded_by_id=uploaded_by_id,
-                    **kwargs)
+                    **kwargs
+                )
                 im = im_origin
 
                 try:
