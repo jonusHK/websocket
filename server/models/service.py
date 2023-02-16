@@ -1,3 +1,5 @@
+import uuid
+
 from sqlalchemy import Column, BigInteger, String, ForeignKey, Text, Boolean, Integer, UniqueConstraint
 from sqlalchemy.orm import relationship
 
@@ -38,6 +40,7 @@ class ChatHistory(TimestampMixin, ConvertMixin, Base):
     __tablename__ = "chat_histories"
 
     id = Column(BigInteger, primary_key=True, index=True)
+    redis_id = Column(String(32), nullable=False, unique=True, index=True)
     room_id = Column(BigInteger, ForeignKey("chat_rooms.id"), nullable=False)
     user_profile_id = Column(BigInteger, ForeignKey("user_profiles.id", ondelete="CASCADE"))
     contents = Column(Text, nullable=True)
