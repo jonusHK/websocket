@@ -297,7 +297,7 @@ async def chat_room_create(
         ]
     )
     # Redis 데이터 업데이트
-    default_profile_images: List[RedisUserImageFileS] = await redis_handler.generate_user_profile_images(
+    default_profile_images: List[RedisUserImageFileS] = await redis_handler.generate_profile_images_schema(
         [m.user_profile for m in room.user_profiles], only_default=True
     )
     user_profile_ids = []
@@ -563,8 +563,8 @@ async def chat(
                                             user_profile_id=h.user_profile_id,
                                             contents=h.contents,
                                             type=h.type.name.lower(),
-                                            files=await redis_handler.generate_presigned_files(
-                                                ChatHistoryFile, h.files
+                                            files=await redis_handler.generate_files_schema(
+                                                ChatHistoryFile, h.files, presigned=True
                                             ),
                                             read_user_ids=[
                                                 m.user_profile_id for m in h.user_profile_mapping if m.is_read
@@ -820,8 +820,8 @@ async def chat(
                                     o.close()
                                     await session.refresh(o)
 
-                            files_s: List[RedisChatHistoryFileS] = await redis_handler.generate_presigned_files(
-                                ChatHistoryFile, chat_files_db
+                            files_s: List[RedisChatHistoryFileS] = await redis_handler.generate_files_schema(
+                                ChatHistoryFile, chat_files_db, presigned=True
                             )
                             chat_history_redis: RedisChatHistoryByRoomS = RedisChatHistoryByRoomS(
                                 id=chat_history_db.id,
@@ -885,7 +885,7 @@ async def chat(
                             # 방에 속한 유저 -> Redis, DB 동기화
                             current_profiles: List[UserProfile] = [m.user_profile for m in _room_user_mapping]
                             current_profile_images_redis: List[RedisUserImageFileS] = \
-                                await redis_handler.generate_user_profile_images(current_profiles, only_default=True)
+                                await redis_handler.generate_profile_images_schema(current_profiles, only_default=True)
                             current_profile_ids: Set[int] = {p.id for p in current_profiles}
                             for current_id in current_profile_ids:
                                 async with redis_handler.lock(
@@ -936,7 +936,7 @@ async def chat(
                             # 초대 받은 유저에 대해 Redis 업데이트
                             total_profiles: List[UserProfile] = current_profiles + profiles
                             profile_images_redis: List[RedisUserImageFileS] = \
-                                await redis_handler.generate_user_profile_images(profiles, only_default=True)
+                                await redis_handler.generate_profile_images_schema(profiles, only_default=True)
                             total_profile_images_redis: List[RedisUserImageFileS] = \
                                 current_profile_images_redis + profile_images_redis
 
@@ -1174,7 +1174,6 @@ async def chat_followings(websocket: WebSocket, user_profile_id: int):
 
     while True:
         try:
-            # async with async_session() as session:
             duplicated_followings: List[RedisFollowingByUserProfileS] = \
                 await RedisFollowingsByUserProfileS.smembers(redis_handler.redis, user_profile_id)
             followings: List[RedisFollowingByUserProfileS] = []
@@ -1183,39 +1182,42 @@ async def chat_followings(websocket: WebSocket, user_profile_id: int):
                     followings.append(list(items)[-1])
 
             if not followings:
-                crud_user_profile = UserProfileCRUD(session)
-                user_profile: UserProfile = await crud_user_profile.get(
-                    conditions=(
-                        UserProfile.id == user_profile_id,
-                        UserProfile.is_active == 1),
-                    options=[
-                        selectinload(UserProfile.followings).
-                        joinedload(UserRelationship.other_profile).
-                        selectinload(UserProfile.images),
-                        selectinload(UserProfile.followings).
-                        joinedload(UserRelationship.other_profile).
-                        selectinload(UserProfile.followers)
-                    ])
-                if user_profile.followings:
-                    async with redis_handler.lock(
-                        key=RedisFollowingsByUserProfileS.get_lock_key(user_profile_id)
-                    ):
-                        if not await RedisFollowingsByUserProfileS.smembers(
-                            redis_handler.redis, user_profile_id
+                async with async_session() as session:
+                    crud_user_profile = UserProfileCRUD(session)
+                    user_profile: UserProfile = await crud_user_profile.get(
+                        conditions=(
+                            UserProfile.id == user_profile_id,
+                            UserProfile.is_active == 1
+                        ),
+                        options=[
+                            selectinload(UserProfile.followings)
+                            .joinedload(UserRelationship.other_profile)
+                            .selectinload(UserProfile.images),
+                            selectinload(UserProfile.followings)
+                            .joinedload(UserRelationship.other_profile)
+                            .selectinload(UserProfile.followers)
+                        ])
+                    if user_profile.followings:
+                        async with redis_handler.lock(
+                            key=RedisFollowingsByUserProfileS.get_lock_key(user_profile_id)
                         ):
-                            await RedisFollowingsByUserProfileS.sadd(redis_handler.redis, user_profile_id, *[
-                                RedisFollowingsByUserProfileS.schema(
-                                    id=f.other_profile_id,
-                                    identity_id=f.other_profile.identity_id,
-                                    nickname=f.other_profile.get_nickname_by_other(user_profile_id),
-                                    type=f.type.name.lower(),
-                                    favorites=f.favorites,
-                                    is_hidden=f.is_hidden,
-                                    is_forbidden=f.is_forbidden,
-                                    files=await redis_handler.generate_presigned_files(
-                                        UserProfileImage, [i for i in f.other_profile.images if i.is_default])
-                                ) for f in user_profile.followings
-                            ])
+                            if not await RedisFollowingsByUserProfileS.smembers(
+                                redis_handler.redis, user_profile_id
+                            ):
+                                await RedisFollowingsByUserProfileS.sadd(redis_handler.redis, user_profile_id, *[
+                                    RedisFollowingsByUserProfileS.schema(
+                                        id=f.other_profile_id,
+                                        identity_id=f.other_profile.identity_id,
+                                        nickname=f.other_profile.get_nickname_by_other(user_profile_id),
+                                        type=f.type.name.lower(),
+                                        favorites=f.favorites,
+                                        is_hidden=f.is_hidden,
+                                        is_forbidden=f.is_forbidden,
+                                        files=await redis_handler.generate_files_schema(
+                                            UserProfileImage, [i for i in f.other_profile.images if i.is_default]
+                                        )
+                                    ) for f in user_profile.followings
+                                ])
             await websocket.send_json(jsonable_encoder(followings))
         except (WebSocketDisconnect, ConnectionClosedOK) as e:
             logger.exception(get_log_error(e))

@@ -68,20 +68,27 @@ class RedisHandler:
         return self.redis.lock(name=key, timeout=timeout)
 
     @classmethod
-    async def generate_presigned_files(
-        cls, model, iterable: Iterable
+    async def generate_files_schema(
+        cls,
+        model,
+        iterable: Iterable,
+        presigned=False
     ) -> List[RedisUserImageFileS | RedisChatHistoryFileS]:
         assert issubclass(model, UserProfileImage | ChatHistoryFile), 'Invalid model type.'
 
-        model_schema_mapping = {
+        model_schema_mapper = {
             UserProfileImage: RedisUserImageFileS,
             ChatHistoryFile: RedisChatHistoryFileS
         }
-        schema = model_schema_mapping[model]
+        schema = model_schema_mapper[model]
 
         files_s: List[schema] = []
         if iterable:
-            urls: List[Dict[str, Any]] = await model.asynchronous_presigned_url(*iterable)
+            urls: List[Dict[str, Any]] = (
+                await model.asynchronous_presigned_url(*iterable)
+                if presigned
+                else model.get_file_urls(*iterable)
+            )
             for m in iterable:
                 model_to_dict = m.to_dict()
                 model_to_dict.update({
@@ -100,7 +107,7 @@ class RedisHandler:
         return files_s
 
     @classmethod
-    async def generate_user_profile_images(
+    async def generate_profile_images_schema(
         cls,
         profiles: List[UserProfile],
         only_default=False
@@ -115,7 +122,7 @@ class RedisHandler:
             else:
                 for image in p.images:
                     images.append(image)
-        return await cls.generate_presigned_files(UserProfileImage, images)
+        return await cls.generate_files_schema(UserProfileImage, images)
 
     async def get_room(
         self,
@@ -143,7 +150,7 @@ class RedisHandler:
                             pipeline, None, RedisChatRoomsInfoS.schema(
                                 id=room_db.id, type=room_db.type.name.lower(),
                                 user_profile_ids=[m.user_profile_id for m in room_db.user_profiles],
-                                user_profile_files=await self.generate_user_profile_images(
+                                user_profile_files=await self.generate_profile_images_schema(
                                     [m.user_profile for m in room_db.user_profiles], only_default=True
                                 )
                             )
@@ -188,7 +195,7 @@ class RedisHandler:
                                 RedisChatRoomsInfoS.schema(
                                     id=room_db.id, type=room_db.type.name.lower(),
                                     user_profile_ids=[m.user_profile_id for m in room_db.user_profiles],
-                                    user_profile_files=await self.generate_user_profile_images(
+                                    user_profile_files=await self.generate_profile_images_schema(
                                         [m.user_profile for m in room_db.user_profiles], only_default=True
                                     )
                                 ) for room_db in rooms_db if room_db.is_active
@@ -336,8 +343,9 @@ class RedisHandler:
                                     id=p.user_profile.id,
                                     identity_id=p.user_profile.identity_id,
                                     nickname=p.user_profile.get_nickname_by_other(user_profile_id),
-                                    files=await self.generate_presigned_files(
-                                        UserProfileImage, p.user_profile.images)
+                                    files=await self.generate_files_schema(
+                                        UserProfileImage, p.user_profile.images
+                                    )
                                 ) for p in room_user_mapping
                             ]
                         )
@@ -393,7 +401,7 @@ class RedisHandler:
                                     id=m.user_profile.id,
                                     identity_id=m.user_profile.identity_id,
                                     nickname=m.user_profile.get_nickname_by_other(user_profile_id),
-                                    files=await self.generate_presigned_files(UserProfileImage, m.user_profile.images)
+                                    files=await self.generate_files_schema(UserProfileImage, m.user_profile.images)
                                 )
                             )
 

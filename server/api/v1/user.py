@@ -105,7 +105,7 @@ async def signup(user_s: UserCreateS, session: AsyncSession = Depends(get_async_
             favorites=relationship.favorites,
             is_hidden=relationship.is_hidden,
             is_forbidden=relationship.is_forbidden,
-            files=await redis_handler.generate_presigned_files(
+            files=await redis_handler.generate_files_schema(
                 UserProfileImage, [i for i in profile_images if i.is_default]
             )
         )
@@ -183,10 +183,10 @@ async def other_profile_detail(
         'nickname': other_profile.get_nickname_by_other(user_profile_id)
     })
     if other_profile.images:
-        presigned_images: List[Dict[str, Any]] = await UserProfileImage.asynchronous_presigned_url(*other_profile.images)
+        image_urls: List[Dict[str, Any]] = UserProfileImage.get_file_urls(*other_profile.images)
         for image in other_profile_dict['images']:
             image.update({
-                'url': next((im['url'] for im in presigned_images if im['id'] == image['id']), None)
+                'url': next((im['url'] for im in image_urls if im['id'] == image['id']), None)
             })
     relationship = next((m for m in other_profile.followers if m.my_profile_id == user_profile_id), None)
     other_profile_dict.update({
@@ -272,7 +272,7 @@ async def search_user_profiles(
 
     result: List[UserProfileSearchResponseS] = []
     for p in user_profiles:
-        image_urls = await UserProfileImage.asynchronous_presigned_url(*p.images)
+        image_urls = UserProfileImage.get_file_urls(*p.images)
         images = [
             UserProfileSearchImageS(
                 id=im.id,
@@ -362,7 +362,7 @@ async def create_relationship(
             favorites=relationship.favorites,
             is_hidden=relationship.is_hidden,
             is_forbidden=relationship.is_forbidden,
-            files=await redis_handler.generate_presigned_files(
+            files=await redis_handler.generate_files_schema(
                 UserProfileImage, [i for i in other_profile_images if i.is_default]
             )
         )
@@ -433,7 +433,7 @@ async def update_relationship(
                     favorites=following_db.favorites,
                     is_hidden=following_db.is_hidden,
                     is_forbidden=following_db.is_forbidden,
-                    files=await redis_handler.generate_presigned_files(
+                    files=await redis_handler.generate_files_schema(
                         UserProfileImage, [i for i in following_db.other_profile.images if i.is_default]
                     )
                 ))
@@ -562,7 +562,7 @@ async def search_relationship(
             profiles: List[UserProfile] = [r.my_profile, r.other_profile]
 
         for p in profiles:
-            image_urls = await UserProfileImage.asynchronous_presigned_url(*p.images)
+            image_urls = UserProfileImage.get_file_urls(*p.images)
             images = [
                 UserProfileSearchImageS(
                     id=im.id,
