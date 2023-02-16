@@ -378,10 +378,10 @@ export default {
     <div v-if="isConnected" class="chat-detail-body">
         <div class="chat-body-info-summary">
             <div>
-                <p><b>{{ state.room.name }}</b><span class="chat-room-info-user-cnt">&nbsp;&nbsp;{{ getUserCnt(obj) }}</span></p>
+                <p><b>{{ state.room.name }}</b><span class="chat-room-info-user-cnt">&nbsp;&nbsp;{{ getUserCnt() }}</span></p>
             </div>
         </div>
-        <div class="chat-detail-body-list" v-if="state.chatHistories" @scroll="onScrollChatHistories">
+        <div class="chat-detail-body-list" v-if="state.chatHistories.length > 0" @scroll="onScrollChatHistories">
             <div v-for="obj in state.chatHistories" :key="obj.id" class="chat-histories">
                 <div v-if="obj.type !== 'notice'" class="chat-history">
                     <div v-if="getUserProfileImageByChat(obj) !== null" class="chat-profile" :style="{
@@ -402,7 +402,14 @@ export default {
                         <div v-if="obj.is_active === true">
                             <p v-if="obj.contents !== null">{{ obj.contents }}</p>
                             <div v-if="obj.files.length">
-                                <div v-for="file in obj.files" :key="file.chat_history_id" :class="{'file-multiple-preview': obj.files.length > 1, 'file-preview': obj.files.length == 1}">
+                                <div 
+                                    v-for="file in obj.files" 
+                                    :key="file.chat_history_id" 
+                                    :class="{
+                                        'file-multiple-preview': obj.files.length > 1, 
+                                        'file-preview': obj.files.length == 1
+                                    }"
+                                >
                                     <!-- TODO 유효기간 만료 시, 처리 -->
                                     <img v-if="file.content_type.startsWith('image')" :src="file.url" />
                                 </div>
@@ -731,7 +738,7 @@ export default {
 }
 
 .file-preview > img {
-    width: 200px;
+    height: 200px;
     margin-right: 3px;
 }
 </style>
