@@ -256,7 +256,7 @@ export default {
                     if (patchHistories.length > 0 && state.chatHistories.length > 0) {
                         for (let i=0; i < patchHistories.length; i++) {
                             for (let j=state.chatHistories.length-1; j >=0; j--) {
-                                if (state.chatHistories[j].id === patchHistories[i].id) {
+                                if (state.chatHistories[j].redis_id === patchHistories[i].redis_id) {
                                     state.chatHistories[j].is_active = patchHistories[i].is_active;
                                     state.chatHistories[j].read_user_ids = patchHistories[i].read_user_ids;
                                     break;
@@ -382,7 +382,7 @@ export default {
             </div>
         </div>
         <div class="chat-detail-body-list" v-if="state.chatHistories.length > 0" @scroll="onScrollChatHistories">
-            <div v-for="obj in state.chatHistories" :key="obj.id" class="chat-histories">
+            <div v-for="obj in state.chatHistories" :key="obj.redis_id" class="chat-histories">
                 <div v-if="obj.type !== 'notice'" class="chat-history">
                     <div v-if="getUserProfileImageByChat(obj) !== null" class="chat-profile" :style="{
                         backgroundImage: 'url(' + getDefaultProfileImageByChat(obj) + ')',

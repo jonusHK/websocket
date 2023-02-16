@@ -28,7 +28,7 @@ class ChatReceiveFileS(BaseModel):
 
 class ChatReceiveDataS(BaseModel):
     text: Optional[str] = None
-    history_ids: Optional[List[int]] = None
+    history_redis_ids: Optional[List[str]] = None
     target_profile_ids: Optional[List[int]] = None
     files: Optional[list[ChatReceiveFileS]] = None
     is_read: Optional[bool] = None

@@ -50,14 +50,16 @@ class RedisUserProfileByRoomS(RedisUserProfileS):
 
 
 class RedisChatHistoryPatchS(BaseModel):
-    id: int
+    id: Optional[int] = None
+    redis_id: str
     user_profile_id: int
     is_active: bool
     read_user_ids: List[int] = []
 
 
 class RedisChatHistoryByRoomS(BaseModel):
-    id: int
+    id: Optional[int] = None
+    redis_id: str
     user_profile_id: int
     contents: Optional[str] = None
     type: str
