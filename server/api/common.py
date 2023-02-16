@@ -428,9 +428,9 @@ class RedisHandler:
     ) -> Pipeline | None:
         async def _transaction(pipeline: Pipeline):
             pipeline = await RedisChatHistoriesByRoomS.zadd(pipeline, room_id, histories)
-            pipeline = await RedisChatHistoriesToSyncS.zadd(pipeline, room_id, [
-                RedisChatHistoriesToSyncS.schema(id=history.id) for history in histories
-            ])
+            sync_histories: List[RedisChatHistoryByRoomS] = [h for h in histories if h.id]
+            if sync_histories:
+                pipeline = await RedisChatHistoriesToSyncS.zadd(pipeline, room_id, sync_histories)
             return pipeline
 
         if not pipe:
