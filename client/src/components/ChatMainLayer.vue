@@ -31,7 +31,6 @@ export default {
       },
       userProfileId: null,
       chatRoomId: null,
-      chatRoom: null,
       followings: [],
       chatRooms: [],
       totalUnreadMsgCnt: 0,
@@ -51,7 +50,6 @@ export default {
     const initData = function() {
       state.userProfileId = null;
       state.chatRoomId = null;
-      state.chatRoom = null;
       state.showAddUserPopup = false;
       state.searchProfileIdentityId = '';
       state.searchedProfileIdentityId = '';
@@ -110,11 +108,8 @@ export default {
       }
       for (const key in state.chatBodyInfoView) {
         state.chatBodyInfoView[key] = false;
-      }
+      };
       state.chatRoomId = chatRoomId;
-      state.chatRoom = _.filter(state.chatRooms, function(r) {
-        return r.id === state.chatRoomId;
-      })[0];
     }
     const chatInfo = function(chatRoomId) {
       for (const key in state.chatBodyInfoView) {
@@ -160,9 +155,7 @@ export default {
       })
       .then((res) => {
         if (res.status === 201) {
-          nextTick(() => {
-              setTimeout(() => chatDetail(res.data.data.id), 100);
-          });
+          chatDetail(res.data.data.id);
         } else {
           const error_obj = {
             state: 'error',
@@ -267,9 +260,7 @@ export default {
         })
         .then((res) => {
           if (res.status === 201) {
-            nextTick(() => {
-                setTimeout(() => chatDetail(res.data.data.id), 100);
-            });
+            chatDetail(res.data.data.id);
           } else {
             const error_obj = {
               state: 'error',
@@ -332,8 +323,15 @@ export default {
           console.log('채팅방 목록 웹소켓 연결 성공');
       }
       chatRoomListSocket.onmessage = function(event) {
-          state.chatRooms = _.orderBy(JSON.parse(event.data), ['timestamp'], 'desc');
+          state.chatRooms = _.orderBy(
+            JSON.parse(event.data), 
+            [
+              room => { return room.last_chat_timestamp === null ? 0 : room.last_chat_timestamp }, 
+              room => { return room.timestamp === null ? 0 : room.timestamp }
+            ], 
+            ['desc', 'desc']);
           let totalUnreadMsgCnt = 0;
+
           for (const room of state.chatRooms) {
               // 현재 조회중인 채팅방의 unread_msg_cnt 값 무시
               if (state.chatRoomId !== null && state.chatRoomId === room.id) {
@@ -587,9 +585,7 @@ export default {
         />
         <ChatDetailLayer
           v-if="state.chatBodyDetailView['chat']"
-          :chatRoom="state.chatRoom"
           :chatRoomId="state.chatRoomId"
-          @chatDetail="chatDetail"
           @followingInfo="followingInfo"
         />
         <FollowingInfoLayer

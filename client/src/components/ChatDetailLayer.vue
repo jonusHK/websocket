@@ -3,7 +3,7 @@ import { ref, reactive, watch, onMounted, onUnmounted, getCurrentInstance, toRef
 import _ from 'lodash';
 import { useConfirm } from 'balm-ui';
 
-const { VITE_SERVER_HOST } = import.meta.env;
+const { VITE_SERVER_HOST, VITE_SERVER_WEBSOCKET_HOST } = import.meta.env;
 
 export default {
     name: 'ChatDetailLayer',
@@ -17,8 +17,8 @@ export default {
         const confirmDialog = useConfirm();
         const state = reactive({
             loginProfileId: proxy.$store.getters['user/getProfileId'],
-            room: toRef(props, 'chatRoom'),
             roomId: toRef(props, 'chatRoomId'),
+            room: {},
             chatHistories: [],
             load: {
                 offset: 0,
@@ -34,8 +34,22 @@ export default {
             followingsNotInRoom: [],
             scrollHeight: 0,
         });
+        proxy.$axios.get(VITE_SERVER_HOST + `/v1/chats/room/${state.loginProfileId}/${state.roomId}`)
+        .then((res) => {
+            if (res.status === 200) {
+                state.room = res.data.data;
+            }
+        })
+        .catch((err) => {
+            const error_obj = {
+                state: 'error',
+                stateOutlined: true,
+                message: err
+            }
+            proxy.$alert(error_obj);
+        });
+        const wsUrl = ref(`${VITE_SERVER_WEBSOCKET_HOST}/v1/chats/conversation/${state.loginProfileId}/${state.roomId}`);
         const isConnected = ref(false);
-        const wsUrl = ref(`ws://localhost:8000/api/v1/chats/conversation/${state.loginProfileId}/${state.roomId}`);
         const ws = ref(new WebSocket(wsUrl.value));
         const wsSend = function(data) {
             if (ws.value.readyState === WebSocket.OPEN) {
@@ -267,7 +281,7 @@ export default {
                 } else {
                     // type => message, file, invite, terminate
                     if (_.includes(['invite', 'terminate'], json.type) === true) {
-                        emit('chatDetail', state.room.id);
+                        refreshRoom();
                     }
                     state.chatHistories.push(json.data.history);
                 }
@@ -282,7 +296,7 @@ export default {
                     wsSend(data);
                     // 스크롤 이동
                     nextTick(() => {
-                        setTimeout(() => moveChatBodyPosition(), 70);
+                        setTimeout(() => moveChatBodyPosition(), 50);
                     })
                 }
             }
@@ -297,6 +311,22 @@ export default {
         }
         const getUserCnt = function() {
             return state.room.user_profiles.length > 2 ? state.room.user_profiles.length : null;
+        }
+        const refreshRoom = function() {
+            proxy.$axios.get(VITE_SERVER_HOST + `/v1/chats/room/${state.loginProfileId}/${state.roomId}`)
+                .then((res) => {
+                    if (res.status === 200) {
+                        state.room = res.data.data;
+                    }
+                })
+                .catch((err) => {
+                    const error_obj = {
+                        state: 'error',
+                        stateOutlined: true,
+                        message: err
+                    }
+                    proxy.$alert(error_obj);
+                });
         }
         onMounted(() => {
             connectWebsocket();
@@ -316,15 +346,15 @@ export default {
             () => state.showInvitePopup,
             (cur) => {
                 if (cur) {
-                    emit('chatDetail', state.room.id);
+                    refreshRoom();
                     proxy.$axios.get(VITE_SERVER_HOST + `/v1/users/relationship/${state.loginProfileId}/search`)
-                    .then((res) => {
-                        if (res.status === 200) {
-                            state.followingsNotInRoom = _.filter(res.data.data, function(f) {
-                                return !_.includes(_.map(state.room.user_profiles, 'id'), f.profile.id);
-                            })
-                        }
-                    })
+                        .then((res) => {
+                            if (res.status === 200) {
+                                state.followingsNotInRoom = _.filter(res.data.data, function(f) {
+                                    return !_.includes(_.map(state.room.user_profiles, 'id'), f.profile.id);
+                                })
+                            }
+                        });
                 } else {
                     state.searchFollowingNickname = '';
                     state.selectedFollowingIds = [];
@@ -335,7 +365,8 @@ export default {
             () => props.chatRoomId,
             (cur) => {
                 initData();
-                wsUrl.value = `ws://localhost:8000/api/v1/chats/conversation/${state.loginProfileId}/${cur}`;
+                refreshRoom();
+                wsUrl.value = `${VITE_SERVER_WEBSOCKET_HOST}/v1/chats/conversation/${state.loginProfileId}/${cur}`;
             },
         )
         watch(
@@ -425,6 +456,7 @@ export default {
                 </div>
             </div>
         </div>
+        <div class="chat-detail-body-list" v-else></div>
         <div class="chat-input-parent">
             <div
                 v-show="state.showInvitePopup"
