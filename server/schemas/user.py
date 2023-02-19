@@ -6,6 +6,7 @@ from typing import Optional, List
 from pydantic import BaseModel, validator
 
 from server.core.enums import ProfileImageType, RelationshipType, FollowType
+from server.core.utils import get_formatted_phone, get_phone
 from server.schemas import ConvertMixinS
 from server.schemas.base import S3MediaBaseS
 
@@ -23,6 +24,10 @@ class UserBase(BaseModel):
 class UserCreateS(UserBase):
     uid: Optional[str] = None
     password: str
+
+    @validator('mobile')
+    def validate_mobile(cls, value: str):
+        return get_formatted_phone(get_phone(value), with_country=True)
 
 
 class UserS(UserBase):
