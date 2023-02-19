@@ -2,7 +2,7 @@
 import { reactive, watch, onMounted, getCurrentInstance, toRef, nextTick, onUpdated } from 'vue';
 import constants from '../constants';
 import _ from 'lodash';
-import defaultChatRoomImage from '@/assets/img/anonymous-user.png'
+import defaultProfileImage from '@/assets/img/anonymous-user.png'
 
 const { VITE_SERVER_HOST } = import.meta.env;
 
@@ -72,7 +72,7 @@ export default {
                 return 'top left, top right, bottom left, bottom right';
             }
         }
-        const getChatRoomImage = function(obj) {
+        const getProfileImages = function(obj) {
             let urls = [];
             if (obj.user_profile_files !== null && obj.user_profile_files.length > 0) {
                 for (const file of obj.user_profile_files) {
@@ -88,10 +88,102 @@ export default {
             const requiredUrlCnt = obj.user_profiles.length === 1 ? obj.user_profiles.length - urls.length : obj.user_profiles.length - urls.length - 1;
             if (requiredUrlCnt > 0) {
                 for (const i of Array(requiredUrlCnt).keys()) {
-                    urls.push(defaultChatRoomImage);
+                    urls.push(defaultProfileImage);
                 }
             }
             return urls.length > 4 ? urls.slice(0, 4) : urls;
+        }
+        const profileImageStyle = function(size, index) {
+            const baseStyle = {
+                position: 'absolute',
+                margin: 0,
+            }
+            const attribute = {};
+            switch (size) {
+                case 1:
+                    return {
+                        width: '100%',
+                        height: '100%'
+                    };
+                case 2:
+                    if (index === 0) {
+                        _.assign(attribute, {
+                            top: 0,
+                            left: 0,
+                             zIndex: 1
+                        });
+                    } else {
+                        _.assign(attribute, {
+                            bottom: 0,
+                            right: 0,
+                            zIndex: 2
+                        })
+                    }
+                    return {
+                        ...baseStyle,
+                        ...attribute,
+                        width: '62%',
+                        height: '62%'
+                    };
+                case 3:
+                    if (index === 0) {
+                        _.assign(attribute, {
+                            top: 0,
+                            left: '8px',
+                            zIndex: 3,
+                        });
+                    } else if (index === 1) {
+                        _.assign(attribute, {
+                            bottom: 0,
+                            left: 0,
+                            zIndex: 1,
+                        });
+                    } else {
+                        _.assign(attribute, {
+                            bottom: 0,
+                            right: 0,
+                            zIndex: 2,
+                        });
+                    }
+                    return {
+                        ...baseStyle,
+                        ...attribute,
+                        width: '55%',
+                        height: '55%',
+                    };
+                case 4:
+                    if (index === 0) {
+                        _.assign(attribute, {
+                            top: 0,
+                            left: 0,
+                            zIndex: 1,
+                        });
+                    } else if (index === 1) {
+                        _.assign(attribute, {
+                            top: 0,
+                            right: 0,
+                            zIndex: 3,
+                        });
+                    } else if (index === 2) {
+                        _.assign(attribute, {
+                            bottom: 0,
+                            left: 0,
+                            zIndex: 2,
+                        });
+                    } else {
+                        _.assign(attribute, {
+                            bottom: 0,
+                            right: 0,
+                            zIndex: 4,
+                        });
+                    }
+                    return {
+                        ...baseStyle,
+                        ...attribute,
+                        width: '50%',
+                        height: '50%',
+                    }
+            }
         }
         const getLastChatHistory = function(obj) {
             if (obj.last_chat_history) {
@@ -147,7 +239,8 @@ export default {
             getBackgroundRepeat,
             getBackgroundSize,
             getBackgroundPosition,
-            getChatRoomImage,
+            getProfileImages,
+            profileImageStyle,
             getLastChatHistory,
             getLastChatHistoryCreated,
             getUnreadMsgCnt,
@@ -160,12 +253,15 @@ export default {
 <template>
     <div class="chat-body-list" v-if="state.chatRooms">
         <div v-for="obj in state.chatRooms" :key="obj.id" class="chat-room-list" @click="detailChatRoom(obj)">
-            <div class="chat-room-image" :style="{
-                backgroundImage: getBackgroundImageUrl(getChatRoomImage(obj)),
-                backgroundRepeat: getBackgroundRepeat(getChatRoomImage(obj)),
-                backgroundSize: getBackgroundSize(getChatRoomImage(obj)),
-                backgroundPosition: getBackgroundPosition(getChatRoomImage(obj)),
-            }" @click="infoChatRoom(obj)"></div>
+            <div class="chat-room-image-container">
+                <div 
+                    v-for="(url, index) in getProfileImages(obj)" 
+                    :key="index" 
+                    :style="profileImageStyle(getProfileImages(obj).length, index)"
+                >
+                    <img class="chat-room-image" :src="url" alt="Image" />
+                </div>
+            </div>
             <div class="chat-room-info">
                 <div class="chat-room-info-summary">
                     <p class="chat-room-info-name"><b>{{ obj.name }}</b><span class="chat-room-info-user-cnt">&nbsp;&nbsp;{{ getUserCnt(obj) }}</span></p>
@@ -199,10 +295,19 @@ export default {
     background-color: #f5f5f5;
 }
 
+.chat-room-image-container {
+    width: 45px; 
+    height: 45px;
+    position: relative;
+}
+
 .chat-room-image {
-    width: 40px; 
-    height: 40px; 
-    border-radius: 50%; 
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    border: 2px solid #ffffff;
+    object-fit: cover;
+    object-position: center;
 }
 
 .chat-room-info {

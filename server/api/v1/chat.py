@@ -14,8 +14,6 @@ from aioredis.client import PubSub
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi import WebSocket, WebSocketDisconnect
 from fastapi.encoders import jsonable_encoder
-from sqlalchemy import func, and_
-from sqlalchemy.engine import Row
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 from starlette import status
@@ -62,6 +60,35 @@ def followings(request: Request):
     return templates.TemplateResponse('followings.html', {'request': request})
 
 
+@router.get('/room/{user_profile_id}/{room_id}')
+async def chat_room_by_profile(
+    room_id: int,
+    user_profile_id: int,
+    session: AsyncSession = Depends(get_async_session)
+):
+    redis_handler = RedisHandler()
+    room_by_profile_redis, _ = await redis_handler.get_room_by_user_profile(
+        room_id, user_profile_id,
+        crud=ChatRoomUserAssociationCRUD(session),
+        sync=True, raise_exception=True
+    )
+    profiles_by_room_redis: List[RedisUserProfileByRoomS] = await RedisUserProfilesByRoomS.smembers(
+        redis_handler.redis, (room_id, user_profile_id)
+    )
+    room_name: str | None = (
+        room_by_profile_redis.name
+        or await redis_handler.generate_default_room_name(
+            room_id, user_profile_id, profiles_by_room_redis
+        )
+    )
+    obj: Dict[str, Any] = jsonable_encoder(room_by_profile_redis)
+    obj.update(jsonable_encoder({
+        'name': room_name,
+        'user_profiles': profiles_by_room_redis,
+    }))
+    return obj
+
+
 @router.websocket('/rooms/{user_profile_id}')
 async def chat_rooms(
     websocket: WebSocket,
@@ -98,7 +125,8 @@ async def chat_rooms(
                     rooms_by_profile_redis: List[RedisChatRoomByUserProfileS] = []
                     for key, items in groupby(duplicated_rooms_by_profile_redis, key=lambda x: x.id):
                         items = list(items)
-                        rooms_by_profile_redis.append(items[-1])
+                        rooms_by_profile_redis.append(items[0])
+
                     rooms_by_profile_redis.sort(key=lambda x: x.timestamp, reverse=True)
                     room_ids: List[int] = [r.id for r in rooms_by_profile_redis]
                     total_rooms, _ = await redis_handler.get_rooms(crud_room, sync=True)
@@ -106,32 +134,26 @@ async def chat_rooms(
                         r for r in total_rooms if r.id in room_ids
                     ] if total_rooms else []
                     for room_by_profile_redis in rooms_by_profile_redis:
-                        room_name: str | None = room_by_profile_redis.name
-                        if not room_name:
-                            profiles_by_room_redis: List[RedisUserProfileByRoomS] = \
-                                await RedisUserProfilesByRoomS.smembers(
-                                    redis_handler.redis, (room_by_profile_redis.id, user_profile_id)
-                                )
-                            if profiles_by_room_redis:
-                                profiles_by_room_redis.sort(key=lambda x: x.nickname)
-                                if len(profiles_by_room_redis) == 2:
-                                    room_name = next(
-                                        (p.nickname for p in profiles_by_room_redis if p.id != user_profile_id),
-                                        None
-                                    )
-                                else:
-                                    room_name: str = ', '.join([p.nickname for p in profiles_by_room_redis])
                         room: RedisChatRoomInfoS = next(
                             (r for r in rooms if r.id == room_by_profile_redis.id), None
                         )
                         if not room:
                             continue
 
+                        profiles_by_room_redis: List[RedisUserProfileByRoomS] = await RedisUserProfilesByRoomS.smembers(
+                            redis_handler.redis, (room.id, user_profile_id)
+                        )
+                        room_name: str = (
+                            room_by_profile_redis.name
+                            or await redis_handler.generate_default_room_name(
+                                room_by_profile_redis.id, user_profile_id, profiles_by_room_redis
+                            )
+                        )
+
                         chat_histories: List[RedisChatHistoryByRoomS] = \
                             await RedisChatHistoriesByRoomS.zrevrange(
                                 redis_handler.redis, room_by_profile_redis.id, 0, 1
                             )
-
                         last_chat_history = None
                         if chat_histories:
                             last_chat_history = chat_histories[0]
@@ -167,14 +189,14 @@ async def chat_rooms(
                         #         await RedisChatHistoriesByRoomS.zadd(
                         #             redis_handler.redis, room_by_profile_redis, last_chat_history
                         #         )
-
                         obj: Dict[str, Any] = jsonable_encoder(room_by_profile_redis)
                         obj.update(jsonable_encoder({
                             'name': room_name,
                             'type': room.type if room else None,
                             'user_profiles': profiles_by_room_redis,
                             'user_profile_files': room.user_profile_files if room else None,
-                            'last_chat_history': last_chat_history
+                            'last_chat_history': last_chat_history,
+                            'last_chat_timestamp': last_chat_history and last_chat_history.timestamp
                         }))
                         result.append(obj)
                 await websocket.send_json(result)
@@ -593,7 +615,7 @@ async def chat(
                             if request_s.data.is_read:
                                 if room_by_profile_redis.unread_msg_cnt > 0:
                                     async with redis_handler.lock(
-                                            key=RedisChatRoomsByUserProfileS.get_lock_key(user_profile_id)
+                                        key=RedisChatRoomsByUserProfileS.get_lock_key(user_profile_id)
                                     ):
                                         async with redis_handler.pipeline(transaction=True) as pipe:
                                             # 해당 방의 unread_msg_cnt = 0 설정 (채팅방 접속 시, 0으로 초기화)
@@ -748,6 +770,8 @@ async def chat(
                             await RedisChatHistoriesByRoomS.zadd(redis_handler.redis, room_id, chat_history_redis)
                             # 각 유저 별 해당 방의 unread_msg_cnt 업데이트
                             for p in user_profiles_redis:
+                                if p.id == user_profile_id:
+                                    continue
                                 _unread_msg_cnt = 1
                                 _room_by_profile_redis, _ = await redis_handler.get_room_by_user_profile(
                                     room_id, p.id, crud_room_user_mapping, sync=True
