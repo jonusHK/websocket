@@ -94,6 +94,10 @@ export default {
                         error_obj['message'] = '이름이 올바르지 않습니다.';
                     } else if (err.response.data.code === 'INVALID_MOBILE') {
                         error_obj['message'] = '휴대폰 번호가 올바르지 않습니다.';
+                    } else if (err.response.data.code === 'DUPLICATED_EMAIL') {
+                        error_obj['message'] = '동일한 이메일 주소가 이미 가입되어 있습니다.';
+                    } else if (err.response.data.code === 'DUPLICATED_MOBILE') {
+                        error_obj['message'] = '동일한 휴대폰 번호가 이미 가입되어 있습니다.';
                     } else {
                         error_obj['message'] = err.response.data.message;
                     }
