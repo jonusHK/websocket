@@ -262,18 +262,20 @@ export default {
                     <img class="chat-room-image" :src="url" alt="Image" />
                 </div>
             </div>
-            <div class="chat-room-info">
-                <div class="chat-room-info-summary">
-                    <p class="chat-room-info-name"><b>{{ obj.name }}</b><span class="chat-room-info-user-cnt">&nbsp;&nbsp;{{ getUserCnt(obj) }}</span></p>
-                    <p class="chat-room-info-last-chat">{{ getLastChatHistory(obj) }}</p>
-                </div>
-                <div class="chat-room-info-meta">
-                    <div class="chat-room-info-time">{{ getLastChatHistoryCreated(obj) }}</div>
-                    <div v-if="obj.id !== state.currentChatRoomId && obj.unread_msg_cnt > 0">
-                        <div class="unread-msg-cnt-icon-div">
-                            <p class="unread-msg-cnt-icon"></p>
+            <div class="chat-room-info-container">
+                <div class="chat-room-info">
+                    <div class="chat-room-info-summary">
+                        <p class="chat-room-info-name"><b>{{ obj.name }}</b><span class="chat-room-info-user-cnt">&nbsp;&nbsp;{{ getUserCnt(obj) }}</span></p>
+                        <p class="chat-room-info-last-chat">{{ getLastChatHistory(obj) }}</p>
+                    </div>
+                    <div class="chat-room-info-meta">
+                        <div class="chat-room-info-time">{{ getLastChatHistoryCreated(obj) }}</div>
+                        <div v-if="obj.id !== state.currentChatRoomId && obj.unread_msg_cnt > 0">
+                            <div class="unread-msg-cnt-icon-div">
+                                <p class="unread-msg-cnt-icon"></p>
+                            </div>
+                            <p class="unread-msg-cnt">{{ getUnreadMsgCnt(obj) }}</p>
                         </div>
-                        <p class="unread-msg-cnt">{{ getUnreadMsgCnt(obj) }}</p>
                     </div>
                 </div>
             </div>
@@ -285,6 +287,7 @@ export default {
 .chat-room-list {
     display: flex;
     flex-direction: row;
+    flex-wrap: wrap;
     justify-content: flex-start;
     align-items: center;
     padding: 15px;
@@ -296,8 +299,10 @@ export default {
 }
 
 .chat-room-image-container {
-    width: 45px; 
     height: 45px;
+    flex-basis: 45px;
+    flex-grow: 0;
+    flex-shrink: 0;
     position: relative;
 }
 
@@ -310,11 +315,20 @@ export default {
     object-position: center;
 }
 
+.chat-room-info-container {
+    width: 80%;
+    flex-basis: 80%;
+    flex-grow: 1;
+    flex-shrink: 1;
+    position: relative;
+}
+
 .chat-room-info {
     width: 100%;
-    margin-left: 10px;
+    padding-left: 10px;
     display: flex;
     flex-direction: row;
+    flex-wrap: wrap;
     justify-content: space-between;
     align-items: center;
 }
@@ -336,6 +350,9 @@ export default {
 }
 
 .chat-room-info-summary {
+    flex-basis: 60%;
+    flex-grow: 1;
+    flex-shrink: 1;
     overflow: hidden;
 }
 
@@ -349,7 +366,9 @@ export default {
 }
 
 .chat-room-info-meta {
-    width: 90px;
+    flex-basis: 90px;
+    flex-grow: 0;
+    flex-shrink: 0;
 }
 
 .chat-room-info-meta div {

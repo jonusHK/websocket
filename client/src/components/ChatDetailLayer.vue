@@ -413,24 +413,24 @@ export default {
             </div>
         </div>
         <div class="chat-detail-body-list" v-if="state.chatHistories.length > 0" @scroll="onScrollChatHistories">
-            <div v-for="obj in state.chatHistories" :key="obj.redis_id" class="chat-histories">
-                <div v-if="obj.type !== 'notice'" class="chat-history">
-                    <div v-if="getUserProfileImageByChat(obj) !== null" class="chat-profile" :style="{
+            <div v-for="obj in state.chatHistories" :key="obj.redis_id" class="chat-histories-container">
+                <div v-if="obj.type !== 'notice'" class="chat-history-container">
+                    <div v-if="getUserProfileImageByChat(obj) !== null" class="chat-profile-container" :style="{
                         backgroundImage: 'url(' + getDefaultProfileImageByChat(obj) + ')',
                         backgroundRepeat: 'no-repeat',
                         backgroundSize: 'cover',
                         backgroundPosition: 'center center',
                     }" @click="onClickProfileId(obj.user_profile_id)"></div>
-                    <div v-else class="chat-profile-default" @click="onClickProfileId(obj.user_profile_id)">
+                    <div v-else class="chat-profile-default-container" @click="onClickProfileId(obj.user_profile_id)">
                         <p><ui-icon style="width: 100%; height: 100%; color: #b3e5fc">person</ui-icon></p>
                     </div>
-                    <div>
-                        <div class="chat-profile-info-meta">
-                            <p><b>{{ getChatUserProfileNickname(obj) }}</b></p>
-                            <p>{{ getChatHistoryCreated(obj) }}</p>
-                            <p>{{ getUnreadCnt(obj) }}</p>
+                    <div class="chat-contents-container">
+                        <div class="chat-profile-meta">
+                            <span><b>{{ getChatUserProfileNickname(obj) }}</b></span>
+                            <span>{{ getChatHistoryCreated(obj) }}</span>
+                            <span>{{ getUnreadCnt(obj) }}</span>
                         </div>
-                        <div v-if="obj.is_active === true">
+                        <div v-if="obj.is_active === true" class="chat-contents">
                             <p v-if="obj.contents !== null">{{ obj.contents }}</p>
                             <div v-if="obj.files.length">
                                 <div 
@@ -446,12 +446,12 @@ export default {
                                 </div>
                             </div>
                         </div>
-                        <div v-else style="text-align: center;">
+                        <div v-else class="chat-notice-container">
                             <p>삭제된 메시지입니다.</p>
                         </div>
                     </div>
                 </div>
-                <div v-else style="text-align: center;">
+                <div v-else class="chat-notice-container">
                     <p>{{ obj.contents }}</p>
                 </div>
             </div>
@@ -580,29 +580,31 @@ export default {
   overflow: auto;
 }
 
-.chat-histories {
+.chat-histories-container {
     padding: 15px;
     cursor: pointer;
 }
 
-.chat-histories:hover {
+.chat-histories-container:hover {
     background-color: #f5f5f5;
 }
 
-.chat-histories p {
+.chat-histories-container p {
     margin: 0;
 }
 
-.chat-history {
+.chat-history-container {
     display: flex;
     flex-direction: row;
     justify-content: flex-start;
     align-items: flex-start;
 }
 
-.chat-profile-default {
-    width: 40px;
-    height: 40px; 
+.chat-profile-default-container {
+    height: 40px;
+    flex-basis: 40px;
+    flex-grow: 0;
+    flex-shrink: 0;
     margin: 0 10px 0 0;
     border-radius: 10%; 
     background-color: #81d4fa;
@@ -612,33 +614,47 @@ export default {
     align-items: center;
 }
 
-.chat-profile {
-    width: 40px; 
-    height: 40px; 
+.chat-profile-container {
+    height: 40px;
+    flex-basis: 40px;
+    flex-grow: 0;
+    flex-shrink: 0;
     margin: 0 10px 0 0; 
     border-radius: 50%; 
 }
 
-.chat-profile-info-meta {
-    margin-bottom: 7px;
-    display: flex;
-    flex-direction: row;
-    align-items: center;
+.chat-contents-container {
+    flex-basis: 100%;
+    flex-grow: 1;
+    flex-shrink: 1;
 }
 
-.chat-profile-info-meta p {
+.chat-profile-meta {
+    margin-bottom: 7px;
+}
+
+.chat-profile-meta span {
     margin-right: 10px;
 }
 
-.chat-profile-info-meta p:nth-child(2) {
+.chat-profile-meta span:nth-child(2) {
     font-size: 13px;
     color: #757575;
 }
 
-.chat-profile-info-meta p:nth-child(3) {
+.chat-profile-meta span:nth-child(3) {
     font-weight: bold;
     font-size: 13px;
     color: #f9a825;
+}
+
+.chat-notice-container {
+    height: 60px;
+    color: #757575;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
 }
 
 .chat-input-parent {
