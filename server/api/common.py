@@ -124,6 +124,30 @@ class RedisHandler:
                     images.append(image)
         return await cls.generate_files_schema(UserProfileImage, images)
 
+    async def generate_default_room_name(
+        self,
+        room_id: int,
+        user_profile_id: int,
+        profiles_by_room_redis: List[RedisUserProfileByRoomS] = None
+    ) -> str | None:
+        profiles_by_room_redis: List[RedisUserProfileByRoomS] = (
+            profiles_by_room_redis
+            or await RedisUserProfilesByRoomS.smembers(
+                self.redis, (room_id, user_profile_id)
+            )
+        )
+        if not profiles_by_room_redis:
+            return
+        profiles_by_room_redis.sort(key=lambda x: x.nickname)
+        if len(profiles_by_room_redis) == 2:
+            room_name = next(
+                (p.nickname for p in profiles_by_room_redis if p.id != user_profile_id),
+                None
+            )
+        else:
+            room_name: str = ', '.join([p.nickname for p in profiles_by_room_redis])
+        return room_name
+
     async def get_room(
         self,
         room_id: int,
