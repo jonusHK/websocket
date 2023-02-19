@@ -9,8 +9,7 @@ class UserCRUD(CRUDBase):
     async def create(self, **kwargs):
         kwargs.update({
             'uid': kwargs['email'],
-            'password': hash_password(kwargs['password']),
-            'mobile': get_formatted_phone(get_phone(kwargs['mobile']), with_country=True)
+            'password': hash_password(kwargs['password'])
         })
         user = User(**kwargs)
         self.session.add(user)

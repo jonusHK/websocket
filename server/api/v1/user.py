@@ -51,11 +51,18 @@ async def signup(user_s: UserCreateS, session: AsyncSession = Depends(get_async_
     crud_user_profile = UserProfileCRUD(session)
     crud_relationship = UserRelationshipCRUD(session)
     try:
-        await crud_user.get(conditions=(User.uid == user_s.email,))
+        await crud_user.get(conditions=(User.email == user_s.email,))
     except HTTPException:
         pass
     else:
-        raise ClassifiableException(code=ResponseCode.ALREADY_SIGNED_UP)
+        raise ClassifiableException(code=ResponseCode.DUPLICATED_EMAIL)
+
+    try:
+        await crud_user.get(conditions=(User.mobile == user_s.mobile,))
+    except HTTPException:
+        pass
+    else:
+        raise ClassifiableException(code=ResponseCode.DUPLICATED_MOBILE)
 
     while True:
         identity_id = generate_random_string()
@@ -68,7 +75,9 @@ async def signup(user_s: UserCreateS, session: AsyncSession = Depends(get_async_
             user=user,
             identity_id=identity_id,
             nickname=user.name,
-            is_default=True))
+            is_default=True
+        )
+    )
     await session.flush()
 
     user_profile_id: int = user.profiles[0].id
