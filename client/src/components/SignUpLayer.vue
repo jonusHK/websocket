@@ -1,6 +1,6 @@
 <script>
 import { reactive, getCurrentInstance } from 'vue';
-import { useValidator, helpers } from 'balm-ui';
+import { useValidator } from 'balm-ui';
 
 const { VITE_SERVER_HOST } = import.meta.env;
 const validations = [

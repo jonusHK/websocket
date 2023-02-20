@@ -1,20 +1,18 @@
 <script>
-import { reactive, onMounted, computed, getCurrentInstance, nextTick, watch } from 'vue';
+import { reactive, onMounted, computed, getCurrentInstance } from 'vue';
 import FollowingListLayer from './FollowingListLayer.vue';
 import FollowingInfoLayer from './FollowingInfoLayer.vue';
 import ChatListLayer from './ChatListLayer.vue';
 import ChatDetailLayer from './ChatDetailLayer.vue';
 import ChatInfoLayer from './ChatInfoLayer.vue';
 import _ from 'lodash';
-import { looseIndexOf } from '@vue/shared';
-const { VITE_SERVER_HOST } = import.meta.env;
+
+const { VITE_SERVER_HOST, VITE_SERVER_WEBSOCKET_HOST } = import.meta.env;
 
 export default {
   name: 'ChatMainLayer',
   setup (props, { emit }) {
     const { proxy } = getCurrentInstance();
-    const followingListSocket = new WebSocket(`ws://localhost:8000/api/v1/chats/followings/${proxy.$store.getters['user/getProfileId']}`);
-    const chatRoomListSocket = new WebSocket(`ws://localhost:8000/api/v1/chats/rooms/${proxy.$store.getters['user/getProfileId']}`);
     const state = reactive({
       loginProfileId: proxy.$store.getters['user/getProfileId'],
       chatBodyListView: {
@@ -47,6 +45,8 @@ export default {
     if (proxy.$store.state.user.userId === '' || proxy.$store.state.user.userIsActive === false) {
       proxy.$router.replace('/login');
     }
+    const followingListSocket = new WebSocket(`${VITE_SERVER_WEBSOCKET_HOST}/v1/chats/followings/${state.loginProfileId}`);
+    const chatRoomListSocket = new WebSocket(`${VITE_SERVER_WEBSOCKET_HOST}/v1/chats/rooms/${state.loginProfileId}`);
     const initData = function() {
       state.userProfileId = null;
       state.chatRoomId = null;

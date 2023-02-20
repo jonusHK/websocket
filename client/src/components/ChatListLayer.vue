@@ -1,11 +1,7 @@
 <script>
-import { reactive, watch, onMounted, getCurrentInstance, toRef, nextTick, onUpdated } from 'vue';
-import constants from '../constants';
+import { reactive, watch, getCurrentInstance, toRef } from 'vue';
 import _ from 'lodash';
 import defaultProfileImage from '@/assets/img/anonymous-user.png'
-
-const { VITE_SERVER_HOST } = import.meta.env;
-
 
 export default {
     name: 'ChatListLayer',

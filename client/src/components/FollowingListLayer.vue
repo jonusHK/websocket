@@ -1,5 +1,5 @@
 <script>
-import { reactive, computed, onMounted, toRef, getCurrentInstance } from 'vue';
+import { reactive, toRef } from 'vue';
 import _ from 'lodash';
 
 export default {
@@ -8,8 +8,6 @@ export default {
         followings: Array,
     },
     setup (props, { emit }) {
-      const { proxy } = getCurrentInstance();
-      const ws = new WebSocket(`ws://localhost:8000/api/v1/chats/followings/${proxy.$store.getters['user/getProfileId']}`);
       const state = reactive({
         followings: toRef(props, 'followings'),
       });
