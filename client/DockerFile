@@ -17,7 +17,7 @@ COPY . .
 RUN npm run build
 
 # Expose the port that the application will be running on
-EXPOSE 80
+EXPOSE 5173
 
 # Serve the built Vue 3 application with a static server
 CMD ['npm', 'run', 'serve']
