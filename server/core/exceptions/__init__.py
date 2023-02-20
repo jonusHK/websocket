@@ -1,6 +1,6 @@
+from fastapi import WebSocketDisconnect
 from fastapi import status, HTTPException
 from fastapi.exceptions import RequestValidationError
-from starlette.websockets import WebSocketDisconnect
 
 from server.core.enums import ResponseCode
 
@@ -26,12 +26,18 @@ class ExceptionHandler:
         if isinstance(exc, ClassifiableException):
             self.code = exc.code
             self.error = exc.detail
+            self.status_code = exc.status_code
         else:
             self.code = ResponseCode.INTERNAL_SERVER_ERROR
+            status_code = None
             for status_key in ("status", "status_code"):
                 if hasattr(exc, status_key):
-                    self.code = self.base_err.get(getattr(exc, status_key), self.code)
+                    status_code = getattr(exc, status_key)
+                    self.code = self.base_err.get(status_code, self.code)
                     break
+            self.status_code = next((
+                k for k, v in self.base_err.items() if v == self.code
+            ), status.HTTP_500_INTERNAL_SERVER_ERROR) if not status_code else status_code
 
             if isinstance(exc, HTTPException):
                 self.error = exc.detail
@@ -41,8 +47,3 @@ class ExceptionHandler:
                 self.error = exc.reason
             else:
                 self.error = str(exc)
-
-    @property
-    def status_code(self):
-        return next(
-            (k for k, v in self.base_err.items() if v == self.code), status.HTTP_500_INTERNAL_SERVER_ERROR)

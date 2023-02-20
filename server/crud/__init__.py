@@ -1,8 +1,9 @@
 from typing import Optional, List, Dict, Any
 
 from fastapi import HTTPException
-from sqlalchemy import update, select, insert, text, delete
+from sqlalchemy import update, select, insert, delete
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.elements import BooleanClauseList, BinaryExpression
 from starlette import status
 
 
@@ -25,20 +26,46 @@ class CRUDBase:
 
     async def list(
         self,
-        offset=0,
-        limit=100,
-        order_by: Optional[tuple] = (),
-        conditions: Optional[tuple] = (),
+        offset: int = 0,
+        limit: int = 0,
+        order_by: Optional[tuple] = None,
+        join: Optional[List[tuple]] = None,
+        outerjoin: Optional[List[tuple]] = None,
+        conditions: Optional[tuple] = None,
+        with_only_columns: Optional[tuple] = None,
+        group_by: Optional[tuple] = None,
+        having: Optional[BooleanClauseList | BinaryExpression] = None,
         options: Optional[list] = None
     ):
-        stmt = select(self.model).offset(offset).limit(limit)
+        assert offset >= 0
+        assert limit >= 0
+
+        stmt = select(self.model)
+        if offset > 0:
+            stmt = stmt.offset(offset)
+        if limit > 0:
+            stmt = stmt.limit(limit)
         if order_by:
-            stmt.order_by(*order_by)
+            stmt = stmt.order_by(*order_by)
         if conditions:
-            stmt.where(*conditions)
+            stmt = stmt.where(*conditions)
+        if group_by:
+            stmt = stmt.group_by(*group_by)
+        if having is not None:
+            stmt = stmt.having(having)
+        if join:
+            for j in join:
+                stmt = stmt.join(*j)
+        if outerjoin:
+            for j in outerjoin:
+                stmt = stmt.outerjoin(*j)
         if options:
-            for option in options:
-                stmt = stmt.options(option)
+            for o in options:
+                stmt = stmt.options(o)
+        if with_only_columns:
+            stmt = stmt.with_only_columns(*with_only_columns)
+            return [row for row in await self.session.execute(stmt)]
+
         results = await self.session.execute(stmt)
         return results.scalars().all()
 
@@ -51,15 +78,18 @@ class CRUDBase:
         stmt = insert(self.model).values(values)
         await self.session.execute(stmt)
 
-    async def update(self, values: dict, conditions: tuple):
+    async def update(self, conditions: tuple, **kwargs):
         stmt = (
             update(self.model).
             where(*conditions).
-            values(**values).
+            values(**kwargs).
             execution_options(synchronize_session="fetch")
         )
         result = await self.session.execute(stmt)
         return result
+
+    async def bulk_update(self, values: List[Dict[str, Any]]):
+        return await self.session.execute(update(self.model), values)
 
     async def delete(self, conditions: tuple):
         stmt = delete(self.model).where(*conditions)

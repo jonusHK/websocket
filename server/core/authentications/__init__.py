@@ -1,5 +1,5 @@
-import datetime
 from abc import ABC, abstractmethod
+from datetime import datetime, timedelta
 from typing import Generic, Optional, List
 from uuid import UUID
 
@@ -10,14 +10,14 @@ from fastapi_sessions.frontends.implementations import SessionCookie, CookiePara
 from fastapi_sessions.frontends.session_frontend import ID, FrontendError
 from pydantic.main import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
 from server.core.authentications.constants import SESSION_AGE, COOKIE_NAME, SESSION_IDENTIFIER
 from server.core.enums import UserType
-from server.core.utils import get_tz
 from server.crud.user import UserCRUD, UserSessionCRUD
 from server.db.databases import get_async_session, settings, async_session
-from server.models import user as user_models
-from server.schemas import user as user_schemas
+from server.models import UserSession, User
+from server.schemas.user import UserSessionCreateS, UserSessionS
 
 
 class SessionData(BaseModel):
@@ -91,12 +91,15 @@ class SessionDatabaseVerifier(Generic[ID, SessionModel]):
                 raise self.auth_http_exception
             return
 
-        user_session: user_models.UserSession = await self.backend.read(session_id, session)
-        session_data = user_schemas.UserSession(**jsonable_encoder(user_session))
+        user_session: UserSession = await self.backend.read(session_id, session)
+        session_data = UserSessionS.from_orm(user_session)
         if not self.verify_session(session_data):
             if self.auto_error:
                 raise self.auth_http_exception
             return
+
+        if not user_session.user.is_active:
+            raise self.auth_http_exception
 
         return user_session
 
@@ -106,31 +109,41 @@ class DatabaseBackend(Generic[ID, SessionModel], SessionDatabaseBackend[ID, Sess
         self.cookie_params = _cookie_params
 
     async def create(self, session_id: ID, data: SessionModel, session: AsyncSession):
-        user: user_models.User = await UserCRUD(session).get_user_by_uid(data.uid)
-        expiry_at = datetime.datetime.now(get_tz()) + datetime.timedelta(seconds=self.cookie_params.max_age)
-        session_create_s = user_schemas.UserSessionCreate(
+        user: User = await UserCRUD(session).get(conditions=(User.uid == data.uid,))
+        expiry_at = datetime.now().astimezone() + timedelta(seconds=self.cookie_params.max_age)
+        session_create_s = UserSessionCreateS(
             user_id=user.id,
-            session_id=str(session_id),  # 저장 되는 쿠키 값: str(cookie.signer.dumps(session_id.hex))
+            session_id=str(session_id),
             expiry_at=expiry_at)
-        await UserSessionCRUD(session).create_session(session_create_s)
+        await UserSessionCRUD(session).create(**jsonable_encoder(session_create_s))
 
     async def read(self, session_id: ID, session: AsyncSession):
-        user_session: user_models.UserSession = await UserSessionCRUD(session).get_session_by_session_id(session_id)
-        if not user_session:
+        crud = UserSessionCRUD(session)
+        try:
+            user_session: UserSession = await crud.get(
+                conditions=(UserSession.session_id == session_id,),
+                options=[joinedload(UserSession.user).selectinload(User.profiles)])
+        except HTTPException:
             raise BackendError("Session does not exist.")
         return user_session
 
     async def update(self, session_id: ID, data: SessionModel, session: AsyncSession) -> None:
-        user_session: user_models.UserSession = await UserSessionCRUD(session).get_session_by_session_id(session_id)
-        if not user_session:
+        crud = UserSessionCRUD(session)
+        try:
+            user_session: UserSession = await crud.get(
+                conditions=(UserSession.session_id == session_id,))
+        except HTTPException:
             raise BackendError("Session does not exist, cannot update")
-        await UserSessionCRUD(session).update_session(user_session.id, **data.dict())
+        await crud.update(conditions=(UserSession == user_session.id,), **data.dict())
 
     async def delete(self, session_id: ID, session: AsyncSession) -> None:
-        user_session: user_models.UserSession = await UserSessionCRUD(session).get_session_by_session_id(str(session_id))
-        if not user_session:
+        crud = UserSessionCRUD(session)
+        try:
+            user_session: UserSession = await crud.get(
+                conditions=(UserSession.session_id == session_id,))
+        except HTTPException:
             raise BackendError("Session does not exist, cannot delete")
-        await UserSessionCRUD(session).delete_session(user_session.id)
+        await crud.delete(conditions=(UserSession.id == user_session.id,))
 
 
 class BasicVerifier(SessionDatabaseVerifier[UUID, SessionData]):
@@ -163,8 +176,8 @@ class BasicVerifier(SessionDatabaseVerifier[UUID, SessionData]):
     def auth_http_exception(self):
         return self._auth_http_exception
 
-    def verify_session(self, schema: user_schemas.UserSession) -> bool:
-        return schema.expiry_at.astimezone() >= datetime.datetime.now(get_tz())
+    def verify_session(self, schema: UserSessionS) -> bool:
+        return schema.expiry_at.astimezone() >= datetime.now().astimezone()
 
 
 cookie_params = CookieParameters(max_age=SESSION_AGE)

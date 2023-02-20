@@ -12,6 +12,12 @@ class ResponseCode(Enum):
     METHOD_NOT_ALLOWED = '허용되지 않은 메소드입니다.'
     NOT_ALLOWED = '허용되지 않은 작업입니다.'
     INVALID_JSON_FORMAT = '유효한 JSON 포맷이 아닙니다.'
+    INVALID_UID = '유효한 UID가 아닙니다.'
+    INVALID_USER_NAME = '유효한 이름이 아닙니다.'
+    INVALID_MOBILE = '유효한 휴대폰 번호가 아닙니다.'
+    INVALID_PASSWORD = '유효한 비밀번호가 아닙니다.'
+    DUPLICATED_EMAIL = '동일한 이메일 주소가 이미 가입되어 있습니다.'
+    DUPLICATED_MOBILE = '동일한 휴대폰 번호가 이미 가입되어 있습니다.'
     INTERNAL_SERVER_ERROR = '정의되지 않은 오류'
 
     def retrieve(self):
@@ -60,10 +66,16 @@ class IntValueEnum(Enum, metaclass=IntValueEnumMeta):
 
 
 class RelationshipType(IntValueEnum):
-    FRIEND = "친구"
-    FAMILY = "가족"
+    FRIEND = '친구'
+    FAMILY = '가족'
+    SELF = '본인'
 
     __default__ = FRIEND
+
+
+class FollowType(IntValueEnum):
+    FOLLOWING = '팔로잉'
+    FOLLOWER = '팔로워'
 
 
 class ProfileImageType(IntValueEnum):
@@ -81,3 +93,17 @@ class ChatType(IntValueEnum):
     MESSAGE = "메시지"
     FILE = "파일"
     UPDATE = "변경"
+    INVITE = "초대"
+    LOOKUP = "조회"
+    TERMINATE = "연결 종료"
+
+
+class ChatRoomType(IntValueEnum):
+    PUBLIC = "공개"
+    PRIVATE = "비공개"
+
+
+class ChatHistoryType(IntValueEnum):
+    MESSAGE = '메시지'
+    FILE = '파일'
+    NOTICE = '안내'

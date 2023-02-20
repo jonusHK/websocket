@@ -1,5 +1,5 @@
 from server.crud import CRUDBase
-from server.models import ChatRoom, ChatRoomUserAssociation, ChatHistory
+from server.models import ChatRoom, ChatRoomUserAssociation, ChatHistory, ChatHistoryFile, ChatHistoryUserAssociation
 
 
 class ChatRoomCRUD(CRUDBase):
@@ -12,3 +12,11 @@ class ChatRoomUserAssociationCRUD(CRUDBase):
 
 class ChatHistoryCRUD(CRUDBase):
     model = ChatHistory
+
+
+class ChatHistoryFileCRUD(CRUDBase):
+    model = ChatHistoryFile
+
+
+class ChatHistoryUserAssociationCRUD(CRUDBase):
+    model = ChatHistoryUserAssociation

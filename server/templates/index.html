@@ -2,15 +2,30 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>HTML5 WebSockets</title>
+    <title>실시간 채팅</title>
     <link href="{{ url_for('static', path='/styles.css') }}" rel="stylesheet">
     <script src="{{ url_for('static', path='/chat.js') }}"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
 </head>
 <body>
     <h1>HTML5 WebSocket Chat</h1>
-    <input type="text" id="text-view" />
-    <input type="button" id="send-button" value="Send" />
-    <input type="button" id="stop-button" value="Stop" />
+    <div>
+        <input type="text" id="text-view" />
+        <input type="button" id="send-button" value="Send" />
+        <input type="button" id="stop-button" value="Stop" />
+        <span>
+            <input type="text" id="invite-user-id" />
+            <input type="button" id="invite-user" value="유저 초대" />
+        </span>
+    </div>
+    <div style="margin-top:10px;">
+        <input type="file" id="fileUpload" multiple="multiple" accept="image/*"/>
+        <div id="imagePreviewArea" class="display-none">
+        </div>
+        <div style="margin-top:5px;">
+            <input type="button" id="send-files-button" value="Send Files">
+        </div>
+    </div>
     <br/>
     <label id="status-label">Status</label>
 </body>

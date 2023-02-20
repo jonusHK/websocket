@@ -1,36 +1,59 @@
 from typing import Optional, List
 
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, validator, root_validator
 
-from server.core.enums import ChatType
+from server.core.enums import ChatType, ChatRoomType
 
 
-class ChatRoomRequest(BaseModel):
+class ChatRoomCreateParamS(BaseModel):
     user_profile_id: int
     target_profile_ids: List[int]
-    room_id: Optional[int] = None
+    type: Optional[int] = ChatRoomType.PUBLIC.value
+
+    @validator('type', always=True)
+    def validate_type(cls, value: str | None):
+        if value:
+            enum = ChatRoomType(value)
+            if enum is None:
+                raise ValueError('Invalid type.')
+            return enum
+        return value
 
 
-class ChatDataBase(BaseModel):
+class ChatReceiveFileS(BaseModel):
+    content: str
+    content_type: str
+    filename: str
+
+
+class ChatReceiveDataS(BaseModel):
     text: Optional[str] = None
-    history_ids: Optional[List[int]] = None
-    file_ids: Optional[List[int]] = None
+    history_redis_ids: Optional[List[str]] = None
+    target_profile_ids: Optional[List[int]] = None
+    files: Optional[list[ChatReceiveFileS]] = None
+    is_read: Optional[bool] = None
+    offset: Optional[int] = None
+    limit: Optional[int] = None
+    timestamp: Optional[float | int] = None
     is_active: bool = True
 
 
-class ChatReceiveData(ChatDataBase):
-    pass
+class ChatSendDataS(BaseModel):
+    from server.core.externals.redis.schemas import (
+        RedisChatHistoryByRoomS,
+        RedisChatHistoryPatchS,
+        RedisUserProfileByRoomS
+    )
+
+    history: Optional[RedisChatHistoryByRoomS] = None
+    histories: Optional[List[RedisChatHistoryByRoomS]] = None
+    patch_histories: Optional[List[RedisChatHistoryPatchS]] = None
+    user_profiles: Optional[List[RedisUserProfileByRoomS]] = None
 
 
-class ChatSendData(ChatDataBase):
-    user_profile_id: int
-    nickname: str
-    timestamp: int
-
-
-class ChatReceiveForm(BaseModel):
+class ChatReceiveFormS(BaseModel):
     type: str
-    data: ChatReceiveData
+    data: Optional[ChatReceiveDataS] = None
 
     @validator("type")
     def get_type(cls, v):
@@ -39,9 +62,9 @@ class ChatReceiveForm(BaseModel):
         return ChatType.get_by_name(v)
 
 
-class ChatSendForm(BaseModel):
+class ChatSendFormS(BaseModel):
     type: ChatType
-    data: ChatSendData
+    data: ChatSendDataS
 
     @validator("type")
     def get_type(cls, v):

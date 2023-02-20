@@ -4,6 +4,7 @@ from typing import Callable
 from fastapi import Request, Response
 from fastapi.routing import APIRoute
 from starlette.templating import Jinja2Templates
+
 from server.core.exceptions import ClassifiableException, ExceptionHandler
 
 logger = logging.getLogger("websocket")

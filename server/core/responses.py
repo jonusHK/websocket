@@ -6,7 +6,7 @@ from server.core.enums import ResponseCode
 
 
 class WebsocketJSONResponse(JSONResponse):
-    def render(self, content: typing.Union[list, dict]) -> bytes:
+    def render(self, content: list | dict) -> bytes:
         response = ResponseCode.OK.retrieve()
         response.update({
             'data': content

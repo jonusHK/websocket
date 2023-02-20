@@ -4,3 +4,21 @@ h1 {
     font-family: "Helvetica Neue", Arial, Sans-Serif;
     font-size: 2em;
 }
+
+.preview-image-wrapper {
+    position: relative;
+    min-width: 25%;
+}
+.preview-image-wrapper img {
+    position: relative;
+    width: 100%;
+    border-radius: 10px;
+}
+
+.display-none {
+  display: none;
+}
+
+.display-flex {
+  display: flex;
+}
