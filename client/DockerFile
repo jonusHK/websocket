@@ -1,0 +1,23 @@
+# Use an official Node.js runtime as a parent image
+FROM node:16-alpine
+
+# Set the working directory to /app
+WORKDIR /app
+
+# Copy the package.json and package-lock.json files into the container
+COPY package*.json .
+
+# Install any needed packages specified in package.json
+RUN npm install
+
+# Copy the rest of the application code into the container
+COPY . .
+
+# Build the Vue 3 application
+RUN npm run build
+
+# Expose the port that the application will be running on
+EXPOSE 80
+
+# Serve the built Vue 3 application with a static server
+CMD ['npm', 'run', 'serve']

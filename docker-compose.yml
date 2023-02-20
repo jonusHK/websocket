@@ -1,0 +1,15 @@
+services:
+  frontend:
+    container_name: frontend-vue
+    build:
+      context: ./client
+      dockerfile: ./client/Dockerfile
+    ports:
+      - '80:80'
+  server:
+    container_name: server-fastapi
+    build:
+      context: ./server
+      dockerfile: ./server/Dockerfile
+    ports:
+      - '8000:8000'
