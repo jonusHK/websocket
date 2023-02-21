@@ -9,9 +9,9 @@ export default defineConfig(({ command, mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   return {
     plugins: [
-      inject({   // => that should be first under plugins array
-        // jQuery: 'jquery',
-      }),
+      // inject({   // => that should be first under plugins array
+      //   jQuery: 'jquery',
+      // }),
       vue(),
     ],
     define: {
