@@ -4,8 +4,10 @@ FROM python:3.10-slim-buster
 # Set the working directory to /app
 WORKDIR /app
 
+ENV PYTHONPATH=/app
+
 # Copy the rest of the application code into the container
-COPY . .
+COPY ./ ./
 
 # Install any needed packages specified in requirements.txt
 RUN pip install --upgrade pip && pip install --no-cache-dir -r server/requirements.txt
