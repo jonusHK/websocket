@@ -131,13 +131,13 @@ export default {
             }
         }
         const moveChatBodyPosition = function() {
-            const currentScrollHeight = window.$('.chat-detail-body-list').prop('scrollHeight');
+            const currentScrollHeight = document.querySelector('.chat-detail-body-list').scrollHeight;
             if (state.bottomFlag || (state.moveFlag && currentScrollHeight !== state.scrollHeight)) {
                 if (state.bottomFlag) {
                     state.scrollHeight = 0;
                 }
-                const height = window.$('.chat-detail-body-list').prop('scrollHeight') - state.scrollHeight;
-                window.$('.chat-detail-body-list').scrollTop(height);
+                const height = currentScrollHeight - state.scrollHeight;
+                document.querySelector('.chat-detail-body-list').scrollTop = height;
             }
         }
         const getChatUserProfileNickname = function(obj) {
@@ -188,7 +188,7 @@ export default {
                     if (state.uploadFiles.length === uploadInput.value.files.length) {
                         sendFiles();
                         state.uploadFiles = [];
-                        window.$('#file-upload').val('');
+                        document.querySelector('#file-upload').value = '';
                     }
                 }
                 fileReader.readAsDataURL(each);
@@ -204,7 +204,7 @@ export default {
                 };
                 wsSend(data);
                 state.bottomFlag = true;
-                window.$('.chat-input-body').focus();
+                document.querySelector('.chat-input-body').focus();
                 state.contents = '';
                 if (e !== undefined) {
                     e.preventDefault();
@@ -259,7 +259,9 @@ export default {
                 };
                 wsSend(data);
                 state.bottomFlag = true;
-                window.$('.chat-input-body').focus();
+                nextTick(() => {
+                    document.querySelector('.chat-input-body').focus();
+                })
             }
             ws.value.onmessage = function(event) {
                 const json = JSON.parse(event.data);
