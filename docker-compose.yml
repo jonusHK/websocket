@@ -1,15 +1,24 @@
 services:
   frontend:
-    container_name: frontend-vue
+    container_name: nginx-frontend-container
     build:
       context: ./client
       dockerfile: Dockerfile
     ports:
-      - '8080:8080'
-  server:
-    container_name: backend-fastapi
+      - '80:80'
+    volumes:
+      - /etc/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - frontend-backend
+  backend:
+    container_name: backend-container
     build:
       context: ./server
       dockerfile: Dockerfile
     ports:
       - '8000:8000'
+    networks:
+      - frontend-backend
+
+networks:
+  frontend-backend:

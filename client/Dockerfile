@@ -1,5 +1,6 @@
 # Use an official Node.js runtime as a parent image
-FROM node:14-alpine
+FROM node:14-alpine as build-stage
+
 
 # Set the working directory to /app
 WORKDIR /app
@@ -16,4 +17,12 @@ COPY . .
 # Build the Vue 3 application
 RUN npm run build
 
-EXPOSE 8080
+
+# Production stage
+FROM nginx:stable-alpine as production-stage
+
+COPY --from=build-stage /app/dist /usr/share/nginx/html
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]

@@ -19,4 +19,4 @@ EXPOSE 8000
 ENV WORKER_CNT ${WORKER_CNT:-$(expr $(grep -c ^processor /proc/cpuinfo || 1) \* 2)}
 
 # Start the FastAPI application with uvicorn
-CMD ["gunicorn", "-w", "${WORKER_CNT}", "-k", "uvicorn.workers.UvicornWorker", "-b", "0.0.0.0:8000", "main:app"]
+CMD ["gunicorn", "-w", "$WORKER_CNT", "-k", "uvicorn.workers.UvicornWorker", "-b", "0.0.0.0:8000", "main:app"]
