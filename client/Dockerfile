@@ -15,3 +15,5 @@ COPY . .
 
 # Build the Vue 3 application
 RUN npm run build
+
+EXPOSE 8080
