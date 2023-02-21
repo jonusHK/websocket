@@ -16,9 +16,7 @@ COPY . .
 # Expose the port that the application will be running on
 EXPOSE 8000
 
-ENV WORKER_CNT $(expr $(grep -c ^processor /proc/cpuinfo || 1) \* 2)
-
-RUN echo "WORKER_CNT=${WORKER_CNT}"
+# ENV WORKER_CNT $(expr $(grep -c ^processor /proc/cpuinfo || 1) \* 2)
 
 # Start the FastAPI application with uvicorn
-CMD ["gunicorn", "--workers=${WORKER_CNT}", "-k", "uvicorn.workers.UvicornWorker", "-b", "0.0.0.0:8000", "main:app"]
+CMD ["gunicorn", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "-b", "0.0.0.0:8000", "main:app"]
