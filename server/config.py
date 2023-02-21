@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     db_password: str
     db_host: str
     db_port: int
-    backend_cors_origins: List[AnyHttpUrl] = []
+    backend_cors_origins: List[AnyHttpUrl | str] = []
     debug: bool
     session_secret_key: str
     redis_host: str
@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     def assemble_cors_origins(cls, v: str | List[str]) -> str | List[str]:
         if isinstance(v, str) and not v.startswith("["):
             return [i.strip() for i in v.split(",")]
-        elif isinstance(v, (list, str)):
+        elif isinstance(v, list):
             return v
         raise ValueError(v)
 

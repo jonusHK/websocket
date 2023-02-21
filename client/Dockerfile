@@ -14,10 +14,4 @@ RUN npm install
 COPY . .
 
 # Build the Vue 3 application
-RUN npm run build --prod
-
-# Expose the port that the application will be running on
-EXPOSE 8080
-
-# Serve the built Vue 3 application with a static server
-CMD ["npm", "run", "serve"]
+RUN npm run build

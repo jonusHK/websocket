@@ -10,8 +10,7 @@ export default defineConfig(({ command, mode }) => {
   return {
     plugins: [
       inject({   // => that should be first under plugins array
-        $: 'jquery',
-        jQuery: 'jquery',
+        // jQuery: 'jquery',
       }),
       vue(),
     ],
@@ -26,8 +25,27 @@ export default defineConfig(({ command, mode }) => {
         'balm-ui-plus': 'balm-ui/dist/balm-ui-plus.esm.js',
         'balm-ui-css': 'balm-ui/dist/balm-ui.css',
         'balm-ui-source': 'balm-ui/src/scripts/balm-ui.js',
-        'balm-ui-plus-source': 'balm-ui/src/scripts/balm-ui-plus.js'
+        'balm-ui-plus-source': 'balm-ui/src/scripts/balm-ui-plus.js',
+        // jquery: 'jquery/dist/jquery.slim.js' // this line adds the exclusion
       }
     },
+    build: {
+      chunkSizeWarningLimit: 1048576, // 1MB in bytes
+      rollupOptions: {
+        input: {
+          main: 'index.html'
+        },
+        output: {
+          entryFileNames: '[name].[hash].js',
+          chunkFileNames: '[name].[hash].js',
+          assetFileNames: '[name].[hash].[ext]'
+        },
+        plugins: [],
+        external: [
+          // 'jquery', // add this line to exclude jQuery from being processed by Babel
+          // 'axios'
+        ]
+      }
+    }
   }
 })
