@@ -16,7 +16,7 @@ COPY . .
 # Expose the port that the application will be running on
 EXPOSE 8000
 
-ENV WORKER_CNT ${WORKER_CNT:-$(expr $(grep -c ^processor /proc/cpuinfo || 1) \* 2)}
+ENV WORKER_CNT $(expr $(grep -c ^processor /proc/cpuinfo || 1) \* 2)
 
 RUN echo "WORKER_CNT=$WORKER_CNT"
 
