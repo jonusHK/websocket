@@ -17,18 +17,13 @@ COPY . .
 # Build the Vue 3 application
 RUN npm run build
 
-# Check if the /app/dist directory exists and show its contents
-RUN echo "Created dist file - $(ls /app/dist)"
-
 
 # Production stage
 FROM nginx:stable-alpine as production-stage
 
+COPY ./nginx.conf /etc/nginx/nginx.conf
+
 COPY --from=build-stage /app/dist /usr/share/nginx/html
-
-RUN echo "Copied dist to nginx html - $(ls /usr/share/nginx/html)"
-
-RUN mkdir /etc/nginx/sites-enabled
 
 EXPOSE 80
 
