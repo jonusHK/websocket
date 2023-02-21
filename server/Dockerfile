@@ -5,7 +5,7 @@ FROM python:3.10-slim-buster
 WORKDIR /app
 
 # Copy the rest of the application code into the container
-COPY websocket .
+COPY . .
 
 RUN cd server
 
