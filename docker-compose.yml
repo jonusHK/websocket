@@ -3,7 +3,7 @@ services:
     container_name: frontend-vue
     build:
       context: ./client
-      dockerfile: ./client/Dockerfile
+      dockerfile: Dockerfile
     depends_on:
       - server
     ports:
@@ -12,6 +12,6 @@ services:
     container_name: backend-fastapi
     build:
       context: ./server
-      dockerfile: ./server/Dockerfile
+      dockerfile: Dockerfile
     ports:
       - '8000:8000'
