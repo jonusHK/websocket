@@ -121,7 +121,7 @@ class DatabaseBackend(Generic[ID, SessionModel], SessionDatabaseBackend[ID, Sess
         crud = UserSessionCRUD(session)
         try:
             user_session: UserSession = await crud.get(
-                conditions=(UserSession.session_id == session_id,),
+                conditions=(UserSession.session_id == str(session_id),),
                 options=[joinedload(UserSession.user).selectinload(User.profiles)])
         except HTTPException:
             raise BackendError("Session does not exist.")
