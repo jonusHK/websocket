@@ -26,4 +26,4 @@ EXPOSE 8000
 # ENV WORKER_CNT $(expr $(grep -c ^processor /proc/cpuinfo || 1) \* 2)
 
 # Start the FastAPI application with uvicorn
-CMD ["gunicorn", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "-b", "0.0.0.0:8000", "server.main:app"]
+CMD ["gunicorn", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "-b", "0.0.0.0:8000", "server.main:app", "--log-config", "logging.conf"]
