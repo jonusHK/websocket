@@ -14,6 +14,12 @@ WORKDIR /app/server
 # Install any needed packages specified in requirements.txt
 RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
 
+# alembic upgrade head
+RUN alembic upgrade head
+
+# Install vim
+RUN apt-get update && apt-get install -y vim
+
 # Expose the port that the application will be running on
 EXPOSE 8000
 
