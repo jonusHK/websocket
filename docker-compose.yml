@@ -19,7 +19,7 @@ services:
       - '8000:8000'
     networks:
       - network
-    mounts:
+    volumes:
       - ./server/logs:/app/server/logs
 
 networks:
