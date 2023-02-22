@@ -20,7 +20,7 @@ app = FastAPI(default_response_class=WebsocketJSONResponse)
 if settings.backend_cors_origins:
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[str(origin) for origin in settings.backend_cors_origins],
+        allow_origins=list(map(str, settings.backend_cors_origins)),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
