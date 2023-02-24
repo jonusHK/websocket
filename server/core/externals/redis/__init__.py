@@ -1,11 +1,11 @@
-from functools import lru_cache
+import ssl
+from copy import deepcopy
 from typing import Optional
 
 import aioredis
 import aioredis_cluster
-import rediscluster
 from aioredis_cluster.typedef import CommandsFactory
-import ssl
+from rediscluster import RedisCluster
 
 from server.db.databases import settings
 
@@ -89,21 +89,20 @@ class AioRedisCluster:
 class SyncRedisCluster:
 
     @classmethod
-    @lru_cache
-    def _get_connections(cls, endpoint: list):
+    def get_nodes(cls, endpoint: list):
         return list(map(
             lambda x: {
                 'host': x.rsplit(':', 1)[0],
-                'port': x.rsplit(':', 1)[1]
+                'port': int(x.rsplit(':', 1)[1])
             },
             endpoint
         ))
 
     def __init__(self, endpoint=settings.redis_endpoint):
         self.endpoint = endpoint
-        self.connections = self._get_connections(self.endpoint)
-        self.redis = rediscluster.RedisCluster(
-            startup_nodes=self.connections,
+        self.nodes = self.get_nodes(self.endpoint)
+        self.redis_cluster = RedisCluster(
+            startup_nodes=deepcopy(self.nodes),
             max_connections=None,
             max_connections_per_node=False,
             init_slot_cache=True,

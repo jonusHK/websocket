@@ -78,7 +78,7 @@ async def chat_room_by_profile(
         sync=True, raise_exception=True
     )
     profiles_by_room_redis: List[RedisUserProfileByRoomS] = RedisUserProfilesByRoomS.smembers(
-        redis_handler.redis, (room_id, user_profile_id)
+        redis_handler.redis_cluster, (room_id, user_profile_id)
     )
     room_name: str | None = (
         room_by_profile_redis.name
@@ -149,7 +149,7 @@ async def chat_rooms(
 
                         profiles_by_room_redis: List[RedisUserProfileByRoomS] = (
                             RedisUserProfilesByRoomS.smembers(
-                                redis_handler.redis, (room.id, user_profile_id)
+                                redis_handler.redis_cluster, (room.id, user_profile_id)
                             )
                         )
                         room_name: str = (
@@ -161,7 +161,7 @@ async def chat_rooms(
 
                         chat_histories: List[RedisChatHistoryByRoomS] = (
                             RedisChatHistoriesByRoomS.zrevrange(
-                                redis_handler.redis, room_by_profile_redis.id, 0, 1
+                                redis_handler.redis_cluster, room_by_profile_redis.id, 0, 1
                             )
                         )
                         last_chat_history = None
@@ -197,7 +197,7 @@ async def chat_rooms(
                         #             is_active=chat_histories_db[0].is_active
                         #         )
                         #         RedisChatHistoriesByRoomS.zadd(
-                        #             redis_handler.redis, room_by_profile_redis, last_chat_history
+                        #             redis_handler.redis_cluster, room_by_profile_redis, last_chat_history
                         #         )
                         obj: Dict[str, Any] = jsonable_encoder(room_by_profile_redis)
                         obj.update(jsonable_encoder({
@@ -343,7 +343,7 @@ async def chat_room_create(
                 key=RedisChatRoomsByUserProfileS.get_lock_key(m.user_profile_id)
             ):
                 rooms_by_profile_redis: List[RedisChatRoomByUserProfileS] = (
-                    RedisChatRoomsByUserProfileS.zrange(redis_handler.redis, m.user_profile_id)
+                    RedisChatRoomsByUserProfileS.zrange(redis_handler.redis_cluster, m.user_profile_id)
                 )
                 filtered_rooms_by_profile_redis = [r for r in rooms_by_profile_redis if r.id == room.id]
                 if filtered_rooms_by_profile_redis:
@@ -359,7 +359,7 @@ async def chat_room_create(
                 key=RedisUserProfilesByRoomS.get_lock_key((room.id, m.user_profile_id))
             ):
                 profiles_by_room_redis: List[RedisUserProfileByRoomS] = (
-                    RedisUserProfilesByRoomS.smembers(redis_handler.redis, (room.id, m.user_profile_id))
+                    RedisUserProfilesByRoomS.smembers(redis_handler.redis_cluster, (room.id, m.user_profile_id))
                 )
                 filtered_profiles_by_room_redis = [
                     p for p in profiles_by_room_redis
@@ -380,7 +380,7 @@ async def chat_room_create(
                     ]
                 )
         with redis_handler.lock(key=RedisChatRoomsInfoS.get_lock_key()):
-            rooms_info_redis: List[RedisChatRoomInfoS] = RedisChatRoomsInfoS.smembers(redis_handler.redis, None)
+            rooms_info_redis: List[RedisChatRoomInfoS] = RedisChatRoomsInfoS.smembers(redis_handler.redis_cluster, None)
             filtered_rooms_info_redis = [r for r in rooms_info_redis if r.id == room.id]
             if filtered_rooms_info_redis:
                 pipe = RedisChatRoomsInfoS.srem(pipe, None, *filtered_rooms_info_redis)
@@ -540,7 +540,7 @@ async def chat(
                             # Redis 대화 내용 조회
                             chat_histories_redis: List[RedisChatHistoryByRoomS] = (
                                 RedisChatHistoriesByRoomS.zrevrange(
-                                    redis_handler.redis, room_id,
+                                    redis_handler.redis_cluster, room_id,
                                     start=request_s.data.offset,
                                     end=request_s.data.offset + request_s.data.limit - 1
                                 )
@@ -647,7 +647,7 @@ async def chat(
 
                                 with redis_handler.lock(key=RedisChatHistoriesByRoomS.get_lock_key(room_id)):
                                     chat_histories_redis: List[RedisChatHistoryByRoomS] = (
-                                        RedisChatHistoriesByRoomS.zrevrange(redis_handler.redis, room_id)
+                                        RedisChatHistoriesByRoomS.zrevrange(redis_handler.redis_cluster, room_id)
                                     )
                                     target_histories_redis: List[RedisChatHistoryByRoomS] = []
                                     # 최근 읽음 처리 안된 내역 추출
@@ -696,7 +696,7 @@ async def chat(
 
                                 with redis_handler.lock(key=RedisChatHistoriesByRoomS.get_lock_key(room_id)):
                                     chat_histories_redis: List[RedisChatHistoryByRoomS] = (
-                                        RedisChatHistoriesByRoomS.zrevrange(redis_handler.redis, room_id)
+                                        RedisChatHistoriesByRoomS.zrevrange(redis_handler.redis_cluster, room_id)
                                     )
                                     if not chat_histories_redis:
                                         raise WebSocketDisconnect(
@@ -788,7 +788,7 @@ async def chat(
                                 date=now.date().isoformat(),
                                 is_active=True
                             )
-                            RedisChatHistoriesByRoomS.zadd(redis_handler.redis, room_id, chat_history_redis)
+                            RedisChatHistoriesByRoomS.zadd(redis_handler.redis_cluster, room_id, chat_history_redis)
                             # 각 유저 별 해당 방의 unread_msg_cnt 업데이트
                             for p in user_profiles_redis:
                                 if p.id == user_profile_id:
@@ -876,7 +876,7 @@ async def chat(
                                 date=now.date().isoformat(),
                                 is_active=chat_history_db.is_active
                             )
-                            RedisChatHistoriesByRoomS.zadd(redis_handler.redis, room_id, chat_history_redis)
+                            RedisChatHistoriesByRoomS.zadd(redis_handler.redis_cluster, room_id, chat_history_redis)
 
                             # 각 유저 별 해당 방의 unread_msg_cnt 업데이트
                             for p in user_profiles_redis:
@@ -938,7 +938,7 @@ async def chat(
                                 ):
                                     _user_profiles_redis: List[RedisUserProfileByRoomS] = (
                                         RedisUserProfilesByRoomS.smembers(
-                                            redis_handler.redis, (room_id, current_id)
+                                            redis_handler.redis_cluster, (room_id, current_id)
                                         )
                                     )
                                     if len(_user_profiles_redis) != len(_room_user_mapping):
@@ -1003,7 +1003,7 @@ async def chat(
                                     key=RedisUserProfilesByRoomS.get_lock_key((room_id, target_profile.id))
                                 ):
                                     RedisUserProfilesByRoomS.sadd(
-                                        redis_handler.redis, (room_id, target_profile.id), *[
+                                        redis_handler.redis_cluster, (room_id, target_profile.id), *[
                                             RedisUserProfilesByRoomS.schema(
                                                 id=p.id,
                                                 identity_id=p.identity_id,
@@ -1034,7 +1034,7 @@ async def chat(
                                             pipe.execute()
                                     else:
                                         RedisChatRoomsByUserProfileS.zadd(
-                                            redis_handler.redis, target_profile.id, RedisChatRoomsByUserProfileS.schema(
+                                            redis_handler.redis_cluster, target_profile.id, RedisChatRoomsByUserProfileS.schema(
                                                 id=room_id, unread_msg_cnt=0, timestamp=now.timestamp()
                                             )
                                         )
@@ -1054,7 +1054,7 @@ async def chat(
                                 date=now.date().isoformat(),
                                 is_active=True
                             )
-                            RedisChatHistoriesByRoomS.zadd(redis_handler.redis, room_id, chat_history_redis)
+                            RedisChatHistoriesByRoomS.zadd(redis_handler.redis_cluster, room_id, chat_history_redis)
 
                             broadcast_response_s = ChatSendFormS(
                                 type=request_s.type,
@@ -1094,7 +1094,7 @@ async def chat(
 
                                 with redis_handler.pipeline() as pipe:
                                     rooms_by_profile_redis: List[RedisChatRoomByUserProfileS] = (
-                                        RedisChatRoomsByUserProfileS.zrange(redis_handler.redis, user_profile_id)
+                                        RedisChatRoomsByUserProfileS.zrange(redis_handler.redis_cluster, user_profile_id)
                                     )
                                     pipe = RedisChatRoomsByUserProfileS.zrem(
                                         pipe, user_profile_id, *[r for r in rooms_by_profile_redis if r.id == room_id]
@@ -1109,7 +1109,7 @@ async def chat(
                                             else:
                                                 profiles_redis: List[RedisUserProfileByRoomS] = (
                                                     RedisUserProfilesByRoomS.smembers(
-                                                        redis_handler.redis, (room_id, profile_id)
+                                                        redis_handler.redis_cluster, (room_id, profile_id)
                                                     )
                                                 )
                                                 remove_profile_redis: List[RedisUserProfileByRoomS] = [
@@ -1142,7 +1142,7 @@ async def chat(
                                         is_active=True
                                     )
                                     RedisChatHistoriesByRoomS.zadd(
-                                        redis_handler.redis, room_id, chat_history_redis
+                                        redis_handler.redis_cluster, room_id, chat_history_redis
                                     )
                                     broadcast_response_s = ChatSendFormS(
                                         type=ChatType.TERMINATE,
@@ -1207,7 +1207,7 @@ async def chat_followings(websocket: WebSocket, user_profile_id: int):
     while True:
         try:
             duplicated_followings: List[RedisFollowingByUserProfileS] = (
-                RedisFollowingsByUserProfileS.smembers(redis_handler.redis, user_profile_id)
+                RedisFollowingsByUserProfileS.smembers(redis_handler.redis_cluster, user_profile_id)
             )
             followings: List[RedisFollowingByUserProfileS] = []
             if duplicated_followings:
@@ -1235,9 +1235,9 @@ async def chat_followings(websocket: WebSocket, user_profile_id: int):
                             key=RedisFollowingsByUserProfileS.get_lock_key(user_profile_id)
                         ):
                             if not RedisFollowingsByUserProfileS.smembers(
-                                redis_handler.redis, user_profile_id
+                                redis_handler.redis_cluster, user_profile_id
                             ):
-                                RedisFollowingsByUserProfileS.sadd(redis_handler.redis, user_profile_id, *[
+                                RedisFollowingsByUserProfileS.sadd(redis_handler.redis_cluster, user_profile_id, *[
                                     RedisFollowingsByUserProfileS.schema(
                                         id=f.other_profile_id,
                                         identity_id=f.other_profile.identity_id,

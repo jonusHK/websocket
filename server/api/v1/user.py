@@ -104,7 +104,7 @@ async def signup(user_s: UserCreateS, session: AsyncSession = Depends(get_async_
     # Redis 데이터 추가
     redis_handler = RedisHandler()
     RedisFollowingsByUserProfileS.sadd(
-        redis_handler.redis,
+        redis_handler.redis_cluster,
         user_profile_id,
         RedisFollowingsByUserProfileS.schema(
             id=user_profile_id,
@@ -361,7 +361,7 @@ async def create_relationship(
 
     # Redis 데이터 추가
     RedisFollowingsByUserProfileS.sadd(
-        redis_handler.redis,
+        redis_handler.redis_cluster,
         user_profile_id,
         RedisFollowingsByUserProfileS.schema(
             id=other_profile_id,
@@ -412,7 +412,7 @@ async def update_relationship(
         key=RedisFollowingsByUserProfileS.get_lock_key(user_profile_id)
     ):
         followings_redis: List[RedisFollowingByUserProfileS] = (
-            RedisFollowingsByUserProfileS.smembers(redis_handler.redis, user_profile_id)
+            RedisFollowingsByUserProfileS.smembers(redis_handler.redis_cluster, user_profile_id)
         )
         duplicated_following_redis: List[RedisFollowingByUserProfileS] = [
             f for f in followings_redis if f.id == other_profile_id
@@ -433,7 +433,7 @@ async def update_relationship(
                 pipe.execute()
         else:
             RedisFollowingsByUserProfileS.sadd(
-                redis_handler.redis,
+                redis_handler.redis_cluster,
                 user_profile_id,
                 RedisFollowingsByUserProfileS.schema(
                     id=other_profile_id,
@@ -472,13 +472,13 @@ async def delete_relationship(
     await session.commit()
 
     followings_redis: List[RedisFollowingByUserProfileS] = (
-        RedisFollowingsByUserProfileS.smembers(redis_handler.redis, user_profile_id)
+        RedisFollowingsByUserProfileS.smembers(redis_handler.redis_cluster, user_profile_id)
     )
     duplicated_following_redis: List[RedisFollowingByUserProfileS] = [
         f for f in followings_redis if f.id == other_profile_id
     ]
     if duplicated_following_redis:
-        RedisFollowingsByUserProfileS.srem(redis_handler.redis, user_profile_id, *duplicated_following_redis)
+        RedisFollowingsByUserProfileS.srem(redis_handler.redis_cluster, user_profile_id, *duplicated_following_redis)
 
     return {'success': True}
 
