@@ -4,8 +4,9 @@ from typing import Optional
 
 import aioredis
 import aioredis_cluster
+from aioredis_cluster import RedisCluster
 from aioredis_cluster.typedef import CommandsFactory
-from rediscluster import RedisCluster
+from rediscluster import RedisCluster as SyncRedisCluster
 
 from server.db.databases import settings
 
@@ -35,6 +36,7 @@ class AioRedis:
 
 
 class AioRedisCluster:
+
     def __init__(
         self,
         endpoint=settings.redis_endpoint,
@@ -63,7 +65,7 @@ class AioRedisCluster:
             },
             self.endpoint
         ))
-        self.redis = aioredis_cluster.create_redis_cluster(
+        self.redis_cluster = aioredis_cluster.create_redis_cluster(
             list(map(
                 lambda x: (x.rsplit(':', 1)[0], int(x.rsplit(':', 1)[1])),
                 self.endpoint
@@ -86,7 +88,7 @@ class AioRedisCluster:
         )
 
 
-class SyncRedisCluster:
+class SyncRedisClusterModule:
 
     @classmethod
     def get_nodes(cls, endpoint: list):
@@ -101,7 +103,7 @@ class SyncRedisCluster:
     def __init__(self, endpoint=settings.redis_endpoint):
         self.endpoint = endpoint
         self.nodes = self.get_nodes(self.endpoint)
-        self.redis_cluster = RedisCluster(
+        self.redis_cluster = SyncRedisCluster(
             startup_nodes=deepcopy(self.nodes),
             max_connections=None,
             max_connections_per_node=False,

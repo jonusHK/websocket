@@ -1,13 +1,12 @@
 import asyncio
-from contextlib import contextmanager
+from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Iterable, List, Dict, Any, Optional, Callable, Coroutine, Tuple
 from uuid import UUID
 
+from aioredis.client import Pipeline
+from aioredis_cluster import RedisCluster
 from fastapi import HTTPException
-from redis.exceptions import LockError
-from rediscluster import ClusterPipeline
-from rediscluster.pubsub import ClusterPubSub
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 from starlette import status
@@ -15,8 +14,8 @@ from starlette.websockets import WebSocket
 
 from server.core.authentications import COOKIE_NAME, cookie, backend
 from server.core.enums import IntValueEnum
-from server.core.externals.redis import SyncRedisCluster
-from server.core.externals.redis.lock import Redlock
+from server.core.externals.redis import AioRedisCluster
+from server.core.externals.redis.lock import AioRedisClusterLock
 from server.core.externals.redis.schemas import (
     RedisChatRoomByUserProfileS, RedisChatRoomsByUserProfileS, RedisUserProfilesByRoomS,
     RedisChatHistoriesByRoomS, RedisChatHistoriesToSyncS, RedisUserImageFileS,
@@ -61,30 +60,37 @@ class AuthValidator:
 
 class RedisHandler:
 
-    lock_timeout = 5000  # 기본값 5초
+    @asynccontextmanager
+    async def generate_redis_cluster(self):
+        redis_cluster = await self.cluster_wrapper.redis_cluster
+        try:
+            yield redis_cluster
+        finally:
+            redis_cluster.close()
+            await redis_cluster.wait_closed()
 
     def __init__(self, **kwargs):
-        self.cluster_wrapper = SyncRedisCluster(**kwargs)
-        self.redis_cluster = self.cluster_wrapper.redis_cluster
-        self.pipeline = self.redis_cluster.pipeline
+        self.cluster_wrapper = AioRedisCluster(**kwargs)
 
-    @contextmanager
+    @staticmethod
     def lock(
-        self,
-        key: str,
+        redis: RedisCluster,
+        name: str | bytes | memoryview,
         timeout: Optional[int] = None,
+        retry_delay: Optional[float] = None,
+        blocking: Optional[bool] = None,
+        blocking_timeout: Optional[int] = None,
+        thread_local: Optional[bool] = None
     ):
-        if timeout is None:
-            timeout = self.lock_timeout
-
-        redlock = Redlock(self.redis_cluster, key=key, ttl=timeout)
-        if redlock.lock():
-            try:
-                yield True
-            finally:
-                redlock.unlock()
-
-        raise LockError('Not acquired lock.')
+        return AioRedisClusterLock(
+            redis=redis,
+            name=name,
+            timeout=timeout,
+            retry_delay=retry_delay,
+            blocking=blocking,
+            blocking_timeout=blocking_timeout,
+            thread_local=thread_local
+        )
 
     @classmethod
     async def generate_files_schema(
@@ -143,16 +149,17 @@ class RedisHandler:
                     images.append(image)
         return await cls.generate_files_schema(UserProfileImage, images)
 
-    def generate_default_room_name(
+    async def generate_default_room_name(
         self,
+        redis: RedisCluster,
         room_id: int,
         user_profile_id: int,
         profiles_by_room_redis: List[RedisUserProfileByRoomS] = None
     ) -> str | None:
         profiles_by_room_redis: List[RedisUserProfileByRoomS] = (
             profiles_by_room_redis
-            or RedisUserProfilesByRoomS.smembers(
-                self.redis_cluster, (room_id, user_profile_id)
+            or await RedisUserProfilesByRoomS.smembers(
+                redis, (room_id, user_profile_id)
             )
         )
         if not profiles_by_room_redis:
@@ -169,14 +176,15 @@ class RedisHandler:
 
     async def get_room(
         self,
+        redis: RedisCluster,
         room_id: int,
         crud: Optional[ChatRoomCRUD] = None,
-        pipe: Optional[ClusterPipeline] = None,
+        pipe: Optional[Pipeline] = None,
         sync=False, lock=True, raise_exception=False
-    ) -> Tuple[RedisChatRoomInfoS, ClusterPipeline | None]:
+    ) -> Tuple[RedisChatRoomInfoS, Pipeline | None]:
         async def _action():
             callback_pipe = None
-            rooms_redis: List[RedisChatRoomInfoS] = RedisChatRoomsInfoS.smembers(self.redis_cluster, None)
+            rooms_redis: List[RedisChatRoomInfoS] = await RedisChatRoomsInfoS.smembers(redis, None)
             room_redis: RedisChatRoomInfoS = next((r for r in rooms_redis if r.id == room_id), None)
             if not room_redis and sync:
                 room_db: ChatRoom = await crud.get(
@@ -188,8 +196,8 @@ class RedisHandler:
                     ]
                 )
                 if room_db and room_db.is_active:
-                    async def _transaction(pipeline: ClusterPipeline):
-                        return RedisChatRoomsInfoS.sadd(
+                    async def _transaction(pipeline: Pipeline):
+                        return await RedisChatRoomsInfoS.sadd(
                             pipeline, None, RedisChatRoomsInfoS.schema(
                                 id=room_db.id, type=room_db.type.name.lower(),
                                 user_profile_ids=[m.user_profile_id for m in room_db.user_profiles],
@@ -200,8 +208,8 @@ class RedisHandler:
                         )
 
                     if not pipe:
-                        with self.pipeline() as _pipe:
-                            (await _transaction(_pipe)).execute()
+                        _pipe = redis.pipeline()
+                        (await _transaction(_pipe)).execute()
                     else:
                         callback_pipe = await _transaction(pipe)
 
@@ -210,19 +218,20 @@ class RedisHandler:
             return room_redis, callback_pipe
 
         if lock:
-            with self.lock(key=RedisChatRoomsInfoS.get_lock_key()):
+            async with self.lock(redis, name=RedisChatRoomsInfoS.get_lock_key()):
                 return await _action()
         return await _action()
 
     async def get_rooms(
         self,
+        redis: RedisCluster,
         crud: Optional[ChatRoomCRUD] = None,
-        pipe: Optional[ClusterPipeline] = None,
+        pipe: Optional[Pipeline] = None,
         sync=False, lock=True, raise_exception=False
-    ) -> Tuple[List[RedisChatRoomInfoS], ClusterPipeline | None]:
+    ) -> Tuple[List[RedisChatRoomInfoS], Pipeline | None]:
         async def _action():
             callback_pipe = None
-            rooms_redis: List[RedisChatRoomInfoS] = RedisChatRoomsInfoS.smembers(self.redis_cluster, None)
+            rooms_redis: List[RedisChatRoomInfoS] = await RedisChatRoomsInfoS.smembers(redis, None)
             if not rooms_redis and sync:
                 rooms_db: List[ChatRoom] = await crud.list(
                     options=[
@@ -232,8 +241,8 @@ class RedisHandler:
                     ]
                 )
                 if rooms_db:
-                    async def _transaction(pipeline: ClusterPipeline):
-                        return RedisChatRoomsInfoS.sadd(
+                    async def _transaction(pipeline: Pipeline):
+                        return await RedisChatRoomsInfoS.sadd(
                             pipeline, None, *[
                                 RedisChatRoomsInfoS.schema(
                                     id=room_db.id, type=room_db.type.name.lower(),
@@ -246,8 +255,8 @@ class RedisHandler:
                         )
 
                     if not pipe:
-                        with self.pipeline() as _pipe:
-                            (await _transaction(_pipe)).execute()
+                        _pipe = redis.pipeline()
+                        (await _transaction(_pipe)).execute()
                     else:
                         callback_pipe = await _transaction(pipe)
 
@@ -256,33 +265,34 @@ class RedisHandler:
             return rooms_redis, callback_pipe
 
         if lock:
-            with self.lock(key=RedisChatRoomsInfoS.get_lock_key()):
+            async with self.lock(redis, name=RedisChatRoomsInfoS.get_lock_key()):
                 return await _action()
         return await _action()
 
     async def get_rooms_by_user_profile(
         self,
+        redis: RedisCluster,
         user_profile_id: int,
         crud: Optional[ChatRoomUserAssociationCRUD] = None,
-        pipe: Optional[ClusterPipeline] = None,
+        pipe: Optional[Pipeline] = None,
         reverse=False, sync=False, lock=True, raise_exception=False
-    ) -> Tuple[List[RedisChatRoomByUserProfileS], ClusterPipeline | None]:
+    ) -> Tuple[List[RedisChatRoomByUserProfileS], Pipeline | None]:
         now = datetime.now().astimezone()
 
         async def _action():
             callback_pipeline = None
             rooms_by_profile_redis: List[RedisChatRoomByUserProfileS] = (
-                getattr(
+                await getattr(
                     RedisChatRoomsByUserProfileS, 'zrevrange' if reverse else 'zrange'
-                )(self.redis_cluster, user_profile_id)
+                )(redis, user_profile_id)
             )
             if not rooms_by_profile_redis and sync:
                 room_by_profile_db: List[ChatRoomUserAssociation] = await crud.list(
                     conditions=(ChatRoomUserAssociation.user_profile_id == user_profile_id,)
                 )
                 if room_by_profile_db:
-                    def _transaction(pipeline: ClusterPipeline):
-                        return RedisChatRoomsByUserProfileS.zadd(
+                    async def _transaction(pipeline: Pipeline):
+                        return await RedisChatRoomsByUserProfileS.zadd(
                             pipeline, user_profile_id, [
                                 RedisChatRoomsByUserProfileS.schema(
                                     id=m.room_id, name=m.room_name, unread_msg_cnt=0, timestamp=now.timestamp()
@@ -291,8 +301,8 @@ class RedisHandler:
                         )
 
                     if not pipe:
-                        with self.pipeline() as _pipe:
-                            _transaction(_pipe).execute()
+                        _pipe = redis.pipeline()
+                        await (await _transaction(_pipe)).execute()
                     else:
                         callback_pipeline = _transaction(pipe)
 
@@ -301,24 +311,25 @@ class RedisHandler:
             return rooms_by_profile_redis, callback_pipeline
 
         if lock:
-            with self.lock(key=RedisChatRoomsByUserProfileS.get_lock_key(user_profile_id)):
+            async with self.lock(redis, name=RedisChatRoomsByUserProfileS.get_lock_key(user_profile_id)):
                 return await _action()
         return await _action()
 
     async def get_room_by_user_profile(
         self,
+        redis: RedisCluster,
         room_id: int,
         user_profile_id: int,
         crud: Optional[ChatRoomUserAssociationCRUD] = None,
-        pipe: Optional[ClusterPipeline] = None,
+        pipe: Optional[Pipeline] = None,
         sync=False, lock=True, raise_exception=False
-    ) -> Tuple[RedisChatRoomByUserProfileS, ClusterPipeline | None]:
+    ) -> Tuple[RedisChatRoomByUserProfileS, Pipeline | None]:
         now = datetime.now().astimezone()
 
         async def _action():
             callback_pipe = None
             rooms_by_profile_redis: List[RedisChatRoomByUserProfileS] = (
-                RedisChatRoomsByUserProfileS.zrevrange(self.redis_cluster, user_profile_id)
+                await RedisChatRoomsByUserProfileS.zrevrange(redis, user_profile_id)
             )
             room_by_profile_redis: RedisChatRoomByUserProfileS = next(
                 (r for r in rooms_by_profile_redis if r.id == room_id), None
@@ -331,8 +342,8 @@ class RedisHandler:
                     )
                 )
                 if room_by_profile_db:
-                    def _transaction(pipeline: ClusterPipeline):
-                        return RedisChatRoomsByUserProfileS.zadd(
+                    async def _transaction(pipeline: Pipeline):
+                        return await RedisChatRoomsByUserProfileS.zadd(
                             pipeline, user_profile_id, RedisChatRoomsByUserProfileS.schema(
                                 id=room_by_profile_db.room_id,
                                 name=room_by_profile_db.room_name,
@@ -342,8 +353,8 @@ class RedisHandler:
                         )
 
                     if not pipe:
-                        with self.pipeline() as _pipe:
-                            _transaction(_pipe).execute()
+                        _pipe = redis.pipeline()
+                        await (await _transaction(_pipe)).execute()
                     else:
                         callback_pipe = _transaction(pipe)
 
@@ -352,23 +363,24 @@ class RedisHandler:
             return room_by_profile_redis, callback_pipe
 
         if lock:
-            with self.lock(key=RedisChatRoomsByUserProfileS.get_lock_key(user_profile_id)):
+            async with self.lock(redis, name=RedisChatRoomsByUserProfileS.get_lock_key(user_profile_id)):
                 return await _action()
 
         return await _action()
 
     async def get_user_profiles_in_room(
         self,
+        redis: RedisCluster,
         room_id: int,
         user_profile_id: int,
         crud: Optional[ChatRoomUserAssociationCRUD] = None,
-        pipe: Optional[ClusterPipeline] = None,
+        pipe: Optional[Pipeline] = None,
         sync=False, lock=True, raise_exception=False
-    ) -> Tuple[List[RedisUserProfileByRoomS], ClusterPipeline | None]:
+    ) -> Tuple[List[RedisUserProfileByRoomS], Pipeline | None]:
         async def _action():
             callback_pipe = None
             profiles_by_room_redis: List[RedisUserProfileByRoomS] = (
-                RedisUserProfilesByRoomS.smembers(self.redis_cluster, (room_id, user_profile_id))
+                await RedisUserProfilesByRoomS.smembers(redis, (room_id, user_profile_id))
             )
             if not profiles_by_room_redis and sync:
                 room_user_mapping: List[ChatRoomUserAssociation] = (
@@ -384,8 +396,8 @@ class RedisHandler:
                     )
                 )
                 if room_user_mapping:
-                    async def _transaction(pipeline: ClusterPipeline):
-                        return RedisUserProfilesByRoomS.sadd(
+                    async def _transaction(pipeline: Pipeline):
+                        return await RedisUserProfilesByRoomS.sadd(
                             pipeline, (room_id, user_profile_id), *[
                                 RedisUserProfilesByRoomS.schema(
                                     id=p.user_profile.id,
@@ -399,8 +411,8 @@ class RedisHandler:
                         )
 
                     if not pipe:
-                        with self.pipeline() as _pipe:
-                            (await _transaction(_pipe)).execute()
+                        _pipe = redis.pipeline()
+                        await (await _transaction(_pipe)).execute()
                     else:
                         callback_pipe = await _transaction(pipe)
 
@@ -409,22 +421,23 @@ class RedisHandler:
             return profiles_by_room_redis, callback_pipe
 
         if lock:
-            with self.lock(key=RedisUserProfilesByRoomS.get_lock_key((room_id, user_profile_id))):
+            async with self.lock(redis, name=RedisUserProfilesByRoomS.get_lock_key((room_id, user_profile_id))):
                 return await _action()
         return await _action()
 
     async def get_user_profile_in_room(
         self,
+        redis: RedisCluster,
         room_id: int,
         user_profile_id: int,
         crud: Optional[ChatRoomUserAssociationCRUD] = None,
-        pipe: Optional[ClusterPipeline] = None,
+        pipe: Optional[Pipeline] = None,
         sync=False, lock=True, raise_exception=False,
-    ) -> Tuple[RedisUserProfileByRoomS, ClusterPipeline | None]:
+    ) -> Tuple[RedisUserProfileByRoomS, Pipeline | None]:
         async def _action():
             callback_pipeline = None
             user_profiles_redis: List[RedisUserProfileByRoomS] = (
-                RedisUserProfilesByRoomS.smembers(self.redis_cluster, (room_id, user_profile_id))
+                await RedisUserProfilesByRoomS.smembers(redis, (room_id, user_profile_id))
             )
             user_profile_redis: RedisUserProfileByRoomS = next(
                 (p for p in user_profiles_redis if p.id == user_profile_id), None
@@ -445,8 +458,8 @@ class RedisHandler:
                 if room_user_mapping:
                     m = next((m for m in room_user_mapping if m.user_profile_id == user_profile_id), None)
                     if m:
-                        async def _transaction(pipeline: ClusterPipeline):
-                            return RedisUserProfilesByRoomS.sadd(
+                        async def _transaction(pipeline: Pipeline):
+                            return await RedisUserProfilesByRoomS.sadd(
                                 pipeline, (room_id, user_profile_id), RedisUserProfilesByRoomS.schema(
                                     id=m.user_profile.id,
                                     identity_id=m.user_profile.identity_id,
@@ -456,8 +469,8 @@ class RedisHandler:
                             )
 
                         if not pipe:
-                            with self.pipeline() as _pipe:
-                                (await _transaction(_pipe)).execute()
+                            _pipe = redis.pipeline()
+                            await (await _transaction(_pipe)).execute()
                         else:
                             callback_pipeline = await _transaction(pipe)
 
@@ -466,33 +479,40 @@ class RedisHandler:
             return user_profile_redis, callback_pipeline
 
         if lock:
-            with self.lock(key=RedisUserProfilesByRoomS.get_lock_key((room_id, user_profile_id))):
+            async with self.lock(redis, name=RedisUserProfilesByRoomS.get_lock_key((room_id, user_profile_id))):
                 return await _action()
         return await _action()
 
-    def update_histories_by_room(
+    async def update_histories_by_room(
         self,
+        redis: RedisCluster,
         room_id: int,
         histories: List[RedisChatHistoryByRoomS],
-        pipe: Optional[ClusterPipeline] = None
-    ) -> ClusterPipeline | None:
-        def _transaction(pipeline: ClusterPipeline):
-            pipeline = RedisChatHistoriesByRoomS.zadd(pipeline, room_id, histories)
+        pipe: Optional[Pipeline] = None
+    ) -> Pipeline | None:
+        async def _transaction(pipeline: Pipeline):
+            pipeline = await RedisChatHistoriesByRoomS.zadd(pipeline, room_id, histories)
             sync_histories: List[RedisChatHistoryByRoomS] = [h for h in histories if h.id]
             if sync_histories:
-                pipeline = RedisChatHistoriesToSyncS.zadd(pipeline, room_id, sync_histories)
+                pipeline = await RedisChatHistoriesToSyncS.zadd(pipeline, room_id, sync_histories)
             return pipeline
 
         if not pipe:
-            with self.pipeline() as p:
-                _transaction(p).execute()
+            _pipe = redis.pipeline()
+            await (await _transaction(_pipe)).execute()
         else:
-            return _transaction(pipe)
+            return await _transaction(pipe)
 
-    async def handle_pubsub(self, ws: WebSocket, producer_handler: Callable, consumer_handler: Callable, logger):
-        pubsub: ClusterPubSub = self.redis_cluster.pubsub()
-        producer_task: Coroutine = producer_handler(pub=self.redis_cluster, ws=ws)
-        consumer_task: Coroutine = consumer_handler(psub=pubsub, ws=ws)
+    async def handle_pubsub(
+        self,
+        redis: RedisCluster,
+        ws: WebSocket,
+        producer_handler: Callable,
+        consumer_handler: Callable,
+        logger
+    ):
+        producer_task: Coroutine = producer_handler(pub=redis, ws=ws)
+        consumer_task: Coroutine = consumer_handler(psub=redis, ws=ws)
         done, pending = await asyncio.wait(
             [producer_task, consumer_task], return_when=asyncio.FIRST_COMPLETED
         )
