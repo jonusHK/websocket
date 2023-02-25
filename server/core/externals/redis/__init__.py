@@ -1,10 +1,9 @@
 import ssl
 from copy import deepcopy
-from typing import Optional
+from typing import Optional, List
 
 import aioredis
 import aioredis_cluster
-from aioredis_cluster import RedisCluster
 from aioredis_cluster.typedef import CommandsFactory
 from rediscluster import RedisCluster as SyncRedisCluster
 
@@ -12,13 +11,14 @@ from server.db.databases import settings
 
 
 class AioRedis:
+
     def __init__(
         self,
-        endpoint=settings.redis_endpoint,
-        db=settings.redis_database,
-        encoding="utf-8",
-        max_connections=10,
-        decode_responses=True
+        endpoint: List[str] = settings.redis_endpoint,
+        db: int = settings.redis_database,
+        encoding: str = "utf-8",
+        max_connections: int = 10,
+        decode_responses: bool = True
     ):
         assert isinstance(endpoint, str) or isinstance(endpoint, list)
         self.endpoint = endpoint
@@ -27,7 +27,7 @@ class AioRedis:
         self.max_connections = max_connections
         self.decode_responses = decode_responses
         self.redis = aioredis.Redis.from_url(
-            'redis://%s' % (self.endpoint[0] if isinstance(endpoint, list) else self.endpoint),
+            'redis://%s' % self.endpoint[0],
             db=self.db,
             encoding=self.encoding,
             max_connections=self.max_connections,
