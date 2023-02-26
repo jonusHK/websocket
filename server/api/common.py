@@ -180,7 +180,7 @@ class RedisHandler:
                         )
 
                     if not pipe:
-                        async with self.pipeline(transaction=True) as _pipe:
+                        async with self.pipeline() as _pipe:
                             await (await _transaction(_pipe)).execute()
                     else:
                         callback_pipe = await _transaction(pipe)
@@ -224,7 +224,7 @@ class RedisHandler:
                         )
 
                     if not pipe:
-                        async with self.pipeline(transaction=True) as _pipe:
+                        async with self.pipeline() as _pipe:
                             await (await _transaction(_pipe)).execute()
                     else:
                         callback_pipeline = await _transaction(pipe)
@@ -274,7 +274,7 @@ class RedisHandler:
                         )
 
                     if not pipe:
-                        async with self.pipeline(transaction=True) as _pipe:
+                        async with self.pipeline() as _pipe:
                             await (await _transaction(_pipe)).execute()
                     else:
                         callback_pipe = await _transaction(pipe)
@@ -328,7 +328,7 @@ class RedisHandler:
                         )
 
                     if not pipe:
-                        async with self.pipeline(transaction=True) as _pipe:
+                        async with self.pipeline() as _pipe:
                             await (await _transaction(_pipe)).execute()
                     else:
                         callback_pipe = await _transaction(pipe)
@@ -383,7 +383,7 @@ class RedisHandler:
                             )
 
                         if not pipe:
-                            async with self.pipeline(transaction=True) as _pipe:
+                            async with self.pipeline() as _pipe:
                                 await (await _transaction(_pipe)).execute()
                         else:
                             callback_pipeline = await _transaction(pipe)
@@ -411,7 +411,7 @@ class RedisHandler:
             return pipeline
 
         if not pipe:
-            async with self.pipeline(transaction=True) as p:
+            async with self.pipeline() as p:
                 await (await _transaction(p)).execute()
         else:
             return await _transaction(pipe)

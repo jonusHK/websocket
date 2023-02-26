@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 from starlette import status
 from starlette.responses import HTMLResponse
-from websockets.exceptions import WebSocketException
+from websockets.exceptions import WebSocketException, ConnectionClosedOK
 
 from server.api import ExceptionHandlerRoute, templates
 from server.api.common import AuthValidator, RedisHandler
@@ -73,7 +73,6 @@ async def chat_room_by_profile(
     session: AsyncSession = Depends(get_async_session)
 ):
     redis_handler = RedisHandler()
-
     room_by_profile_redis, _ = await redis_handler.get_room_by_user_profile(
         room_id, user_profile_id,
         crud=ChatRoomUserAssociationCRUD(session),
@@ -88,6 +87,8 @@ async def chat_room_by_profile(
             room_id, user_profile_id, profiles_by_room_redis
         )
     )
+    await redis_handler.redis.close()
+
     obj: Dict[str, Any] = jsonable_encoder(room_by_profile_redis)
     obj.update(jsonable_encoder({
         'name': room_name,
@@ -179,7 +180,9 @@ async def chat_rooms(
                         result.append(obj)
                 await websocket.send_json(result)
             except (WebSocketDisconnect, WebSocketException) as e:
-                logger.exception(get_log_error(e))
+                if not isinstance(e, ConnectionClosedOK):
+                    logger.exception(get_log_error(e))
+                await redis_handler.redis.close()
                 raise e
             except Exception as e:
                 if e.__class__.__name__ not in raised_errors:
@@ -361,6 +364,7 @@ async def chat_room_create(
         ))
         await pipe.execute()
 
+    await redis_handler.redis.close()
     return ChatRoomS.from_orm(room)
 
 
@@ -1148,8 +1152,9 @@ async def chat(
                         if exc.__class__.__name__ not in raised_errors:
                             logger.error(get_log_error(exc))
                             raised_errors.add(exc.__class__.__name__)
-        except WebSocketDisconnect as exc:
-            logger.exception(get_log_error(exc))
+        except (WebSocketDisconnect, WebSocketException) as exc:
+            if not isinstance(e, ConnectionClosedOK):
+                logger.exception(get_log_error(e))
             raise exc
 
     async def consumer_handler(psub: PubSub, ws: WebSocket):
@@ -1184,6 +1189,7 @@ async def chat(
             redis_handler.redis, room_id,
             field='connected_profile_ids', value=room_redis.connected_profile_ids
         )
+        await redis_handler.redis.close()
 
 
 @router.websocket('/followings/{user_profile_id}')
@@ -1257,7 +1263,9 @@ async def chat_followings(websocket: WebSocket, user_profile_id: int):
                                 ])
             await websocket.send_json(jsonable_encoder(followings))
         except (WebSocketDisconnect, WebSocketException) as e:
-            logger.exception(get_log_error(e))
+            if not isinstance(e, ConnectionClosedOK):
+                logger.exception(get_log_error(e))
+            await redis_handler.redis.close()
             raise e
         except Exception as e:
             if e.__class__.__name__ not in raised_errors:

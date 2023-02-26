@@ -39,7 +39,7 @@ async def init_chat_room_redis():
     room_keys: List[str] = (await RedisInfoByRoomS.scan(redis))[1]
     if room_keys:
         await RedisInfoByRoomS.delete(redis, *room_keys, raw_key=True)
-    redis.close()
+    await redis.close()
 
 
 @app.on_event("startup")
