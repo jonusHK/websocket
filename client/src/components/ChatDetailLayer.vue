@@ -289,13 +289,6 @@ export default {
                 }
 
                 if (_.includes(['lookup', 'message', 'file', 'invite'], json.type)) {
-                    const data = {
-                        'type': 'update',
-                        'data': {
-                            'is_read': true
-                        }
-                    };
-                    wsSend(data);
                     // 스크롤 이동
                     nextTick(() => {
                         setTimeout(() => moveChatBodyPosition(), 50);
@@ -651,7 +644,7 @@ export default {
 }
 
 .chat-notice-container {
-    height: 60px;
+    height: 45px;
     color: #757575;
     display: flex;
     flex-direction: column;

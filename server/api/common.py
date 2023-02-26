@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 from starlette import status
 from starlette.websockets import WebSocket
+from websockets.exceptions import WebSocketException
 
 from server.core.authentications import COOKIE_NAME, cookie, backend
 from server.core.enums import IntValueEnum
@@ -16,8 +17,8 @@ from server.core.externals.redis import AioRedis
 from server.core.externals.redis.schemas import (
     RedisChatRoomByUserProfileS, RedisChatRoomsByUserProfileS, RedisUserProfilesByRoomS,
     RedisChatHistoriesByRoomS, RedisChatHistoriesToSyncS, RedisUserImageFileS,
-    RedisChatHistoryFileS, RedisUserProfileByRoomS, RedisChatHistoryByRoomS, RedisChatRoomInfoS,
-    RedisChatRoomsInfoS
+    RedisChatHistoryFileS, RedisUserProfileByRoomS, RedisChatHistoryByRoomS, RedisInfoByRoomS,
+    RedisChatRoomInfoS
 )
 from server.crud.service import ChatRoomCRUD, ChatRoomUserAssociationCRUD
 from server.models import (
@@ -156,8 +157,7 @@ class RedisHandler:
     ) -> Tuple[RedisChatRoomInfoS, Pipeline | None]:
         async def _action():
             callback_pipe = None
-            rooms_redis: List[RedisChatRoomInfoS] = await RedisChatRoomsInfoS.smembers(self.redis, None)
-            room_redis: RedisChatRoomInfoS = next((r for r in rooms_redis if r.id == room_id), None)
+            room_redis: RedisChatRoomInfoS = await RedisInfoByRoomS.hgetall(self.redis, room_id)
             if not room_redis and sync:
                 room_db: ChatRoom = await crud.get(
                     conditions=(ChatRoom.id == room_id,),
@@ -169,18 +169,18 @@ class RedisHandler:
                 )
                 if room_db and room_db.is_active:
                     async def _transaction(pipeline: Pipeline):
-                        return await RedisChatRoomsInfoS.sadd(
-                            pipeline, None, RedisChatRoomsInfoS.schema(
+                        return await RedisInfoByRoomS.hset(
+                            pipeline, room_id, data=RedisChatRoomInfoS(
                                 id=room_db.id, type=room_db.type.name.lower(),
                                 user_profile_ids=[m.user_profile_id for m in room_db.user_profiles],
                                 user_profile_files=await self.generate_profile_images_schema(
                                     [m.user_profile for m in room_db.user_profiles], only_default=True
-                                )
+                                ), connected_profile_ids=[]
                             )
                         )
 
                     if not pipe:
-                        async with self.pipeline(transaction=True) as _pipe:
+                        async with self.pipeline() as _pipe:
                             await (await _transaction(_pipe)).execute()
                     else:
                         callback_pipe = await _transaction(pipe)
@@ -190,53 +190,7 @@ class RedisHandler:
             return room_redis, callback_pipe
 
         if lock:
-            async with self.lock(key=RedisChatRoomsInfoS.get_lock_key()):
-                return await _action()
-        return await _action()
-
-    async def get_rooms(
-        self,
-        crud: Optional[ChatRoomCRUD] = None,
-        pipe: Optional[Pipeline] = None,
-        sync=False, lock=True, raise_exception=False
-    ) -> Tuple[List[RedisChatRoomInfoS], Pipeline | None]:
-        async def _action():
-            callback_pipe = None
-            rooms_redis: List[RedisChatRoomInfoS] = await RedisChatRoomsInfoS.smembers(self.redis, None)
-            if not rooms_redis and sync:
-                rooms_db: List[ChatRoom] = await crud.list(
-                    options=[
-                        selectinload(ChatRoom.user_profiles)
-                        .joinedload(ChatRoomUserAssociation.user_profile)
-                        .selectinload(UserProfile.images)
-                    ]
-                )
-                if rooms_db:
-                    async def _transaction(pipeline: Pipeline):
-                        return await RedisChatRoomsInfoS.sadd(
-                            pipeline, None, *[
-                                RedisChatRoomsInfoS.schema(
-                                    id=room_db.id, type=room_db.type.name.lower(),
-                                    user_profile_ids=[m.user_profile_id for m in room_db.user_profiles],
-                                    user_profile_files=await self.generate_profile_images_schema(
-                                        [m.user_profile for m in room_db.user_profiles], only_default=True
-                                    )
-                                ) for room_db in rooms_db if room_db.is_active
-                            ]
-                        )
-
-                    if not pipe:
-                        async with self.pipeline(transaction=True) as _pipe:
-                            await (await _transaction(_pipe)).execute()
-                    else:
-                        callback_pipe = await _transaction(pipe)
-
-                elif raise_exception:
-                    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
-            return rooms_redis, callback_pipe
-
-        if lock:
-            async with self.lock(key=RedisChatRoomsInfoS.get_lock_key()):
+            async with self.lock(key=RedisInfoByRoomS.get_lock_key()):
                 return await _action()
         return await _action()
 
@@ -270,7 +224,7 @@ class RedisHandler:
                         )
 
                     if not pipe:
-                        async with self.pipeline(transaction=True) as _pipe:
+                        async with self.pipeline() as _pipe:
                             await (await _transaction(_pipe)).execute()
                     else:
                         callback_pipeline = await _transaction(pipe)
@@ -320,7 +274,7 @@ class RedisHandler:
                         )
 
                     if not pipe:
-                        async with self.pipeline(transaction=True) as _pipe:
+                        async with self.pipeline() as _pipe:
                             await (await _transaction(_pipe)).execute()
                     else:
                         callback_pipe = await _transaction(pipe)
@@ -374,7 +328,7 @@ class RedisHandler:
                         )
 
                     if not pipe:
-                        async with self.pipeline(transaction=True) as _pipe:
+                        async with self.pipeline() as _pipe:
                             await (await _transaction(_pipe)).execute()
                     else:
                         callback_pipe = await _transaction(pipe)
@@ -429,7 +383,7 @@ class RedisHandler:
                             )
 
                         if not pipe:
-                            async with self.pipeline(transaction=True) as _pipe:
+                            async with self.pipeline() as _pipe:
                                 await (await _transaction(_pipe)).execute()
                         else:
                             callback_pipeline = await _transaction(pipe)
@@ -457,21 +411,51 @@ class RedisHandler:
             return pipeline
 
         if not pipe:
-            async with self.pipeline(transaction=True) as p:
+            async with self.pipeline() as p:
                 await (await _transaction(p)).execute()
         else:
             return await _transaction(pipe)
+
+    # 유저 채팅방 unread_msg_cnt 업데이트
+    async def update_unread_msg_cnt(
+        self,
+        room_id: int,
+        profile_id: int,
+        crud: ChatRoomUserAssociationCRUD,
+        timestamp: Optional[float] = None
+    ):
+        async with self.lock(key=RedisChatRoomsByUserProfileS.get_lock_key(profile_id)):
+            room_by_profile_redis, _ = await self.get_room_by_user_profile(
+                room_id, profile_id, crud, sync=True, lock=False
+            )
+            if room_by_profile_redis:
+                async with self.pipeline() as pipe:
+                    pipe = await RedisChatRoomsByUserProfileS.zrem(
+                        pipe, profile_id, room_by_profile_redis
+                    )
+                    pipe = await RedisChatRoomsByUserProfileS.zadd(
+                        pipe, profile_id, RedisChatRoomByUserProfileS(
+                            id=room_by_profile_redis.id,
+                            name=room_by_profile_redis.name,
+                            unread_msg_cnt=room_by_profile_redis.unread_msg_cnt + 1,
+                            timestamp=timestamp or datetime.now().astimezone().timestamp()
+                        )
+                    )
+                    await pipe.execute()
 
     async def handle_pubsub(self, ws: WebSocket, producer_handler: Callable, consumer_handler: Callable, logger):
         pubsub: PubSub = self.redis.pubsub()
         producer_task: Coroutine = producer_handler(pub=self.redis, ws=ws)
         consumer_task: Coroutine = consumer_handler(psub=pubsub, ws=ws)
         done, pending = await asyncio.wait(
-            [producer_task, consumer_task], return_when=asyncio.FIRST_COMPLETED)
+            [producer_task, consumer_task], return_when=asyncio.FIRST_COMPLETED
+        )
         logger.info(f"Done task: {done}")
-        for task in pending:
-            logger.info(f"Canceling task: {task}")
-            task.cancel()
+        if pending:
+            for task in pending:
+                logger.info(f"Canceling task: {task}")
+                task.cancel()
+            raise WebSocketException('Cancelled task.')
 
 
 def generate_room_mapping_name(user_profile_id: int, other_profiles: List[UserProfile]):

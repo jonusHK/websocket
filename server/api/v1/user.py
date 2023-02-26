@@ -119,6 +119,7 @@ async def signup(user_s: UserCreateS, session: AsyncSession = Depends(get_async_
             )
         )
     )
+    await redis_handler.redis.close()
 
     return UserS.from_orm(user)
 
@@ -419,7 +420,7 @@ async def update_relationship(
         ]
 
         if duplicated_following_redis:
-            async with redis_handler.pipeline(transaction=True) as pipe:
+            async with redis_handler.pipeline() as pipe:
                 pipe = await RedisFollowingsByUserProfileS.srem(pipe, user_profile_id, *duplicated_following_redis)
                 following_redis = duplicated_following_redis[-1]
                 for k, v in values.items():

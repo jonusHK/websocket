@@ -2,7 +2,9 @@ from typing import List, Optional
 
 from pydantic import BaseModel
 
-from server.core.externals.redis.mixin import SortedSetCollectionMixin, SetCollectionMixin
+from server.core.externals.redis.mixin import (
+    SortedSetCollectionMixin, SetCollectionMixin, HashCollectionMixin, ScanMixin
+)
 
 
 class RedisFileBaseS(BaseModel):
@@ -34,7 +36,7 @@ class RedisUserProfileS(BaseModel):
     identity_id: str
     nickname: str
     image: Optional[RedisUserImageFileS] = None
-    files: Optional[List[RedisUserImageFileS]] = []
+    files: List[RedisUserImageFileS] = []
 
 
 class RedisFollowingS(RedisUserProfileS):
@@ -62,7 +64,7 @@ class RedisChatHistoryByRoomS(BaseModel):
     user_profile_id: int
     contents: Optional[str] = None
     type: str
-    files: Optional[List[RedisChatHistoryFileS]] = []
+    files: List[RedisChatHistoryFileS] = []
     read_user_ids: List[int] = []
     timestamp: float | int
     date: str
@@ -72,8 +74,13 @@ class RedisChatHistoryByRoomS(BaseModel):
 class RedisChatRoomInfoS(BaseModel):
     id: int
     type: str
-    user_profile_ids: List[int]
-    user_profile_files: Optional[List[RedisUserImageFileS]] = []
+    user_profile_ids: List[int] = []
+    user_profile_files: List[RedisUserImageFileS] = []
+    connected_profile_ids: List[int] = []
+
+    def add_connected_profile_id(self, profile_id: int):
+        if profile_id not in self.connected_profile_ids:
+            self.connected_profile_ids.append(profile_id)
 
 
 class RedisChatRoomByUserProfileS(BaseModel):
@@ -91,8 +98,8 @@ class RedisFollowingByUserProfileS(RedisFollowingS):
     ...
 
 
-class RedisChatRoomsInfoS(SetCollectionMixin):
-    format = 'rooms'
+class RedisInfoByRoomS(HashCollectionMixin, ScanMixin):
+    format = 'room:{}:info'
     schema = RedisChatRoomInfoS
 
 

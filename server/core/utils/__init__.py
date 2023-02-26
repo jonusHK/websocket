@@ -1,5 +1,6 @@
 import random
 import string
+from typing import Iterable
 
 import phonenumbers
 from passlib.context import CryptContext
@@ -101,3 +102,8 @@ def generate_random_string(
     for _ in range(length):
         random_str += random.choice(words)
     return random_str
+
+
+async def async_iter(iterable: Iterable):
+    for v in iterable:
+        yield v
