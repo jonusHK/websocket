@@ -1,4 +1,5 @@
 import logging
+from typing import List
 
 import uvicorn
 from fastapi import FastAPI, Request
@@ -9,6 +10,8 @@ from starlette.staticfiles import StaticFiles
 
 from server.api.v1 import api_router
 from server.core.exceptions import ClassifiableException
+from server.core.externals.redis import AioRedis
+from server.core.externals.redis.schemas import RedisInfoByRoomS
 from server.core.responses import WebsocketJSONResponse
 from server.db.databases import settings, engine, Base
 
@@ -31,6 +34,14 @@ app.include_router(api_router, prefix=settings.api_v1_prefix)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
+async def init_chat_room_redis():
+    redis = AioRedis().redis
+    room_keys: List[str] = (await RedisInfoByRoomS.scan(redis))[1]
+    if room_keys:
+        await RedisInfoByRoomS.delete(redis, *room_keys, raw_key=True)
+    redis.close()
+
+
 @app.on_event("startup")
 async def on_startup():
     # create db tables
@@ -39,6 +50,13 @@ async def on_startup():
 
     logging.basicConfig()
     logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
+
+    await init_chat_room_redis()
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    await init_chat_room_redis()
 
 
 @app.exception_handler(ClassifiableException)

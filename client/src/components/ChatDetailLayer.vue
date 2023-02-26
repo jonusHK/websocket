@@ -289,13 +289,6 @@ export default {
                 }
 
                 if (_.includes(['lookup', 'message', 'file', 'invite'], json.type)) {
-                    const data = {
-                        'type': 'update',
-                        'data': {
-                            'is_read': true
-                        }
-                    };
-                    wsSend(data);
                     // 스크롤 이동
                     nextTick(() => {
                         setTimeout(() => moveChatBodyPosition(), 50);

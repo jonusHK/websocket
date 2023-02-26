@@ -6,7 +6,7 @@ from server.api import ExceptionHandlerRoute
 from server.core.externals.redis import AioRedis
 from server.core.externals.redis.schemas import (
     RedisUserProfilesByRoomS, RedisChatRoomsByUserProfileS, RedisChatHistoriesByRoomS,
-    RedisFollowingsByUserProfileS, RedisChatRoomsInfoS, RedisChatRoomInfoS
+    RedisFollowingsByUserProfileS, RedisInfoByRoomS
 )
 
 router = APIRouter(route_class=ExceptionHandlerRoute)
@@ -15,14 +15,16 @@ router = APIRouter(route_class=ExceptionHandlerRoute)
 @router.get('/rooms')
 async def chat_rooms():
     redis = AioRedis().redis
-    return await RedisChatRoomsInfoS.smembers(redis, None)
+    room_keys: List[str] = (await RedisInfoByRoomS.scan(redis))[1]
+    if not room_keys:
+        return []
+    return [await RedisInfoByRoomS.hgetall(redis, key, raw_key=True) for key in room_keys]
 
 
 @router.get('/rooms/{room_id}')
-async def chat_rooms_by_id(room_id: int):
+async def chat_room(room_id: int):
     redis = AioRedis().redis
-    rooms: List[RedisChatRoomInfoS] = await RedisChatRoomsInfoS.smembers(redis, None)
-    return next((room for room in rooms if room.id == room_id), None)
+    return await RedisInfoByRoomS.hgetall(redis, room_id)
 
 
 @router.get('/rooms/user_profile/{user_profile_id}')
