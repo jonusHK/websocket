@@ -5,6 +5,7 @@ from typing import Any, TypeVar, Mapping, Sequence, Optional, Awaitable
 
 from aioredis import Redis
 from aioredis.client import Pipeline
+from fastapi.encoders import jsonable_encoder
 
 KeyT = bytes | str | memoryview
 EncodedT = bytes | memoryview
@@ -12,7 +13,8 @@ DecodedT = str | int | float
 EncodableT = EncodedT | DecodedT
 ExpiryT = int | datetime.timedelta
 ZScoreBoundT = float | int
-AnyKeyT = TypeVar("AnyKeyT", bytes, str, memoryview)
+AnyKeyT = TypeVar('AnyKeyT', bytes, str, memoryview)
+AnyFieldT = TypeVar('AnyFieldT', bytes, str, memoryview)
 
 
 class KeyMixin:
@@ -31,11 +33,12 @@ class KeyMixin:
 
 class ValueMixin:
     @classmethod
-    def get_value(cls, value: Any):
+    def get_value(cls, value: Any, only_encode: bool = False):
         if isinstance(value, EncodableT):
             return value
         elif isinstance(value, list | tuple):
-            return [cls.get_value(v) for v in value]
+            iterable = [cls.get_value(v) for v in value]
+            return json.dumps(iterable) if only_encode else iterable
         elif isinstance(value, getattr(cls, 'schema')):
             return value.json()
         return json.dumps(value)
@@ -49,10 +52,10 @@ class TransactionMixin:
 
 class DeleteMixin:
     @classmethod
-    async def delete(cls, redis: Redis, *key_param):
+    async def delete(cls, redis: Redis, *key_params, raw_key=False):
         assert hasattr(cls, 'get_key'), 'Must have `KeyMixin` class.'
         assert hasattr(cls, 'execute'), 'Must have `TransactionMixin` class.'
-        keys = [getattr(cls, 'get_key')(k) for k in key_param]
+        keys = [getattr(cls, 'get_key')(k) for k in key_params] if not raw_key else key_params
         return await getattr(cls, 'execute')(redis.delete(*keys))
 
 
@@ -61,13 +64,16 @@ class ConvertFormatMixin:
     def decode(cls, value: Any):
         if not value:
             return value
-        elif isinstance(value, list | tuple | set):
+        elif isinstance(value, list | set):
             decoded = [cls.decode(v) for v in value]
+            return decoded
+        elif isinstance(value, dict):
+            decoded = {k: cls.decode(v) for k, v in value.items()}
             return decoded
         elif isinstance(value, bytes):
             return value.decode('utf-8')
         try:
-            return json.loads(value)
+            return cls.decode(json.loads(value))
         except (JSONDecodeError, TypeError):
             return value
 
@@ -274,6 +280,45 @@ class StringCollectionMixin(KeyMixin, ValueMixin, TransactionMixin, ConvertForma
         return await cls.execute(redis.append(key, value))
 
 
+class HashCollectionMixin(KeyMixin, ValueMixin, TransactionMixin, ConvertFormatMixin, DeleteMixin):
+    @classmethod
+    async def hset(
+        cls,
+        redis: Redis,
+        key_param: Any | None,
+        field: Optional[AnyFieldT] = None,
+        value: Optional[Any] = None,
+        data: Optional[Any] = None,
+        raw_key=False
+    ):
+        key = cls.get_key(key_param) if not raw_key else key_param
+        if value is not None:
+            value = cls.get_value(value, only_encode=True)
+        if data and not isinstance(data, Mapping):
+            if isinstance(data, getattr(cls, 'schema')):
+                data = {
+                    cls.get_value(k): cls.get_value(v, only_encode=True)
+                    for k, v in jsonable_encoder(data).items()
+                }
+            else:
+                raise AssertionError(
+                    f"Should be instance of Mapping or {getattr(cls, 'schema').__class__.__name__}."
+                )
+        return await cls.execute(redis.hset(key, field, value, data))
+
+    @classmethod
+    async def hget(cls, redis: Redis, key_param: Any | None, field: AnyFieldT, raw_key=False):
+        key = cls.get_key(key_param) if not raw_key else key_param
+        result = cls.decode(await redis.hget(key, field))
+        return cls.to_schema(result)
+
+    @classmethod
+    async def hgetall(cls, redis: Redis, key_param: Any | None, raw_key=False):
+        key = cls.get_key(key_param) if not raw_key else key_param
+        result = cls.decode(await redis.hgetall(key))
+        return cls.to_schema(result)
+
+
 class SortedSetCollectionMixin(KeyMixin, ValueMixin, TransactionMixin, ConvertFormatMixin, DeleteMixin):
     @classmethod
     async def zadd(cls, redis: Redis, key_param: Any | None, data: Any, **kwargs):
@@ -337,3 +382,12 @@ class SortedSetCollectionMixin(KeyMixin, ValueMixin, TransactionMixin, ConvertFo
     async def zcard(cls, redis: Redis, key_param: Any | None):
         key = cls.get_key(key_param)
         return await redis.zcard(key)
+
+
+class ScanMixin:
+    @classmethod
+    async def scan(cls, redis: Redis, cursor: int = 0, match: Optional[str] = None, count: Optional[int] = None):
+        if not match:
+            assert hasattr(cls, 'format'), 'Should be have format attribute if not match.'
+            match = getattr(cls, 'format').replace('{}', '*')
+        return await redis.scan(cursor, match, count)
