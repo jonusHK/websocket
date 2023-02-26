@@ -644,7 +644,7 @@ export default {
 }
 
 .chat-notice-container {
-    height: 60px;
+    height: 45px;
     color: #757575;
     display: flex;
     flex-direction: column;

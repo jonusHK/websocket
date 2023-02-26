@@ -2,8 +2,9 @@ from typing import List, Optional
 
 from pydantic import BaseModel
 
-from server.core.externals.redis.mixin import SortedSetCollectionMixin, SetCollectionMixin, HashCollectionMixin, \
-    ScanMixin
+from server.core.externals.redis.mixin import (
+    SortedSetCollectionMixin, SetCollectionMixin, HashCollectionMixin, ScanMixin
+)
 
 
 class RedisFileBaseS(BaseModel):
