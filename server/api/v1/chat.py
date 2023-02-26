@@ -357,7 +357,7 @@ async def chat_room_create(
             type=room.type.name.lower(),
             user_profile_ids=user_profile_ids,
             user_profile_files=default_profile_images,
-            connected_user_profile_ids=set(),
+            connected_profile_ids=[],
         ))
         await pipe.execute()
 
