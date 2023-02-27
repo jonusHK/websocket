@@ -8,11 +8,12 @@ from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 from starlette import status
-from starlette.websockets import WebSocket
-from websockets.exceptions import WebSocketException
+from starlette.websockets import WebSocket, WebSocketDisconnect, WebSocketState
+from websockets.exceptions import WebSocketException, ConnectionClosedOK
 
 from server.core.authentications import COOKIE_NAME, cookie, backend
 from server.core.enums import IntValueEnum
+from server.core.exceptions import ExceptionHandler
 from server.core.externals.redis import AioRedis
 from server.core.externals.redis.schemas import (
     RedisChatRoomByUserProfileS, RedisChatRoomsByUserProfileS, RedisUserProfilesByRoomS,
@@ -230,7 +231,7 @@ class RedisHandler:
             return room_redis, callback_pipe
 
         if lock:
-            async with self.lock(key=RedisInfoByRoomS.get_lock_key()):
+            async with await self.lock(key=RedisInfoByRoomS.get_lock_key()):
                 return await _action()
         return await _action()
 
@@ -264,7 +265,7 @@ class RedisHandler:
                         )
 
                     if not pipe:
-                        async with self.pipeline() as _pipe:
+                        async with await self.pipeline() as _pipe:
                             await (await _transaction(_pipe)).execute()
                     else:
                         callback_pipeline = await _transaction(pipe)
@@ -274,7 +275,7 @@ class RedisHandler:
             return rooms_by_profile_redis, callback_pipeline
 
         if lock:
-            async with self.lock(key=RedisChatRoomsByUserProfileS.get_lock_key(user_profile_id)):
+            async with await self.lock(key=RedisChatRoomsByUserProfileS.get_lock_key(user_profile_id)):
                 return await _action()
         return await _action()
 
@@ -314,7 +315,7 @@ class RedisHandler:
                         )
 
                     if not pipe:
-                        async with self.pipeline() as _pipe:
+                        async with await self.pipeline() as _pipe:
                             await (await _transaction(_pipe)).execute()
                     else:
                         callback_pipe = await _transaction(pipe)
@@ -324,7 +325,7 @@ class RedisHandler:
             return room_by_profile_redis, callback_pipe
 
         if lock:
-            async with self.lock(key=RedisChatRoomsByUserProfileS.get_lock_key(user_profile_id)):
+            async with await self.lock(key=RedisChatRoomsByUserProfileS.get_lock_key(user_profile_id)):
                 return await _action()
         return await _action()
 
@@ -368,7 +369,7 @@ class RedisHandler:
                         )
 
                     if not pipe:
-                        async with self.pipeline() as _pipe:
+                        async with await self.pipeline() as _pipe:
                             await (await _transaction(_pipe)).execute()
                     else:
                         callback_pipe = await _transaction(pipe)
@@ -378,7 +379,7 @@ class RedisHandler:
             return profiles_by_room_redis, callback_pipe
 
         if lock:
-            async with self.lock(key=RedisUserProfilesByRoomS.get_lock_key((room_id, user_profile_id))):
+            async with await self.lock(key=RedisUserProfilesByRoomS.get_lock_key((room_id, user_profile_id))):
                 return await _action()
         return await _action()
 
@@ -423,7 +424,7 @@ class RedisHandler:
                             )
 
                         if not pipe:
-                            async with self.pipeline() as _pipe:
+                            async with await self.pipeline() as _pipe:
                                 await (await _transaction(_pipe)).execute()
                         else:
                             callback_pipeline = await _transaction(pipe)
@@ -433,7 +434,7 @@ class RedisHandler:
             return user_profile_redis, callback_pipeline
 
         if lock:
-            async with self.lock(key=RedisUserProfilesByRoomS.get_lock_key((room_id, user_profile_id))):
+            async with await self.lock(key=RedisUserProfilesByRoomS.get_lock_key((room_id, user_profile_id))):
                 return await _action()
         return await _action()
 
@@ -451,7 +452,7 @@ class RedisHandler:
             return pipeline
 
         if not pipe:
-            async with self.pipeline() as p:
+            async with await self.pipeline() as p:
                 await (await _transaction(p)).execute()
         else:
             return await _transaction(pipe)
@@ -464,12 +465,12 @@ class RedisHandler:
         crud: ChatRoomUserAssociationCRUD,
         timestamp: Optional[float] = None
     ):
-        async with self.lock(key=RedisChatRoomsByUserProfileS.get_lock_key(profile_id)):
+        async with await self.lock(key=RedisChatRoomsByUserProfileS.get_lock_key(profile_id)):
             room_by_profile_redis, _ = await self.get_room_by_user_profile(
                 room_id, profile_id, crud, sync=True, lock=False
             )
             if room_by_profile_redis:
-                async with self.pipeline() as pipe:
+                async with await self.pipeline() as pipe:
                     pipe = await RedisChatRoomsByUserProfileS.zrem(
                         pipe, profile_id, room_by_profile_redis
                     )
@@ -491,13 +492,36 @@ class RedisHandler:
         done, pending = await asyncio.wait(
             [producer_task, consumer_task], return_when=asyncio.FIRST_COMPLETED
         )
-        logger.info(f"Done task: {done}")
         if pending:
             for task in pending:
-                logger.info(f"Canceling task: {task}")
                 task.cancel()
-            raise WebSocketException('Cancelled task.')
 
 
 def generate_room_mapping_name(user_profile_id: int, other_profiles: List[UserProfile]):
     return ', '.join([p.get_nickname_by_other(user_profile_id) for p in other_profiles])
+
+
+def ws_code_reason(e: Exception):
+    if isinstance(e, WebSocketDisconnect):
+        code, reason = e.code, e.reason
+    else:
+        code, reason = status.WS_1011_INTERNAL_ERROR, ExceptionHandler(e).error
+    return {'code': code, 'reason': reason}
+
+
+async def ws_close(ws: WebSocket, e: Exception):
+    if ws.application_state in (WebSocketState.CONNECTING, WebSocketState.CONNECTED):
+        try:
+            await ws.close(**ws_code_reason(e))
+        except RuntimeError:
+            pass
+
+
+def ws_self_disconnect(e: Exception):
+    return (
+        isinstance(e, ConnectionClosedOK)
+        or (
+            isinstance(e, WebSocketDisconnect)
+            and e.code in (status.WS_1000_NORMAL_CLOSURE, status.WS_1001_GOING_AWAY)
+        )
+    )

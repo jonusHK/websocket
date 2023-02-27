@@ -328,7 +328,7 @@ export default {
         })
         onUnmounted(() => {
             if (ws.value.readyState === WebSocket.OPEN) {
-                ws.value.close();
+                ws.value.close(1000);
             }
         })
         const searchedFollowings = computed(() => {
@@ -367,8 +367,8 @@ export default {
         watch(
             () => wsUrl.value,
             (newUrl) => {
-                if (ws.value) {
-                    ws.value.close();
+                if (ws.value && ws.value.readyState === WebSocket.OPEN) {
+                    ws.value.close(1000);
                 }
                 ws.value = new WebSocket(newUrl);
                 connectWebsocket();

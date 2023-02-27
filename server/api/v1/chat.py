@@ -18,10 +18,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 from starlette import status
 from starlette.responses import HTMLResponse
-from websockets.exceptions import WebSocketException, ConnectionClosedOK
+from websockets.exceptions import WebSocketException
 
 from server.api import ExceptionHandlerRoute, templates
-from server.api.common import AuthValidator, RedisHandler
+from server.api.common import AuthValidator, RedisHandler, ws_self_disconnect, ws_close
 from server.core.authentications import cookie, RoleChecker
 from server.core.enums import UserType, ChatType, ChatHistoryType
 from server.core.exceptions import ExceptionHandler
@@ -116,7 +116,9 @@ async def chat_rooms(
     async with async_session() as session:
         user: User = await AuthValidator(session).get_user_by_websocket(websocket)
         if not next((p for p in user.profiles if p.id == user_profile_id), None):
-            raise WebSocketDisconnect(code=status.WS_1007_INVALID_FRAME_PAYLOAD_DATA)
+            code, reason = status.WS_1011_INTERNAL_ERROR, 'Unauthorized user.'
+            await websocket.close(code=code, reason=reason)
+            raise WebSocketDisconnect(code=code, reason=reason)
 
     await websocket.accept()
 
@@ -126,9 +128,10 @@ async def chat_rooms(
     try:
         while True:
             async with async_session() as session:
-                crud_room = ChatRoomCRUD(session)
-                crud_room_user_mapping = ChatRoomUserAssociationCRUD(session)
                 try:
+                    crud_room = ChatRoomCRUD(session)
+                    crud_room_user_mapping = ChatRoomUserAssociationCRUD(session)
+
                     duplicated_rooms_by_profile_redis, _ = await redis_hdr.get_rooms_by_user_profile(
                         user_profile_id=user_profile_id, crud=crud_room_user_mapping,
                         lock=False, reverse=True
@@ -182,7 +185,8 @@ async def chat_rooms(
                             result.append(obj)
                     await websocket.send_json(result)
                 except (WebSocketDisconnect, WebSocketException) as e:
-                    if not isinstance(e, ConnectionClosedOK):
+                    await ws_close(websocket, e)
+                    if not ws_self_disconnect(e):
                         logger.exception(get_log_error(e))
                     raise e
                 except Exception as e:
@@ -391,17 +395,17 @@ async def chat(
     redis_hdr = RedisHandler()
 
     async with async_session() as session:
-        user: User = await AuthValidator(session).get_user_by_websocket(websocket)
-        if not next((p for p in user.profiles if p.id == user_profile_id), None):
-            raise WebSocketDisconnect(code=status.WS_1007_INVALID_FRAME_PAYLOAD_DATA, reason='Unauthorized user.')
-
         try:
+            user: User = await AuthValidator(session).get_user_by_websocket(websocket)
+            if not next((p for p in user.profiles if p.id == user_profile_id), None):
+                raise WebSocketDisconnect(code=status.WS_1011_INTERNAL_ERROR, reason='Unauthorized user.')
+
             # 방 데이터 추출
             try:
                 room_redis, _ = await redis_hdr.get_room(room_id, ChatRoomCRUD(session), sync=True)
             except Exception as e:
                 raise WebSocketDisconnect(
-                    code=status.WS_1007_INVALID_FRAME_PAYLOAD_DATA,
+                    code=status.WS_1011_INTERNAL_ERROR,
                     reason=f'Not exist room. {e}'
                 )
 
@@ -412,7 +416,7 @@ async def chat(
                 )
             except Exception as e:
                 raise WebSocketDisconnect(
-                    code=status.WS_1007_INVALID_FRAME_PAYLOAD_DATA,
+                    code=status.WS_1011_INTERNAL_ERROR,
                     reason=f'Not exist room by user. {e}'
                 )
 
@@ -423,22 +427,23 @@ async def chat(
                 )
             except Exception as e:
                 raise WebSocketDisconnect(
-                    code=status.WS_1007_INVALID_FRAME_PAYLOAD_DATA,
+                    code=status.WS_1011_INTERNAL_ERROR,
                     reason=f'Failed to get user profiles in the room. {e}'
                 )
             else:
                 # 방에 해당 유저 존재 여부 확인
                 if not next((p for p in user_profiles_redis if p.id == user_profile_id), None):
                     raise WebSocketDisconnect(
-                        code=status.WS_1007_INVALID_FRAME_PAYLOAD_DATA,
+                        code=status.WS_1011_INTERNAL_ERROR,
                         reason='Not exist the user in the room.'
                     )
 
         except Exception as e:
-            code = e.code if isinstance(e, WebSocketDisconnect) else status.WS_1006_ABNORMAL_CLOSURE
+            code = e.code if isinstance(e, WebSocketDisconnect) else status.WS_1011_INTERNAL_ERROR
+            reason = ExceptionHandler(e).error
             logger.exception(get_log_error(e))
-            await websocket.close(code=code)
-            raise WebSocketDisconnect(code=code, reason=ExceptionHandler(e).error)
+            await websocket.close(code=code, reason=reason)
+            raise WebSocketDisconnect(code=code, reason=reason)
 
     await websocket.accept()
 
@@ -457,7 +462,7 @@ async def chat(
                     )
                 except Exception as exc:
                     raise WebSocketDisconnect(
-                        code=status.WS_1000_NORMAL_CLOSURE,
+                        code=status.WS_1011_INTERNAL_ERROR,
                         reason=f'Failed to get room. {exc}'
                     )
                 # 유저에 연결된 방 데이터 추출
@@ -468,7 +473,7 @@ async def chat(
                     )
                 except Exception as exc:
                     raise WebSocketDisconnect(
-                        code=status.WS_1000_NORMAL_CLOSURE,
+                        code=status.WS_1011_INTERNAL_ERROR,
                         reason=f'Failed to get room for user profile. {exc}'
                     )
 
@@ -555,7 +560,7 @@ async def chat(
                             )
                         except Exception as exc:
                             raise WebSocketDisconnect(
-                                code=status.WS_1000_NORMAL_CLOSURE,
+                                code=status.WS_1011_INTERNAL_ERROR,
                                 reason=f'Failed to get room. {exc}'
                             )
                         # 유저에 연결된 방 데이터 추출
@@ -565,7 +570,7 @@ async def chat(
                             )
                         except Exception as exc:
                             raise WebSocketDisconnect(
-                                code=status.WS_1000_NORMAL_CLOSURE,
+                                code=status.WS_1011_INTERNAL_ERROR,
                                 reason=f'Failed to get room for user profile. {exc}'
                             )
                         # 방에 속한 유저들 프로필 데이터 추출
@@ -575,7 +580,7 @@ async def chat(
                             )
                         except Exception as exc:
                             raise WebSocketDisconnect(
-                                code=status.WS_1000_NORMAL_CLOSURE,
+                                code=status.WS_1011_INTERNAL_ERROR,
                                 reason=f'Failed to get user profiles in the room. {exc}'
                             )
                         # 방에 해당 유저 존재 여부 확인
@@ -584,7 +589,7 @@ async def chat(
                         )
                         if not user_profile_redis:
                             raise WebSocketDisconnect(
-                                code=status.WS_1000_NORMAL_CLOSURE,
+                                code=status.WS_1011_INTERNAL_ERROR,
                                 reason='Left the chat room.'
                             )
 
@@ -600,7 +605,7 @@ async def chat(
                         if request_s.type == ChatType.LOOKUP:
                             if request_s.data.offset is None or request_s.data.limit is None:
                                 raise WebSocketDisconnect(
-                                    code=status.WS_1007_INVALID_FRAME_PAYLOAD_DATA,
+                                    code=status.WS_1011_INTERNAL_ERROR,
                                     reason='Not exists offset or limit for page.'
                                 )
 
@@ -697,7 +702,7 @@ async def chat(
                             # 채팅 내역 상태를 업데이트 하는 경우
                             if not request_s.data.history_redis_ids:
                                 raise WebSocketDisconnect(
-                                    code=status.WS_1007_INVALID_FRAME_PAYLOAD_DATA,
+                                    code=status.WS_1011_INTERNAL_ERROR,
                                     reason='Not exists chat history redis ids.'
                                 )
 
@@ -713,7 +718,7 @@ async def chat(
                                 )
                                 if not chat_histories_redis:
                                     raise WebSocketDisconnect(
-                                        code=status.WS_1007_INVALID_FRAME_PAYLOAD_DATA,
+                                        code=status.WS_1011_INTERNAL_ERROR,
                                         reason='Not exists chat histories in the room.'
                                     )
                                 async with await redis_hdr.pipeline() as pipe:
@@ -805,12 +810,13 @@ async def chat(
 
                             # 각 유저 별 해당 방의 unread_msg_cnt 업데이트
                             for p in user_profiles_redis:
-                                if p.id == user_profile_id:
-                                    continue
-                                await redis_hdr.update_unread_msg_cnt(
-                                    room_id, p.id, crud_room_user_mapping, now.timestamp()
-                                )
-
+                                if p.id not in room_redis.connected_profile_ids:
+                                    await redis_hdr.update_unread_msg_cnt(
+                                        room_id,
+                                        p.id,
+                                        crud_room_user_mapping,
+                                        now.timestamp()
+                                    )
 
                             broadcast_response_s = ChatSendFormS(
                                 type=request_s.type,
@@ -879,11 +885,13 @@ async def chat(
 
                             # 각 유저 별 해당 방의 unread_msg_cnt 업데이트
                             for p in user_profiles_redis:
-                                if p.id == user_profile_id:
-                                    continue
-                                await redis_hdr.update_unread_msg_cnt(
-                                    room_id, p.id, crud_room_user_mapping, now.timestamp()
-                                )
+                                if p.id not in room_redis.connected_profile_ids:
+                                    await redis_hdr.update_unread_msg_cnt(
+                                        room_id,
+                                        p.id,
+                                        crud_room_user_mapping,
+                                        now.timestamp()
+                                    )
 
                             broadcast_response_s = ChatSendFormS(
                                 type=request_s.type,
@@ -894,7 +902,7 @@ async def chat(
                             target_profile_ids: List[int] = request_s.data.target_profile_ids
                             if not target_profile_ids:
                                 raise WebSocketDisconnect(
-                                    code=status.WS_1007_INVALID_FRAME_PAYLOAD_DATA,
+                                    code=status.WS_1011_INTERNAL_ERROR,
                                     reason='Not exists user profile ids for invite.'
                                 )
                             _room_user_mapping: List[ChatRoomUserAssociation] = (
@@ -1158,8 +1166,9 @@ async def chat(
                             logger.error(get_log_error(exc))
                             raised_errors.add(exc.__class__.__name__)
         except (WebSocketDisconnect, WebSocketException) as exc:
-            if not isinstance(e, ConnectionClosedOK):
-                logger.exception(get_log_error(e))
+            await ws_close(ws, exc)
+            if not ws_self_disconnect(exc):
+                logger.exception(get_log_error(exc))
             raise exc
 
     async def consumer_handler(psub: PubSub, ws: WebSocket):
@@ -1183,9 +1192,10 @@ async def chat(
         except asyncio.CancelledError as exc:
             await psub.close()
             logger.error(get_log_error(exc))
+
     try:
         await redis_hdr.handle_pubsub(websocket, producer_handler, consumer_handler, logger)
-    except:
+    finally:
         room_redis.connected_profile_ids = [
             profile_id for profile_id in room_redis.connected_profile_ids
             if profile_id != user_profile_id
@@ -1194,12 +1204,14 @@ async def chat(
             await redis_hdr.redis, room_id,
             field='connected_profile_ids', value=room_redis.connected_profile_ids
         )
-    finally:
         await redis_hdr.close()
 
 
 @router.websocket('/followings/{user_profile_id}')
-async def chat_followings(websocket: WebSocket, user_profile_id: int):
+async def chat_followings(
+    websocket: WebSocket,
+    user_profile_id: int
+):
     """
     친구 목록 조회
     """
@@ -1213,7 +1225,10 @@ async def chat_followings(websocket: WebSocket, user_profile_id: int):
         user: User = await AuthValidator(session).get_user_by_websocket(websocket)
         user_profile: UserProfile = next((p for p in user.profiles if p.id == user_profile_id and p.is_active), None)
         if not user_profile:
-            raise WebSocketDisconnect(code=status.WS_1007_INVALID_FRAME_PAYLOAD_DATA, reason='Unauthorized user.')
+            code = status.WS_1011_INTERNAL_ERROR
+            reason = 'Unauthorized user.'
+            await websocket.close(code=code, reason=reason)
+            raise WebSocketDisconnect(code=code, reason=reason)
 
         await websocket.accept()
 
@@ -1269,7 +1284,8 @@ async def chat_followings(websocket: WebSocket, user_profile_id: int):
                                     ])
                 await websocket.send_json(jsonable_encoder(followings))
             except (WebSocketDisconnect, WebSocketException) as e:
-                if not isinstance(e, ConnectionClosedOK):
+                await ws_close(websocket, e)
+                if not ws_self_disconnect(e):
                     logger.exception(get_log_error(e))
                 raise e
             except Exception as e:
