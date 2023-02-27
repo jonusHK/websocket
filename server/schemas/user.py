@@ -5,7 +5,8 @@ from typing import Optional, List
 
 from pydantic import BaseModel, validator
 
-from server.core.enums import ProfileImageType, RelationshipType, FollowType
+from server.core.enums import ProfileImageType, RelationshipType, FollowType, ResponseCode
+from server.core.exceptions import ClassifiableException
 from server.core.utils import get_formatted_phone, get_phone
 from server.schemas import ConvertMixinS
 from server.schemas.base import S3MediaBaseS
@@ -27,7 +28,10 @@ class UserCreateS(UserBase):
 
     @validator('mobile')
     def validate_mobile(cls, value: str):
-        return get_formatted_phone(get_phone(value), with_country=True)
+        try:
+            return get_formatted_phone(get_phone(value), with_country=True, raise_exception=True)
+        except ValueError:
+            raise ClassifiableException(code=ResponseCode.INVALID_MOBILE)
 
 
 class UserS(UserBase):
@@ -53,16 +57,16 @@ class UserRelationshipBaseS(BaseModel):
 
 class UserRelationshipUpdateS(ConvertMixinS, BaseModel):
     other_profile_nickname: Optional[str] = None
-    type: Optional[str] = None
+    type: Optional[int] = None
     favorites: Optional[bool] = None
     is_hidden: Optional[bool] = None
     is_forbidden: Optional[bool] = None
 
-    @validator("type")
-    def get_type(cls, v):
-        enum = RelationshipType.get_by_name(v)
+    @validator('type')
+    def get_type(cls, v: int):
+        enum = RelationshipType(v)
         if not enum:
-            raise ValueError("Invalid `type` value.")
+            raise ValueError('Invalid `type` value.')
         return enum
 
 

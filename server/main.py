@@ -8,9 +8,9 @@ from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import JSONResponse
 from starlette.staticfiles import StaticFiles
 
+from server.api.common import RedisHandler
 from server.api.v1 import api_router
 from server.core.exceptions import ClassifiableException
-from server.core.externals.redis import AioRedis
 from server.core.externals.redis.schemas import RedisInfoByRoomS
 from server.core.responses import WebsocketJSONResponse
 from server.db.databases import settings, engine, Base
@@ -35,11 +35,11 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 async def init_chat_room_redis():
-    redis = AioRedis().redis
-    room_keys: List[str] = (await RedisInfoByRoomS.scan(redis))[1]
+    redis_hdr = RedisHandler()
+    room_keys: List[str] = (await RedisInfoByRoomS.scan(await redis_hdr.redis))[1]
     if room_keys:
-        await RedisInfoByRoomS.delete(redis, *room_keys, raw_key=True)
-    await redis.close()
+        await RedisInfoByRoomS.delete(await redis_hdr.redis, *room_keys, raw_key=True)
+    await redis_hdr.close()
 
 
 @app.on_event("startup")
