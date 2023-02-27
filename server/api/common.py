@@ -1,6 +1,6 @@
 import asyncio
 from datetime import datetime
-from typing import Iterable, List, Dict, Any, Optional, Callable, Coroutine, Tuple
+from typing import Iterable, List, Dict, Any, Optional, Callable, Coroutine, Tuple, Awaitable
 from uuid import UUID
 
 from aioredis.client import Pipeline, Redis, PubSub
@@ -20,6 +20,7 @@ from server.core.externals.redis.schemas import (
     RedisChatHistoryFileS, RedisUserProfileByRoomS, RedisChatHistoryByRoomS, RedisInfoByRoomS,
     RedisChatRoomInfoS
 )
+from server.core.utils import async_iter
 from server.crud.service import ChatRoomCRUD, ChatRoomUserAssociationCRUD
 from server.models import (
     User, ChatRoomUserAssociation, UserProfile, UserProfileImage,
@@ -58,14 +59,53 @@ class AuthValidator:
 
 class RedisHandler:
 
-    def __init__(self, redis: Optional[Redis] = None, **kwargs):
-        if redis is None:
-            redis = AioRedis(**kwargs).redis
-        self.redis = redis
-        self.pipeline = self.redis.pipeline
+    RETRY_COUNT = 5
+    RETRY_DELAY = 0.2
 
-    def lock(self, key: str, timeout: int = 5):
-        return self.redis.lock(name=key, timeout=timeout)
+    _redis = None
+
+    @classmethod
+    async def generate_primary_redis(cls, connections: List[Redis]):
+        async for conn in async_iter(connections):
+            info = await conn.info()
+            if info.get('role') == 'master':
+                return conn
+        return
+
+    def __init__(self, redis_coro: Optional[Awaitable[Redis]] = None, **kwargs):
+        if redis_coro is None:
+            connections = AioRedis(**kwargs).connections
+            redis_coro = self.generate_primary_redis(connections)
+        self._redis_coro = redis_coro
+
+    @property
+    async def redis(self):
+        for _ in range(self.RETRY_COUNT):
+            try:
+                redis = self._redis
+                if not redis:
+                    self._redis = await self._redis_coro
+                return self._redis
+            except ConnectionError:
+                await asyncio.sleep(self.RETRY_DELAY)
+        raise ConnectionError('No connected master node for redis.')
+
+    async def pipeline(self):
+        redis = await self.redis
+        return redis.pipeline()
+
+    async def lock(self, key: str, timeout: int = 5):
+        redis = await self.redis
+        return redis.lock(name=key, timeout=timeout)
+
+    async def pubsub(self):
+        redis = await self.redis
+        return redis.pubsub()
+
+    async def close(self):
+        if not self._redis:
+            raise RuntimeError('Redis connection not initialized.')
+        await self._redis.close()
 
     @classmethod
     async def generate_files_schema(
@@ -133,7 +173,7 @@ class RedisHandler:
         profiles_by_room_redis: List[RedisUserProfileByRoomS] = (
             profiles_by_room_redis
             or await RedisUserProfilesByRoomS.smembers(
-                self.redis, (room_id, user_profile_id)
+                await self.redis, (room_id, user_profile_id)
             )
         )
         if not profiles_by_room_redis:
@@ -157,7 +197,7 @@ class RedisHandler:
     ) -> Tuple[RedisChatRoomInfoS, Pipeline | None]:
         async def _action():
             callback_pipe = None
-            room_redis: RedisChatRoomInfoS = await RedisInfoByRoomS.hgetall(self.redis, room_id)
+            room_redis: RedisChatRoomInfoS = await RedisInfoByRoomS.hgetall(await self.redis, room_id)
             if not room_redis and sync:
                 room_db: ChatRoom = await crud.get(
                     conditions=(ChatRoom.id == room_id,),
@@ -180,7 +220,7 @@ class RedisHandler:
                         )
 
                     if not pipe:
-                        async with self.pipeline() as _pipe:
+                        async with await self.pipeline() as _pipe:
                             await (await _transaction(_pipe)).execute()
                     else:
                         callback_pipe = await _transaction(pipe)
@@ -208,7 +248,7 @@ class RedisHandler:
             rooms_by_profile_redis: List[RedisChatRoomByUserProfileS] = \
                 await getattr(
                     RedisChatRoomsByUserProfileS,
-                    'zrevrange' if reverse else 'zrange')(self.redis, user_profile_id)
+                    'zrevrange' if reverse else 'zrange')(await self.redis, user_profile_id)
             if not rooms_by_profile_redis and sync:
                 room_by_profile_db: List[ChatRoomUserAssociation] = await crud.list(
                     conditions=(ChatRoomUserAssociation.user_profile_id == user_profile_id,)
@@ -251,7 +291,7 @@ class RedisHandler:
         async def _action():
             callback_pipe = None
             rooms_by_profile_redis: List[RedisChatRoomByUserProfileS] = \
-                await RedisChatRoomsByUserProfileS.zrevrange(self.redis, user_profile_id)
+                await RedisChatRoomsByUserProfileS.zrevrange(await self.redis, user_profile_id)
             room_by_profile_redis: RedisChatRoomByUserProfileS = next(
                 (r for r in rooms_by_profile_redis if r.id == room_id), None
             )
@@ -299,7 +339,7 @@ class RedisHandler:
         async def _action():
             callback_pipe = None
             profiles_by_room_redis: List[RedisUserProfileByRoomS] = \
-                await RedisUserProfilesByRoomS.smembers(self.redis, (room_id, user_profile_id))
+                await RedisUserProfilesByRoomS.smembers(await self.redis, (room_id, user_profile_id))
             if not profiles_by_room_redis and sync:
                 room_user_mapping: List[ChatRoomUserAssociation] = \
                     await crud.list(
@@ -353,7 +393,7 @@ class RedisHandler:
         async def _action():
             callback_pipeline = None
             user_profiles_redis: List[RedisUserProfileByRoomS] = \
-                await RedisUserProfilesByRoomS.smembers(self.redis, (room_id, user_profile_id))
+                await RedisUserProfilesByRoomS.smembers(await self.redis, (room_id, user_profile_id))
             user_profile_redis: RedisUserProfileByRoomS = next(
                 (p for p in user_profiles_redis if p.id == user_profile_id), None
             )
@@ -444,8 +484,9 @@ class RedisHandler:
                     await pipe.execute()
 
     async def handle_pubsub(self, ws: WebSocket, producer_handler: Callable, consumer_handler: Callable, logger):
-        pubsub: PubSub = self.redis.pubsub()
-        producer_task: Coroutine = producer_handler(pub=self.redis, ws=ws)
+        pub: Redis = await self.redis
+        pubsub: PubSub = await self.pubsub()
+        producer_task: Coroutine = producer_handler(pub=pub, ws=ws)
         consumer_task: Coroutine = consumer_handler(psub=pubsub, ws=ws)
         done, pending = await asyncio.wait(
             [producer_task, consumer_task], return_when=asyncio.FIRST_COMPLETED
