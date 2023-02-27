@@ -1,4 +1,5 @@
 import random
+import re
 import string
 from typing import Iterable
 
@@ -8,6 +9,8 @@ from phonenumbers.phonenumber import PhoneNumber as BasePhoneNumber
 from sqlalchemy import Integer
 from sqlalchemy.types import TypeDecorator
 from sqlalchemy_utils import PhoneNumber, PhoneNumberParseException
+
+from server.core.constants import REGION_CODES
 
 
 class IntTypeEnum(TypeDecorator):
@@ -46,29 +49,31 @@ def verify_password(plain_password, hashed_password):
 def validate_region(region):
     if (
         region is not None
-        and region not in phonenumbers.shortdata._AVAILABLE_REGION_CODES
+        and region not in REGION_CODES
     ):
         raise ValueError(
             "`%s` is not a valid region code. Choices are %r"
-            % (region, phonenumbers.shortdata._AVAILABLE_REGION_CODES)
+            % (region, REGION_CODES)
         )
 
 
-def get_formatted_phone(parsed_value: PhoneNumber, with_country=False, with_hyphen=False) -> str:
+def get_formatted_phone(parsed_value: PhoneNumber, with_country=False, with_hyphen=False, raise_exception=False) -> str:
     if parsed_value.is_valid_number():
         if with_country:
             # INTERNATIONAL -> +82 10-1234-5678, E164 -> +821086075857
-            attr = "INTERNATIONAL" if with_hyphen else "E164"
+            attr = 'INTERNATIONAL' if with_hyphen else 'E164'
             fmt = getattr(phonenumbers.PhoneNumberFormat, attr)
         else:
             # NATIONAL -> 010-1234-5857
             fmt = phonenumbers.PhoneNumberFormat.NATIONAL
         value = phonenumbers.format_number(parsed_value, fmt)
     else:
+        if raise_exception:
+            raise ValueError('Invalid phone number.')
         value = parsed_value.raw_input
 
     if not with_hyphen:
-        value = value.replace("-", "")
+        value = re.sub(r'-', '', value)
 
     return value
 

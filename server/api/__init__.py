@@ -25,6 +25,7 @@ class ExceptionHandlerRoute(APIRoute):
                 raise ClassifiableException(
                     code=exc_handler.code,
                     detail=exc_handler.error,
-                    status_code=exc_handler.status_code)
+                    status_code=exc_handler.status_code
+                )
 
         return custom_route_handler
