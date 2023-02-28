@@ -48,7 +48,8 @@ async def on_startup():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    logging.basicConfig()
+    log_level = logging.DEBUG if settings.debug else logging.INFO
+    logging.basicConfig(level=log_level)
     logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
 
     await init_chat_room_redis()
