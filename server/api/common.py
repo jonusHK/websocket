@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 from starlette import status
 from starlette.websockets import WebSocket, WebSocketDisconnect, WebSocketState
-from websockets.exceptions import WebSocketException, ConnectionClosedOK
+from websockets.exceptions import ConnectionClosedOK
 
 from server.core.authentications import COOKIE_NAME, cookie, backend
 from server.core.enums import IntValueEnum
@@ -497,31 +497,67 @@ class RedisHandler:
                 task.cancel()
 
 
-def generate_room_mapping_name(user_profile_id: int, other_profiles: List[UserProfile]):
-    return ', '.join([p.get_nickname_by_other(user_profile_id) for p in other_profiles])
+class WebSocketHandler:
 
+    __slots__ = ('ws',)
 
-def ws_code_reason(e: Exception):
-    if isinstance(e, WebSocketDisconnect):
-        code, reason = e.code, e.reason
-    else:
-        code, reason = status.WS_1011_INTERNAL_ERROR, ExceptionHandler(e).error
-    return {'code': code, 'reason': reason}
+    def __init__(self, ws: WebSocket):
+        self.ws = ws
 
+    def connect_ok(self):
+        return self.ws.application_state in (WebSocketState.CONNECTING, WebSocketState.CONNECTED)
 
-async def ws_close(ws: WebSocket, e: Exception):
-    if ws.application_state in (WebSocketState.CONNECTING, WebSocketState.CONNECTED):
-        try:
-            await ws.close(**ws_code_reason(e))
-        except RuntimeError:
-            pass
+    def connected(self):
+        return self.ws.application_state == WebSocketState.CONNECTED
 
+    @classmethod
+    def code_reason(cls, e: Exception):
+        if isinstance(e, WebSocketDisconnect):
+            code, reason = e.code, e.reason
+        else:
+            code, reason = status.WS_1011_INTERNAL_ERROR, ExceptionHandler(e).error
+        return {'code': code, 'reason': reason}
 
-def ws_self_disconnect(e: Exception):
-    return (
-        isinstance(e, ConnectionClosedOK)
-        or (
-            isinstance(e, WebSocketDisconnect)
-            and e.code in (status.WS_1000_NORMAL_CLOSURE, status.WS_1001_GOING_AWAY)
+    async def accept(
+        self,
+        sub_protocol: Optional[str] = None,
+        headers: Optional[Iterable[Tuple[bytes, bytes]]] = None,
+    ):
+        await self.ws.accept(sub_protocol, headers)
+
+    async def send_json(self, data: Any):
+        if self.connect_ok():
+            await self.ws.send_json(data)
+
+    async def receive_json(self, mode: str = 'text'):
+        if self.connected:
+            return await self.ws.receive_json(mode)
+
+    async def close(
+        self,
+        code: Optional[int] = None,
+        reason: Optional[str] = None,
+        e: Optional[Exception] = None
+    ):
+        assert code or e, 'code or e must be provided.'
+        if self.connect_ok():
+            try:
+                kwargs = {}
+                if code:
+                    kwargs['code'] = code
+                    kwargs['reason'] = reason
+                elif e:
+                    kwargs = self.code_reason(e)
+                await self.ws.close(**kwargs)
+            except RuntimeError:
+                pass
+
+    @classmethod
+    def self_disconnected(cls, e: Exception):
+        return (
+            isinstance(e, ConnectionClosedOK)
+            or (
+                isinstance(e, WebSocketDisconnect)
+                and e.code in (status.WS_1000_NORMAL_CLOSURE, status.WS_1001_GOING_AWAY)
+            )
         )
-    )
