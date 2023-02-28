@@ -21,7 +21,7 @@ from starlette.responses import HTMLResponse
 from websockets.exceptions import WebSocketException
 
 from server.api import ExceptionHandlerRoute, templates
-from server.api.common import AuthValidator, RedisHandler, ws_self_disconnect, ws_close
+from server.api.common import AuthValidator, RedisHandler, WebSocketHandler
 from server.core.authentications import cookie, RoleChecker
 from server.core.enums import UserType, ChatType, ChatHistoryType
 from server.core.exceptions import ExceptionHandler
@@ -113,14 +113,15 @@ async def chat_rooms(
             f'reason: {ExceptionHandler(exc).error}'
         )
 
+    ws_handler = WebSocketHandler(websocket)
     async with async_session() as session:
         user: User = await AuthValidator(session).get_user_by_websocket(websocket)
         if not next((p for p in user.profiles if p.id == user_profile_id), None):
             code, reason = status.WS_1011_INTERNAL_ERROR, 'Unauthorized user.'
-            await websocket.close(code=code, reason=reason)
+            await ws_handler.close(code=code, reason=reason)
             raise WebSocketDisconnect(code=code, reason=reason)
 
-    await websocket.accept()
+    await ws_handler.accept()
 
     raised_errors = set()
 
@@ -183,9 +184,9 @@ async def chat_rooms(
                                 'last_chat_timestamp': last_chat_history and last_chat_history.timestamp
                             }))
                             result.append(obj)
-                    await websocket.send_json(result)
+                    await ws_handler.send_json(result)
                 except (WebSocketDisconnect, WebSocketException) as e:
-                    await ws_close(websocket, e)
+                    await ws_handler.close(e=e)
                     if not ws_self_disconnect(e):
                         logger.exception(get_log_error(e))
                     raise e
@@ -394,6 +395,7 @@ async def chat(
 
     redis_hdr = RedisHandler()
 
+    ws_handler = WebSocketHandler(websocket)
     async with async_session() as session:
         try:
             user: User = await AuthValidator(session).get_user_by_websocket(websocket)
@@ -442,10 +444,10 @@ async def chat(
             code = e.code if isinstance(e, WebSocketDisconnect) else status.WS_1011_INTERNAL_ERROR
             reason = ExceptionHandler(e).error
             logger.exception(get_log_error(e))
-            await websocket.close(code=code, reason=reason)
+            await ws_handler.close(code=code, reason=reason)
             raise WebSocketDisconnect(code=code, reason=reason)
 
-    await websocket.accept()
+    await ws_handler.accept()
 
     async def producer_handler(pub: Redis, ws: WebSocket):
         raised_errors = set()
@@ -541,7 +543,7 @@ async def chat(
                         ).json())
 
             while True:
-                data = await ws.receive_json()
+                data = await ws_handler.receive_json()
                 if not data:
                     continue
 
@@ -1152,10 +1154,10 @@ async def chat(
                                     )
                                     await session.commit()
                                     await pipe.execute()
-                                    await ws.close(code=status.WS_1001_GOING_AWAY, reason='Self terminated.')
+                                    await ws_handler.close(code=status.WS_1001_GOING_AWAY, reason='Self terminated.')
 
                         if unicast_response_s:
-                            await ws.send_json(jsonable_encoder(unicast_response_s))
+                            await ws_handler.send_json(jsonable_encoder(unicast_response_s))
                         if broadcast_response_s:
                             await pub.publish(f'pubsub:room:{room_id}:chat', broadcast_response_s.json())
 
@@ -1166,8 +1168,8 @@ async def chat(
                             logger.error(get_log_error(exc))
                             raised_errors.add(exc.__class__.__name__)
         except (WebSocketDisconnect, WebSocketException) as exc:
-            await ws_close(ws, exc)
-            if not ws_self_disconnect(exc):
+            await ws_handler.close(e=exc)
+            if not ws_handler.self_disconnected(exc):
                 logger.exception(get_log_error(exc))
             raise exc
 
@@ -1181,7 +1183,7 @@ async def chat(
                     while True:
                         message: dict = await p.get_message(ignore_subscribe_messages=True)
                         if message:
-                            await ws.send_json(json.loads(message.get('data')))
+                            await ws_handler.send_json(json.loads(message.get('data')))
                 except asyncio.CancelledError as exc:
                     await p.unsubscribe()
                     raise exc
@@ -1221,16 +1223,18 @@ async def chat_followings(
             f'reason: {ExceptionHandler(exc).error}'
         )
 
+    ws_handler = WebSocketHandler(websocket)
+
     async with async_session() as session:
         user: User = await AuthValidator(session).get_user_by_websocket(websocket)
         user_profile: UserProfile = next((p for p in user.profiles if p.id == user_profile_id and p.is_active), None)
         if not user_profile:
             code = status.WS_1011_INTERNAL_ERROR
             reason = 'Unauthorized user.'
-            await websocket.close(code=code, reason=reason)
+            await ws_handler.close(code=code, reason=reason)
             raise WebSocketDisconnect(code=code, reason=reason)
 
-        await websocket.accept()
+        await ws_handler.accept()
 
     raised_errors = set()
     redis_hdr = RedisHandler()
@@ -1282,10 +1286,10 @@ async def chat_followings(
                                             )
                                         ) for f in user_profile.followings
                                     ])
-                await websocket.send_json(jsonable_encoder(followings))
+                await ws_handler.send_json(jsonable_encoder(followings))
             except (WebSocketDisconnect, WebSocketException) as e:
-                await ws_close(websocket, e)
-                if not ws_self_disconnect(e):
+                await ws_handler.close(e=e)
+                if not ws_handler.self_disconnected(e):
                     logger.exception(get_log_error(e))
                 raise e
             except Exception as e:
