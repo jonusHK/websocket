@@ -69,9 +69,6 @@ class RedisHandler:
     async def generate_primary_redis(cls, connections: List[Redis]):
         async for conn in async_iter(connections):
             info = await conn.info()
-            import logging
-            logger = logging.getLogger('websocket')
-            logger.info(f" redis info role : {info.get('role')}")
             if info.get('role') == 'master':
                 return conn
         return
