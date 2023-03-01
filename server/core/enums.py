@@ -96,6 +96,7 @@ class ChatType(IntValueEnum):
     INVITE = "초대"
     LOOKUP = "조회"
     TERMINATE = "연결 종료"
+    PING = "연결 확인"
 
 
 class ChatRoomType(IntValueEnum):
