@@ -33,6 +33,7 @@ export default {
             selectedFollowingIds: [],
             followingsNotInRoom: [],
             scrollHeight: 0,
+            pingInterval: null,
         });
         proxy.$axios.get(VITE_SERVER_HOST + `/v1/chats/room/${state.loginProfileId}/${state.roomId}`)
         .then((res) => {
@@ -50,7 +51,9 @@ export default {
         });
         const wsUrl = ref(`${VITE_SERVER_WEBSOCKET_HOST}/v1/chats/conversation/${state.loginProfileId}/${state.roomId}`);
         const isConnected = ref(false);
-        const ws = ref(new WebSocket(wsUrl.value));
+        const ws = ref(new WebSocket(wsUrl.value), {
+            timeout: 60000
+        });
         const wsSend = function(data) {
             if (ws.value.readyState === WebSocket.OPEN) {
                 ws.value.send(JSON.stringify(data));
@@ -247,6 +250,14 @@ export default {
             e.stopPropagation();
         }
         const connectWebsocket = function() {
+            // Send a ping message every 30 seconds
+            state.pingInterval = setInterval(() => {
+                const data = {
+                    'type': 'ping'
+                };
+                wsSend(data);
+            }, 30000);
+
             ws.value.onopen = function(event) {
                 console.log('채팅 웹소켓 연결 성공');
                 isConnected.value = true;
@@ -298,10 +309,12 @@ export default {
             ws.value.onclose = function(event) {
                 console.log('chat socket close - ', event);
                 isConnected.value = false;
+                clearInterval(state.pingInterval);
             }
             ws.value.onerror = function(event) {
                 console.log('chat socket error - ', event);
                 isConnected.value = false;
+                clearInterval(state.pingInterval);
             }
         }
         const getUserCnt = function() {
@@ -328,6 +341,7 @@ export default {
         })
         onUnmounted(() => {
             if (ws.value.readyState === WebSocket.OPEN) {
+                clearInterval(state.pingInterval);
                 ws.value.close(1000);
             }
         })
@@ -370,7 +384,9 @@ export default {
                 if (ws.value && ws.value.readyState === WebSocket.OPEN) {
                     ws.value.close(1000);
                 }
-                ws.value = new WebSocket(newUrl);
+                ws.value = new WebSocket(newUrl, {
+                    timeout: 60000
+                });
                 connectWebsocket();
             }
         )

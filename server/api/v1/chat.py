@@ -1056,7 +1056,7 @@ async def chat(
                                 data=ChatSendDataS(history=chat_history_redis)
                             )
                         # 연결 종료
-                        else:
+                        elif request_s.type == ChatType.TERMINATE:
                             try:
                                 room_user_mappings_db: List[ChatRoomUserAssociation] = (
                                     await crud_room_user_mapping.list(
@@ -1155,6 +1155,8 @@ async def chat(
                                     await session.commit()
                                     await pipe.execute()
                                     await ws_handler.close(code=status.WS_1001_GOING_AWAY, reason='Self terminated.')
+                        else:
+                            continue
 
                         if unicast_response_s:
                             await ws_handler.send_json(jsonable_encoder(unicast_response_s))
