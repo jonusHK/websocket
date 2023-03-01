@@ -484,7 +484,7 @@ class RedisHandler:
                     )
                     await pipe.execute()
 
-    async def handle_pubsub(self, ws: WebSocket, producer_handler: Callable, consumer_handler: Callable, logger):
+    async def handle_pubsub(self, ws: WebSocket, producer_handler: Callable, consumer_handler: Callable):
         pub: Redis = await self.redis
         pubsub: PubSub = await self.pubsub()
         producer_task: Coroutine = producer_handler(pub=pub, ws=ws)

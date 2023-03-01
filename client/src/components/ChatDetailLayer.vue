@@ -51,9 +51,7 @@ export default {
         });
         const wsUrl = ref(`${VITE_SERVER_WEBSOCKET_HOST}/v1/chats/conversation/${state.loginProfileId}/${state.roomId}`);
         const isConnected = ref(false);
-        const ws = ref(new WebSocket(wsUrl.value), {
-            timeout: 60000
-        });
+        const ws = ref(new WebSocket(wsUrl.value));
         const wsSend = function(data) {
             if (ws.value.readyState === WebSocket.OPEN) {
                 ws.value.send(JSON.stringify(data));
@@ -384,9 +382,7 @@ export default {
                 if (ws.value && ws.value.readyState === WebSocket.OPEN) {
                     ws.value.close(1000);
                 }
-                ws.value = new WebSocket(newUrl, {
-                    timeout: 60000
-                });
+                ws.value = new WebSocket(newUrl);
                 connectWebsocket();
             }
         )

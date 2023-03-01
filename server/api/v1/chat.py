@@ -187,7 +187,7 @@ async def chat_rooms(
                     await ws_handler.send_json(result)
                 except (WebSocketDisconnect, WebSocketException) as e:
                     await ws_handler.close(e=e)
-                    if not ws_self_disconnect(e):
+                    if not ws_handler.self_disconnected(e):
                         logger.exception(get_log_error(e))
                     raise e
                 except Exception as e:
@@ -1198,7 +1198,7 @@ async def chat(
             logger.error(get_log_error(exc))
 
     try:
-        await redis_hdr.handle_pubsub(websocket, producer_handler, consumer_handler, logger)
+        await redis_hdr.handle_pubsub(websocket, producer_handler, consumer_handler)
     finally:
         room_redis.connected_profile_ids = [
             profile_id for profile_id in room_redis.connected_profile_ids
