@@ -15,6 +15,7 @@ WORKDIR /app/server
 RUN mkdir -p /app/server/logs
 RUN touch /app/server/logs/chat.log
 RUN touch /app/server/logs/websocket.log
+RUN touch /app/server/logs/gunicorn.log
 
 # Install any needed packages specified in requirements.txt
 RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
