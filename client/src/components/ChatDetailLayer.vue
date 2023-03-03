@@ -159,7 +159,8 @@ export default {
             return dt.format('A h:mm');
         }
         const getUnreadCnt = function(obj) {
-            const unreadCnt = state.room.user_profiles.length - obj.read_user_ids.length;
+            const read_user_profiles = state.room.user_profiles.filter(p => obj.read_user_ids.includes(p.id));
+            const unreadCnt = state.room.user_profiles.length - read_user_profiles.length;
             return unreadCnt > 0 ? unreadCnt : null;
         }
         const sendFiles = function() {
