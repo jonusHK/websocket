@@ -293,6 +293,19 @@ export default {
     }
     onMounted(() => {
       followingInfo(state.loginProfileId);
+      // Send a ping message every 30 seconds
+      state.pingInterval = setInterval(() => {
+          const data = {
+              'type': 'ping'
+          };
+          if (followingListSocket.readyState === WebSocket.OPEN) {
+              followingListSocket.send(JSON.stringify(data));
+          }
+          if (chatRoomListSocket.readyState === WebSocket.OPEN) {
+              chatRoomListSocket.send(JSON.stringify(data));
+          }
+      }, 30000);
+
       followingListSocket.onopen = function(event) {
           console.log('친구 목록 웹소켓 연결 성공');
       }
@@ -313,10 +326,12 @@ export default {
       }
       followingListSocket.onclose = function(event) {
           console.log('following list close - ', event);
+          clearInterval(state.pingInterval);
           proxy.$router.replace('/login');
       }
       followingListSocket.onerror = function(event) {
           console.log('following list error - ', event);
+          clearInterval(state.pingInterval);
           proxy.$router.replace('/login');
       }
       chatRoomListSocket.onopen = function(event) {
@@ -343,10 +358,12 @@ export default {
       }
       chatRoomListSocket.onclose = function(event) {
           console.log('chat room list close - ', event);
+          clearInterval(state.pingInterval);
           proxy.$router.replace('/');
       }
       chatRoomListSocket.onerror = function(event) {
           console.log('chat room list error - ', event);
+          clearInterval(state.pingInterval);
           proxy.$router.replace('/');
       }
     });

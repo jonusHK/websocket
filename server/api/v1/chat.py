@@ -130,6 +130,8 @@ async def chat_rooms(
         while True:
             async with async_session() as session:
                 try:
+                    await ws_handler.receive_json()
+
                     crud_room = ChatRoomCRUD(session)
                     crud_room_user_mapping = ChatRoomUserAssociationCRUD(session)
 
@@ -1086,7 +1088,7 @@ async def chat(
                                         ChatRoomUserAssociation.room_id == room_id,
                                         ChatRoomUserAssociation.user_profile_id == user_profile_id)
                                     )
-
+                            finally:
                                 async with await redis_hdr.pipeline() as pipe:
                                     rooms_by_profile_redis: List[RedisChatRoomByUserProfileS] = (
                                         await RedisChatRoomsByUserProfileS.zrange(pub, user_profile_id)
@@ -1128,10 +1130,6 @@ async def chat(
                                             room_redis.user_profile_files = [
                                                 f for f in room_redis.user_profile_files
                                                 if f.user_profile_id != user_profile_id
-                                            ]
-                                            room_redis.connected_profile_ids = [
-                                                profile_id for profile_id in room_redis.connected_profile_ids
-                                                if profile_id != user_profile_id
                                             ]
                                             await RedisInfoByRoomS.hset(await redis_hdr.redis, room_id, data=room_redis)
 
@@ -1243,6 +1241,8 @@ async def chat_followings(
     try:
         while True:
             try:
+                await ws_handler.receive_json()
+
                 duplicated_followings: List[RedisFollowingByUserProfileS] = (
                     await RedisFollowingsByUserProfileS.smembers(await redis_hdr.redis, user_profile_id)
                 )
