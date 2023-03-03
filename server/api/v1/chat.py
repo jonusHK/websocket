@@ -130,8 +130,6 @@ async def chat_rooms(
         while True:
             async with async_session() as session:
                 try:
-                    await ws_handler.receive_json()
-
                     crud_room = ChatRoomCRUD(session)
                     crud_room_user_mapping = ChatRoomUserAssociationCRUD(session)
 
@@ -1241,8 +1239,6 @@ async def chat_followings(
     try:
         while True:
             try:
-                await ws_handler.receive_json()
-
                 duplicated_followings: List[RedisFollowingByUserProfileS] = (
                     await RedisFollowingsByUserProfileS.smembers(await redis_hdr.redis, user_profile_id)
                 )
