@@ -1280,10 +1280,10 @@ async def chat_followings(
                             ])
                         if user_profile.followings:
                             async with await redis_hdr.lock(
-                                    key=RedisFollowingsByUserProfileS.get_lock_key(user_profile_id)
+                                key=RedisFollowingsByUserProfileS.get_lock_key(user_profile_id)
                             ):
                                 if not await RedisFollowingsByUserProfileS.scard(
-                                        await redis_hdr.redis, user_profile_id
+                                    await redis_hdr.redis, user_profile_id
                                 ):
                                     await RedisFollowingsByUserProfileS.sadd(await redis_hdr.redis, user_profile_id, *[
                                         RedisFollowingsByUserProfileS.schema(
