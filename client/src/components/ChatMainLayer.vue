@@ -310,19 +310,21 @@ export default {
           console.log('친구 목록 웹소켓 연결 성공');
       }
       followingListSocket.onmessage = function(event) {
-          let followings = _.orderBy(JSON.parse(event.data), ['nickname'], ['asc']);
-          followings = _.filter(followings, function(f) {
-              return f.is_hidden === false && f.is_forbidden === false;
-          });
-          const self = _.find(followings, function(f) {
-            return f.type === 'self';
-          });
-          const removeIdx = _.indexOf(followings, self);
-          if (removeIdx !== -1) {
-            followings.splice(_.indexOf(followings, self), 1);
-            followings.unshift(self);
-          }
-          state.followings = followings;
+          try {
+              let followings = _.orderBy(JSON.parse(event.data), ['nickname'], ['asc']);
+              followings = _.filter(followings, function(f) {
+                  return f.is_hidden === false && f.is_forbidden === false;
+              });
+              const self = _.find(followings, function(f) {
+                return f.type === 'self';
+              });
+              const removeIdx = _.indexOf(followings, self);
+              if (removeIdx !== -1) {
+                followings.splice(_.indexOf(followings, self), 1);
+                followings.unshift(self);
+              }
+              state.followings = followings;
+          } catch (e) {}
       }
       followingListSocket.onclose = function(event) {
           console.log('following list close - ', event);
@@ -338,23 +340,25 @@ export default {
           console.log('채팅방 목록 웹소켓 연결 성공');
       }
       chatRoomListSocket.onmessage = function(event) {
-          state.chatRooms = _.orderBy(
-            JSON.parse(event.data), 
-            [
-              room => { return room.last_chat_timestamp === null ? 0 : room.last_chat_timestamp }, 
-              room => { return room.timestamp === null ? 0 : room.timestamp }
-            ], 
-            ['desc', 'desc']);
-          let totalUnreadMsgCnt = 0;
+          try {
+              state.chatRooms = _.orderBy(
+                JSON.parse(event.data), 
+                [
+                  room => { return room.last_chat_timestamp === null ? 0 : room.last_chat_timestamp }, 
+                  room => { return room.timestamp === null ? 0 : room.timestamp }
+                ], 
+                ['desc', 'desc']);
+              let totalUnreadMsgCnt = 0;
 
-          for (const room of state.chatRooms) {
-              // 현재 조회중인 채팅방의 unread_msg_cnt 값 무시
-              if (state.chatRoomId !== null && state.chatRoomId === room.id) {
-                continue
+              for (const room of state.chatRooms) {
+                  // 현재 조회중인 채팅방의 unread_msg_cnt 값 무시
+                  if (state.chatRoomId !== null && state.chatRoomId === room.id) {
+                    continue
+                  }
+                  totalUnreadMsgCnt += room.unread_msg_cnt;
               }
-              totalUnreadMsgCnt += room.unread_msg_cnt;
-          }
-          state.totalUnreadMsgCnt = totalUnreadMsgCnt;
+              state.totalUnreadMsgCnt = totalUnreadMsgCnt;
+          } catch (e) {}
       }
       chatRoomListSocket.onclose = function(event) {
           console.log('chat room list close - ', event);

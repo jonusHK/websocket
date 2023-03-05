@@ -123,10 +123,7 @@ async def chat_rooms(
 
     await ws_handler.accept()
 
-    raised_errors = set()
-
-    redis_hdr = RedisHandler()
-    try:
+    async def producer_handler():
         while True:
             async with async_session() as session:
                 try:
@@ -194,6 +191,25 @@ async def chat_rooms(
                     if e.__class__.__name__ not in raised_errors:
                         logger.exception(get_log_error(e))
                         raised_errors.add(e.__class__.__name__)
+
+    async def consumer_handler():
+        while True:
+            data = await ws_handler.receive_json()
+            if data:
+                request_s = ChatReceiveFormS(**data)
+                if request_s.type == ChatType.PING:
+                    await ws_handler.send_text('pong')
+
+    raised_errors = set()
+    redis_hdr = RedisHandler()
+    try:
+        done, pending = await asyncio.wait([
+            producer_handler(), consumer_handler()
+        ], return_when=asyncio.FIRST_COMPLETED)
+
+        if pending:
+            for task in pending:
+                task.cancel()
     finally:
         await redis_hdr.close()
 
@@ -1152,6 +1168,7 @@ async def chat(
                                     await pipe.execute()
                                     await ws_handler.close(code=status.WS_1001_GOING_AWAY, reason='Self terminated.')
                         else:
+                            await ws_handler.send_text('pong')
                             continue
 
                         if unicast_response_s:
@@ -1234,9 +1251,7 @@ async def chat_followings(
 
         await ws_handler.accept()
 
-    raised_errors = set()
-    redis_hdr = RedisHandler()
-    try:
+    async def producer_handler():
         while True:
             try:
                 duplicated_followings: List[RedisFollowingByUserProfileS] = (
@@ -1265,10 +1280,10 @@ async def chat_followings(
                             ])
                         if user_profile.followings:
                             async with await redis_hdr.lock(
-                                key=RedisFollowingsByUserProfileS.get_lock_key(user_profile_id)
+                                    key=RedisFollowingsByUserProfileS.get_lock_key(user_profile_id)
                             ):
                                 if not await RedisFollowingsByUserProfileS.scard(
-                                    await redis_hdr.redis, user_profile_id
+                                        await redis_hdr.redis, user_profile_id
                                 ):
                                     await RedisFollowingsByUserProfileS.sadd(await redis_hdr.redis, user_profile_id, *[
                                         RedisFollowingsByUserProfileS.schema(
@@ -1294,5 +1309,24 @@ async def chat_followings(
                 if e.__class__.__name__ not in raised_errors:
                     logger.exception(get_log_error(e))
                     raised_errors.add(e.__class__.__name__)
+
+    async def consumer_handler():
+        while True:
+            data = await ws_handler.receive_json()
+            if data:
+                request_s = ChatReceiveFormS(**data)
+                if request_s.type == ChatType.PING:
+                    await ws_handler.send_text('pong')
+
+    raised_errors = set()
+    redis_hdr = RedisHandler()
+    try:
+        done, pending = await asyncio.wait([
+            producer_handler(), consumer_handler()
+        ], return_when=asyncio.FIRST_COMPLETED)
+
+        if pending:
+            for task in pending:
+                task.cancel()
     finally:
         await redis_hdr.close()

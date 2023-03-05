@@ -274,36 +274,38 @@ export default {
                 })
             }
             ws.value.onmessage = function(event) {
-                const json = JSON.parse(event.data);
-                if (json.type === 'lookup') {
-                    state.chatHistories = [...json.data.histories, ...state.chatHistories];
-                } else if (json.type === 'update') {
-                    const patchHistories = json.data.patch_histories;
-                    if (patchHistories.length > 0 && state.chatHistories.length > 0) {
-                        for (let i=0; i < patchHistories.length; i++) {
-                            for (let j=state.chatHistories.length-1; j >=0; j--) {
-                                if (state.chatHistories[j].redis_id === patchHistories[i].redis_id) {
-                                    state.chatHistories[j].is_active = patchHistories[i].is_active;
-                                    state.chatHistories[j].read_user_ids = patchHistories[i].read_user_ids;
-                                    break;
+                try {
+                    const json = JSON.parse(event.data);
+                    if (json.type === 'lookup') {
+                        state.chatHistories = [...json.data.histories, ...state.chatHistories];
+                    } else if (json.type === 'update') {
+                        const patchHistories = json.data.patch_histories;
+                        if (patchHistories.length > 0 && state.chatHistories.length > 0) {
+                            for (let i=0; i < patchHistories.length; i++) {
+                                for (let j=state.chatHistories.length-1; j >=0; j--) {
+                                    if (state.chatHistories[j].redis_id === patchHistories[i].redis_id) {
+                                        state.chatHistories[j].is_active = patchHistories[i].is_active;
+                                        state.chatHistories[j].read_user_ids = patchHistories[i].read_user_ids;
+                                        break;
+                                    }
                                 }
                             }
                         }
+                    } else {
+                        // type => message, file, invite, terminate
+                        if (_.includes(['invite', 'terminate'], json.type) === true) {
+                            refreshRoom();
+                        }
+                        state.chatHistories.push(json.data.history);
                     }
-                } else {
-                    // type => message, file, invite, terminate
-                    if (_.includes(['invite', 'terminate'], json.type) === true) {
-                        refreshRoom();
-                    }
-                    state.chatHistories.push(json.data.history);
-                }
 
-                if (_.includes(['lookup', 'message', 'file', 'invite'], json.type)) {
+                    if (_.includes(['lookup', 'message', 'file', 'invite'], json.type)) {
                     // 스크롤 이동
                     nextTick(() => {
                         setTimeout(() => moveChatBodyPosition(), 50);
                     })
                 }
+                } catch (e) {}
             }
             ws.value.onclose = function(event) {
                 console.log('chat socket close - ', event);
