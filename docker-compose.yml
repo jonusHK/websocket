@@ -19,8 +19,8 @@ services:
       - '8000:8000'
     networks:
       - network
-#    volumes:
-#      - ./server/logs:/app/server/logs
+    volumes:
+      - ./server/logs:/app/server/logs
 
 networks:
   network:
