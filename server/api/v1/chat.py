@@ -107,7 +107,7 @@ async def chat_rooms(
     """
     대화 방 목록 조회
     """
-    def get_log_error(exc: Exception):
+    def get_log_error(exc: BaseException):
         return (
             f'Chat Room Error - user_profile_id: {user_profile_id}, '
             f'reason: {ExceptionHandler(exc).error}'
@@ -403,7 +403,7 @@ async def chat(
     """
     대화 방 입장 및 실시간 채팅
     """
-    def get_log_error(exc: Exception):
+    def get_log_error(exc: BaseException):
         return (
             f'Chat Error - room_id: {room_id}, user_profile_id: {user_profile_id}, '
             f'reason: {ExceptionHandler(exc).error}'
@@ -1232,7 +1232,7 @@ async def chat_followings(
     """
     친구 목록 조회
     """
-    def get_log_error(exc: Exception):
+    def get_log_error(exc: BaseException):
         return (
             f'Followings Error - user_profile_id: {user_profile_id}, '
             f'reason: {ExceptionHandler(exc).error}'

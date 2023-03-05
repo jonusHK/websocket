@@ -21,7 +21,7 @@ class ExceptionHandler:
         status.HTTP_405_METHOD_NOT_ALLOWED: ResponseCode.METHOD_NOT_ALLOWED,
     }
 
-    def __init__(self, exc: Exception):
+    def __init__(self, exc: BaseException):
         self.exc = exc
         if isinstance(exc, ClassifiableException):
             self.code = exc.code
