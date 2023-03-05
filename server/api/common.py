@@ -529,6 +529,10 @@ class WebSocketHandler:
         if self.connect_ok():
             await self.ws.send_json(data)
 
+    async def send_text(self, data: str):
+        if self.connect_ok():
+            await self.ws.send_text(data)
+
     async def receive_json(self, mode: str = 'text'):
         if self.connected:
             return await self.ws.receive_json(mode)
