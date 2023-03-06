@@ -385,7 +385,17 @@ export default {
                 if (ws.value && ws.value.readyState === WebSocket.OPEN) {
                     ws.value.close(1000);
                 }
-                ws.value = new WebSocket(newUrl);
+                let retryCnt = 5;
+                while (retryCnt >= 0) {
+                    try {
+                        ws.value = new WebSocket(newUrl);
+                        break;
+                    } catch (e) {
+                        retryCnt -= 1;
+                        sleep(200);
+                    }
+                }
+                
                 connectWebsocket();
             }
         )
