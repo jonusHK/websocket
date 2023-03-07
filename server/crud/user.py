@@ -1,4 +1,4 @@
-from server.core.utils import hash_password, get_formatted_phone, get_phone
+from server.core.utils import hash_password
 from server.crud import CRUDBase
 from server.models.user import User, UserSession, UserProfile, UserProfileImage, UserRelationship
 

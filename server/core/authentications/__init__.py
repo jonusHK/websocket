@@ -131,7 +131,7 @@ class DatabaseBackend(Generic[ID, SessionModel], SessionDatabaseBackend[ID, Sess
         crud = UserSessionCRUD(session)
         try:
             user_session: UserSession = await crud.get(
-                conditions=(UserSession.session_id == session_id,))
+                conditions=(UserSession.session_id == str(session_id),))
         except HTTPException:
             raise BackendError("Session does not exist, cannot update")
         await crud.update(conditions=(UserSession == user_session.id,), **data.dict())
@@ -140,7 +140,7 @@ class DatabaseBackend(Generic[ID, SessionModel], SessionDatabaseBackend[ID, Sess
         crud = UserSessionCRUD(session)
         try:
             user_session: UserSession = await crud.get(
-                conditions=(UserSession.session_id == session_id,))
+                conditions=(UserSession.session_id == str(session_id),))
         except HTTPException:
             raise BackendError("Session does not exist, cannot delete")
         await crud.delete(conditions=(UserSession.id == user_session.id,))
