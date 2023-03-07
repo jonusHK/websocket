@@ -15,7 +15,12 @@ DATABASE_URL = "mysql+asyncmy://{username}:{password}@{host}:{port}/{db_name}".f
     db_name=settings.db_name
 )
 
-engine = create_async_engine(DATABASE_URL, echo=True, future=True, isolation_level="READ COMMITTED")
+engine = create_async_engine(
+    DATABASE_URL,
+    echo=True, future=True,
+    pool_recycle=3600,
+    isolation_level="READ COMMITTED"
+)
 
 Base = declarative_base()
 # sessionmaker : 엔진의 연결 풀을 요청하고, 새로운 세션 객체와 연결하여, 새로운 세션 객체를 초기화하는 자동화 기능을 수행함
