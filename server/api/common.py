@@ -73,18 +73,21 @@ class RedisHandler:
                 return conn
         return
 
+    @staticmethod
+    def get_redis_module(**kwargs):
+        return AioRedis(**kwargs)
+
     def __init__(self, redis_coro: Optional[Awaitable[Redis]] = None, **kwargs):
         if redis_coro is None:
-            connections = AioRedis(**kwargs).connections
-            redis_coro = self.generate_primary_redis(connections)
+            redis_module = self.get_redis_module(**kwargs)
+            redis_coro = self.generate_primary_redis(redis_module.connections)
         self._redis_coro = redis_coro
 
     @property
     async def redis(self):
         for _ in range(self.RETRY_COUNT):
             try:
-                redis = self._redis
-                if not redis:
+                if not self._redis:
                     self._redis = await self._redis_coro
                 return self._redis
             except ConnectionError:
