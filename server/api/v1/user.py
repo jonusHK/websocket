@@ -250,8 +250,6 @@ async def user_profile_image_upload(
         for o in objects:
             o.close()
 
-    # TODO 파일 URL -> CDN 변경하고나서 Redis 업데이트
-
     return [UserProfileImageS.from_orm(o) for o in objects]
 
 

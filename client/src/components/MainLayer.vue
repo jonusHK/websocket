@@ -1,9 +1,6 @@
 <script>
 import { reactive, onMounted, getCurrentInstance } from 'vue';
 import ChatMainLayer from './ChatMainLayer.vue';
-import { useCookies } from 'vue3-cookies';
-
-const { cookies } = useCookies();
 
 export default {
     name: 'Main',
