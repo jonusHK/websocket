@@ -24,4 +24,6 @@ const router = createRouter({
   routes,
 });
 
+// axios TODO Request, Response 데이터 모듈화
+
 export default router;

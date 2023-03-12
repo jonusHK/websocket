@@ -465,8 +465,7 @@ class RedisHandler:
         self,
         room_id: int,
         profile_id: int,
-        crud: ChatRoomUserAssociationCRUD,
-        timestamp: Optional[float] = None
+        crud: ChatRoomUserAssociationCRUD
     ):
         async with await self.lock(key=RedisChatRoomsByUserProfileS.get_lock_key(profile_id)):
             room_by_profile_redis, _ = await self.get_room_by_user_profile(
@@ -482,7 +481,7 @@ class RedisHandler:
                             id=room_by_profile_redis.id,
                             name=room_by_profile_redis.name,
                             unread_msg_cnt=room_by_profile_redis.unread_msg_cnt + 1,
-                            timestamp=timestamp or datetime.now().astimezone().timestamp()
+                            timestamp=room_by_profile_redis.timestamp
                         )
                     )
                     await pipe.execute()
