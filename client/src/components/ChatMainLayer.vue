@@ -165,12 +165,14 @@ export default {
         }
       })
       .catch((err) => {
-        const error_obj = {
+        proxy.$alert({
             state: 'error',
             stateOutlined: true,
-            message: err
+            message: err.response.data.message,
+        });
+        if (_.includes(['PERMISSION_DENIED', 'UNAUTHORIZED'], err.response.data.code)) {
+            proxy.$router.replace('/login');
         }
-        proxy.$alert(error_obj);
       })
       .finally(() => {
         onCancelAddUserProfile();
@@ -197,10 +199,13 @@ export default {
         })
         .catch((err) => {
           proxy.$alert({
-            message: '친구 추가에 실패했습니다.',
-            state: 'error',
-            stateOutlined: true
+              state: 'error',
+              stateOutlined: true,
+              message: err.response.data.message,
           });
+          if (_.includes(['PERMISSION_DENIED', 'UNAUTHORIZED'], err.response.data.code)) {
+              proxy.$router.replace('/login');
+          }
         })
       } else {
         proxy.$alert({
@@ -220,6 +225,16 @@ export default {
           state.isAlreadyFollowing = _.filter(state.followings, function(f) {
             return f.id === state.addUserProfile.id;
           }).length >= 1 || state.addUserProfile.id === state.loginProfileId;
+        }
+      })
+      .catch((err) => {
+        proxy.$alert({
+            state: 'error',
+            stateOutlined: true,
+            message: err.response.data.message,
+        });
+        if (_.includes(['PERMISSION_DENIED', 'UNAUTHORIZED'], err.response.data.code)) {
+            proxy.$router.replace('/login');
         }
       })
       .finally(() => {
@@ -270,12 +285,14 @@ export default {
           }
         })
         .catch((err) => {
-          const error_obj = {
+          proxy.$alert({
               state: 'error',
               stateOutlined: true,
-              message: err
+              message: err.response.data.message,
+          });
+          if (_.includes(['PERMISSION_DENIED', 'UNAUTHORIZED'], err.response.data.code)) {
+              proxy.$router.replace('/login');
           }
-          proxy.$alert(error_obj);
         })
         .finally(() => {
           onCancelCreateRoom();
@@ -289,7 +306,19 @@ export default {
       }
     }
     const logout = function() {
-      proxy.$router.replace('/login');
+      proxy.$axios.post(VITE_SERVER_HOST + '/v1/users/logout')
+      .then((res) => {
+            if (res.status === 200) {
+              proxy.$router.replace('/login');
+            }
+        })
+        .catch((err) => {
+          proxy.$alert({
+              state: 'error',
+              stateOutlined: true,
+              message: err.response.data.message,
+          });
+        });
     }
     onMounted(() => {
       followingInfo(state.loginProfileId);
@@ -363,12 +392,12 @@ export default {
       chatRoomListSocket.onclose = function(event) {
           console.log('chat room list close - ', event);
           clearInterval(state.pingInterval);
-          proxy.$router.replace('/');
+          proxy.$router.replace('/login');
       }
       chatRoomListSocket.onerror = function(event) {
           console.log('chat room list error - ', event);
           clearInterval(state.pingInterval);
-          proxy.$router.replace('/');
+          proxy.$router.replace('/login');
       }
     });
     return {

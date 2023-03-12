@@ -1,6 +1,7 @@
 <script>
 import { reactive, watch, onMounted, getCurrentInstance, toRef, nextTick } from 'vue';
 import constants from '../constants';
+import _ from 'lodash';
 
 const { VITE_SERVER_HOST } = import.meta.env;
 
@@ -43,7 +44,10 @@ export default {
                 state: 'error',
                 stateOutlined: true,
                 message: err.response.data.message,
-            })
+            });
+            if (_.includes(['PERMISSION_DENIED', 'UNAUTHORIZED'], err.response.data.code)) {
+                proxy.$router.replace('/login');
+            }
         })
         await nextTick();
       }
@@ -77,6 +81,16 @@ export default {
                 proxy.$router.replace('/');
             }
         })
+        .catch((err) => {
+            proxy.$alert({
+                state: 'error',
+                stateOutlined: true,
+                message: err.response.data.message,
+            });
+            if (_.includes(['PERMISSION_DENIED', 'UNAUTHORIZED'], err.response.data.code)) {
+                proxy.$router.replace('/login');
+            }
+        })
       }
       const followingForbidden = function(profileId) {
         proxy.$axios.patch(VITE_SERVER_HOST + `/v1/users/relationship/${state.loginProfileId}/${profileId}`, JSON.stringify({
@@ -96,6 +110,16 @@ export default {
                 proxy.$router.replace('/');
             }
         })
+        .catch((err) => {
+            proxy.$alert({
+                state: 'error',
+                stateOutlined: true,
+                message: err.response.data.message,
+            });
+            if (_.includes(['PERMISSION_DENIED', 'UNAUTHORIZED'], err.response.data.code)) {
+                proxy.$router.replace('/login');
+            }
+        })
       }
       const moveChatRoomDetail = function() {
         proxy.$axios.post(VITE_SERVER_HOST + '/v1/chats/rooms/create', JSON.stringify({
@@ -113,12 +137,14 @@ export default {
             }
         })
         .catch((err) => {
-            const error_obj = {
+            proxy.$alert({
                 state: 'error',
                 stateOutlined: true,
-                message: err.response.data.message
+                message: err.response.data.message,
+            });
+            if (_.includes(['PERMISSION_DENIED', 'UNAUTHORIZED'], err.response.data.code)) {
+                proxy.$router.replace('/login');
             }
-            proxy.$alert(error_obj);
         });
       }
       const addFollowing = function() {
@@ -134,12 +160,14 @@ export default {
             }
         })
         .catch((err) => {
-            const error_obj = {
+            proxy.$alert({
                 state: 'error',
                 stateOutlined: true,
-                message: err.response.data.message
+                message: err.response.data.message,
+            });
+            if (_.includes(['PERMISSION_DENIED', 'UNAUTHORIZED'], err.response.data.code)) {
+                proxy.$router.replace('/login');
             }
-            proxy.$alert(error_obj);
         });
       }
       watch(

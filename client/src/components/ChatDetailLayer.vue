@@ -42,12 +42,14 @@ export default {
             }
         })
         .catch((err) => {
-            const error_obj = {
+            proxy.$alert({
                 state: 'error',
                 stateOutlined: true,
-                message: err
+                message: err.response.data.message,
+            });
+            if (_.includes(['PERMISSION_DENIED', 'UNAUTHORIZED'], err.response.data.code)) {
+                proxy.$router.replace('/login');
             }
-            proxy.$alert(error_obj);
         });
         const wsUrl = ref(`${VITE_SERVER_WEBSOCKET_HOST}/v1/chats/conversation/${state.loginProfileId}/${state.roomId}`);
         const isConnected = ref(false);
@@ -311,11 +313,28 @@ export default {
                 console.log('chat socket close - ', event);
                 isConnected.value = false;
                 clearInterval(state.pingInterval);
+                if (_.includes([1008, 1006], event.code)) {
+                    proxy.$alert({
+                        state: 'error',
+                        stateOutlined: true,
+                        message: event.reason || '연결이 끊어습니다.',
+                    });
+                    proxy.$router.replace('/login');
+                    
+                }
             }
             ws.value.onerror = function(event) {
                 console.log('chat socket error - ', event);
                 isConnected.value = false;
                 clearInterval(state.pingInterval);
+                if (_.includes([1008, 1006], event.code)) {
+                    proxy.$alert({
+                        state: 'error',
+                        stateOutlined: true,
+                        message: event.reason || '연결이 끊어습니다.',
+                    });
+                    proxy.$router.replace('/login');
+                }
             }
         }
         const getUserCnt = function() {
@@ -329,12 +348,14 @@ export default {
                     }
                 })
                 .catch((err) => {
-                    const error_obj = {
+                    proxy.$alert({
                         state: 'error',
                         stateOutlined: true,
-                        message: err
+                        message: err.response.data.message,
+                    });
+                    if (_.includes(['PERMISSION_DENIED', 'UNAUTHORIZED'], err.response.data.code)) {
+                        proxy.$router.replace('/login');
                     }
-                    proxy.$alert(error_obj);
                 });
         }
         onMounted(() => {
@@ -363,6 +384,16 @@ export default {
                                 state.followingsNotInRoom = _.filter(res.data.data, function(f) {
                                     return !_.includes(_.map(state.room.user_profiles, 'id'), f.profile.id);
                                 })
+                            }
+                        })
+                        .catch((err) => {
+                            proxy.$alert({
+                                state: 'error',
+                                stateOutlined: true,
+                                message: err.response.data.message,
+                            });
+                            if (_.includes(['PERMISSION_DENIED', 'UNAUTHORIZED'], err.response.data.code)) {
+                                proxy.$router.replace('/login');
                             }
                         });
                 } else {

@@ -195,7 +195,7 @@ verifier = BasicVerifier(
     identifier=SESSION_IDENTIFIER,
     auto_error=True,
     _backend=backend,
-    auth_http_exception=HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid session."))
+    auth_http_exception=HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session."))
 
 
 class RoleChecker:
