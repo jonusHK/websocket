@@ -24,6 +24,7 @@ from server.api.websocket.chat.invite import InviteHandler
 from server.api.websocket.chat.lookup import LookUpHandler
 from server.api.websocket.chat.message import MessageHandler
 from server.api.websocket.chat.ping import PingHandler
+from server.api.websocket.chat.proxy import ChatHandlerProxy
 from server.api.websocket.chat.terminate import TerminateHandler
 from server.api.websocket.chat.update import UpdateHandler
 from server.core.authentications import cookie, RoleChecker
@@ -34,7 +35,7 @@ from server.core.externals.redis.schemas import (
     RedisChatHistoriesByRoomS, RedisUserProfileByRoomS, RedisChatHistoryByRoomS,
     RedisChatRoomsByUserProfileS, RedisFollowingsByUserProfileS,
     RedisFollowingByUserProfileS, RedisUserImageFileS, RedisChatRoomByUserProfileS, RedisChatHistoryPatchS,
-    RedisInfoByRoomS, RedisChatRoomInfoS
+    RedisInfoByRoomS, RedisChatRoomInfoS, RedisChatRoomPubSubS
 )
 from server.core.utils import async_iter
 from server.crud.service import (
@@ -543,7 +544,7 @@ async def chat(
                             pipe = await RedisChatHistoriesByRoomS.zadd(pipe, room_id, sync)
                             await pipe.execute()
 
-                        await pub.publish(f'pubsub:room:{room_id}:chat', ChatSendFormS(
+                        await pub.publish(RedisChatRoomPubSubS.get_key(room_id), ChatSendFormS(
                             type=ChatType.UPDATE,
                             data=ChatSendDataS(patch_histories=patch_histories_redis)
                         ).json())
@@ -599,54 +600,15 @@ async def chat(
                         # 요청 데이터
                         receive = ChatReceiveFormS(**data)
 
-                        # 대화 내용 조회
-                        if receive.type == ChatType.LOOKUP:
-                            handler_cls = LookUpHandler
-
-                        # 업데이트 요청
-                        elif receive.type == ChatType.UPDATE:
-                            handler_cls = UpdateHandler
-
-                        # 메시지 요청
-                        elif receive.type == ChatType.MESSAGE:
-                            handler_cls = MessageHandler
-
-                        # 파일 업로드 요청
-                        elif receive.type == ChatType.FILE:
-                            handler_cls = FileHandler
-
-                        # 유저 초대
-                        elif receive.type == ChatType.INVITE:
-                            handler_cls = InviteHandler
-
-                        # 연결 종료
-                        elif receive.type == ChatType.TERMINATE:
-                            handler_cls = TerminateHandler
-
-                        # Ping 요청
-                        else:
-                            handler_cls = PingHandler
-
-                        handler = handler_cls(receive, session)
-                        result = await handler.execute(
+                        await ChatHandlerProxy(receive, session).send(
                             redis_handler=redis_hdr,
+                            ws_handler=ws_handler,
                             user_profile_id=user_profile_id,
                             user_profiles_redis=user_profiles_redis,
                             user_profile_redis=user_profile_redis,
                             room_id=room_id,
                             room_redis=room_redis,
                         )
-                        if not result:
-                            continue
-
-                        response_s, send_type = handler.send_response
-                        if send_type == SendMessageType.UNICAST:
-                            await ws_handler.send_json(jsonable_encoder(response_s))
-                        elif send_type == SendMessageType.MULTICAST:
-                            await pub.publish(f'pubsub:room:{room_id}:chat', response_s.json())
-                        else:
-                            logger.warning(f'Invalid send type. {send_type}')
-                            continue
 
                     except (WebSocketDisconnect, WebSocketException) as exc:
                         raise exc
@@ -666,7 +628,7 @@ async def chat(
 
         try:
             async with psub as p:
-                await p.subscribe(f'pubsub:room:{room_id}:chat')
+                await p.subscribe(RedisChatRoomPubSubS.get_key(room_id))
                 try:
                     while True:
                         message: dict = await p.get_message(ignore_subscribe_messages=True)

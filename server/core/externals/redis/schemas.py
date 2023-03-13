@@ -4,7 +4,7 @@ from pydantic import BaseModel
 
 from server.core.enums import IntValueEnum
 from server.core.externals.redis.mixin import (
-    SortedSetCollectionMixin, SetCollectionMixin, HashCollectionMixin, ScanMixin
+    SortedSetCollectionMixin, SetCollectionMixin, HashCollectionMixin, ScanMixin, KeyMixin
 )
 from server.models import S3Media, UserProfileImage, ChatHistoryFile, UserProfile, ChatHistory
 
@@ -221,3 +221,7 @@ class RedisChatHistoriesToSyncS(SortedSetCollectionMixin):
 class RedisFollowingsByUserProfileS(SetCollectionMixin):
     format = 'user:{}:followings'
     schema = RedisFollowingByUserProfileS
+
+
+class RedisChatRoomPubSubS(KeyMixin):
+    format = 'pubsub:room:{}:chat'
