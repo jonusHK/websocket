@@ -317,7 +317,7 @@ export default {
                     proxy.$alert({
                         state: 'error',
                         stateOutlined: true,
-                        message: event.reason || '연결이 끊어습니다.',
+                        message: event.reason || '연결이 끊어졌습니다.',
                     });
                     proxy.$router.replace('/login');
                     
@@ -331,7 +331,7 @@ export default {
                     proxy.$alert({
                         state: 'error',
                         stateOutlined: true,
-                        message: event.reason || '연결이 끊어습니다.',
+                        message: event.reason || '연결이 끊어졌습니다.',
                     });
                     proxy.$router.replace('/login');
                 }
