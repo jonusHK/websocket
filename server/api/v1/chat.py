@@ -571,15 +571,6 @@ async def chat(
 
                 async with async_session() as session:
                     try:
-                        try:
-                            user: User = await AuthValidator(session).get_user_by_websocket(websocket)
-                            if not next((p for p in user.profiles if p.id == user_profile_id), None):
-                                raise WebSocketDisconnect(code=status.WS_1008_POLICY_VIOLATION)
-                        except:
-                            raise WebSocketDisconnect(
-                                code=status.WS_1008_POLICY_VIOLATION, reason=ResponseCode.UNAUTHORIZED.value
-                            )
-
                         crud_room = ChatRoomCRUD(session)
                         crud_chat_history = ChatHistoryCRUD(session)
                         crud_history_user_mapping = ChatHistoryUserAssociationCRUD(session)
