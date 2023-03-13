@@ -328,10 +328,9 @@ export default {
               'type': 'ping'
           };
           if (followingListSocket.readyState === WebSocket.OPEN) {
-              followingListSocket.send(JSON.stringify(data));
-          }
-          if (chatRoomListSocket.readyState === WebSocket.OPEN) {
-              chatRoomListSocket.send(JSON.stringify(data));
+              [followingListSocket, chatRoomListSocket].forEach(socket => {
+                  socket.send(JSON.stringify(data));
+              });
           }
       }, 30000);
 
@@ -340,28 +339,29 @@ export default {
       }
       followingListSocket.onmessage = function(event) {
           try {
-              let followings = _.orderBy(JSON.parse(event.data), ['nickname'], ['asc']);
-              followings = _.filter(followings, function(f) {
-                  return f.is_hidden === false && f.is_forbidden === false;
-              });
-              const self = _.find(followings, function(f) {
-                return f.type === 'self';
-              });
-              const removeIdx = _.indexOf(followings, self);
-              if (removeIdx !== -1) {
-                followings.splice(_.indexOf(followings, self), 1);
-                followings.unshift(self);
+              const json = JSON.parse(event.data);
+              if (json.type === 'lookup') {
+                  let followings = _.orderBy(json.data.followings, ['nickname'], ['asc']);
+                  followings = _.filter(followings, function(f) {
+                      return f.is_hidden === false && f.is_forbidden === false;
+                  });
+                  const self = _.find(followings, function(f) {
+                    return f.type === 'self';
+                  });
+                  const removeIdx = _.indexOf(followings, self);
+                  if (removeIdx !== -1) {
+                    followings.splice(_.indexOf(followings, self), 1);
+                    followings.unshift(self);
+                  }
+                  state.followings = followings;
               }
-              state.followings = followings;
           } catch (e) {}
       }
       followingListSocket.onclose = function(event) {
-          console.log('following list close - ', event);
           clearInterval(state.pingInterval);
           proxy.$router.replace('/login');
       }
       followingListSocket.onerror = function(event) {
-          console.log('following list error - ', event);
           clearInterval(state.pingInterval);
           proxy.$router.replace('/login');
       }
@@ -370,32 +370,33 @@ export default {
       }
       chatRoomListSocket.onmessage = function(event) {
           try {
-              state.chatRooms = _.orderBy(
-                JSON.parse(event.data), 
-                [
-                  room => { return room.last_chat_timestamp === null ? 0 : room.last_chat_timestamp }, 
-                  room => { return room.timestamp === null ? 0 : room.timestamp }
-                ], 
-                ['desc', 'desc']);
-              let totalUnreadMsgCnt = 0;
-
-              for (const room of state.chatRooms) {
-                  // 현재 조회중인 채팅방의 unread_msg_cnt 값 무시
-                  if (state.chatRoomId !== null && state.chatRoomId === room.id) {
-                    continue
+              const json = JSON.parse(event.data);
+              if (json.type === 'lookup') {
+                  state.chatRooms = _.orderBy(
+                      json.data.rooms, 
+                      [
+                        room => { return room.last_chat_timestamp === null ? 0 : room.last_chat_timestamp }, 
+                        room => { return room.timestamp === null ? 0 : room.timestamp }
+                      ], 
+                      ['desc', 'desc']
+                  );
+                  let totalUnreadMsgCnt = 0;
+                  for (const room of state.chatRooms) {
+                      // 현재 조회중인 채팅방의 unread_msg_cnt 값 무시
+                      if (state.chatRoomId !== null && state.chatRoomId === room.id) {
+                        continue
+                      }
+                      totalUnreadMsgCnt += room.unread_msg_cnt;
                   }
-                  totalUnreadMsgCnt += room.unread_msg_cnt;
+                  state.totalUnreadMsgCnt = totalUnreadMsgCnt;
               }
-              state.totalUnreadMsgCnt = totalUnreadMsgCnt;
           } catch (e) {}
       }
       chatRoomListSocket.onclose = function(event) {
-          console.log('chat room list close - ', event);
           clearInterval(state.pingInterval);
           proxy.$router.replace('/login');
       }
       chatRoomListSocket.onerror = function(event) {
-          console.log('chat room list error - ', event);
           clearInterval(state.pingInterval);
           proxy.$router.replace('/login');
       }

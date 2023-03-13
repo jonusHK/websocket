@@ -182,6 +182,14 @@ class RedisChatRoomByUserProfileS(BaseModel):
     timestamp: float | int
 
 
+class RedisChatRoomListS(RedisChatRoomByUserProfileS):
+    type: Optional[str] = None
+    user_profiles: List[RedisUserProfileByRoomS]
+    user_profile_files: List[RedisUserImageFileS] = []
+    last_chat_history: Optional[RedisChatHistoryByRoomS] = None
+    last_chat_timestamp: Optional[float] = None
+
+
 class RedisChatHistoryToSyncS(BaseModel):
     id: int
 

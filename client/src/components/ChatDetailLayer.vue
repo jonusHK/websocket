@@ -311,7 +311,6 @@ export default {
                 } catch (e) {}
             }
             ws.value.onclose = function(event) {
-                console.log('chat socket close - ', event);
                 isConnected.value = false;
                 clearInterval(state.pingInterval);
                 if (_.includes([1008, 1006], event.code)) {
@@ -325,7 +324,6 @@ export default {
                 }
             }
             ws.value.onerror = function(event) {
-                console.log('chat socket error - ', event);
                 isConnected.value = false;
                 clearInterval(state.pingInterval);
                 if (_.includes([1008, 1006], event.code)) {

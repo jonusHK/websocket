@@ -35,7 +35,7 @@ from server.core.externals.redis.schemas import (
     RedisChatHistoriesByRoomS, RedisUserProfileByRoomS, RedisChatHistoryByRoomS,
     RedisChatRoomsByUserProfileS, RedisFollowingsByUserProfileS,
     RedisFollowingByUserProfileS, RedisUserImageFileS, RedisChatRoomByUserProfileS, RedisChatHistoryPatchS,
-    RedisInfoByRoomS, RedisChatRoomInfoS, RedisChatRoomPubSubS
+    RedisInfoByRoomS, RedisChatRoomInfoS, RedisChatRoomPubSubS, RedisChatRoomListS
 )
 from server.core.utils import async_iter
 from server.crud.service import (
@@ -172,14 +172,17 @@ async def chat_rooms(
                             obj: Dict[str, Any] = jsonable_encoder(room_by_profile_redis)
                             obj.update(jsonable_encoder({
                                 'name': room_name,
-                                'type': room.type if room else None,
+                                'type': room and room.type,
                                 'user_profiles': profiles_by_room_redis,
-                                'user_profile_files': room.user_profile_files if room else None,
+                                'user_profile_files': room and room.user_profile_files,
                                 'last_chat_history': last_chat_history,
                                 'last_chat_timestamp': last_chat_history and last_chat_history.timestamp
                             }))
-                            result.append(obj)
-                await ws_handler.send_json(result)
+                            result.append(RedisChatRoomListS(**obj))
+                await ws_handler.send_json(jsonable_encoder(ChatSendFormS(
+                    type=ChatType.LOOKUP,
+                    data=ChatSendDataS(rooms=result)
+                )))
             except (WebSocketDisconnect, WebSocketException) as e:
                 await ws_handler.close(e=e)
                 if not ws_handler.self_disconnected(e):
@@ -196,7 +199,10 @@ async def chat_rooms(
             if data:
                 receive = ChatReceiveFormS(**data)
                 if receive.type == ChatType.PING:
-                    await ws_handler.send_text('pong')
+                    await ws_handler.send_json(jsonable_encoder(ChatSendFormS(
+                        type=receive.type,
+                        data=ChatSendDataS(pong=True)
+                    )))
 
     raised_errors = set()
     redis_hdr = RedisHandler()
@@ -679,7 +685,10 @@ async def chat_followings(
                                             )
                                         ) for f in user_profile.followings
                                     ])
-                await ws_handler.send_json(jsonable_encoder(followings))
+                await ws_handler.send_json(jsonable_encoder(ChatSendFormS(
+                    type=ChatType.LOOKUP,
+                    data=ChatSendDataS(followings=followings)
+                )))
             except (WebSocketDisconnect, WebSocketException) as e:
                 await ws_handler.close(e=e)
                 if not ws_handler.self_disconnected(e):
@@ -696,7 +705,10 @@ async def chat_followings(
             if data:
                 receive = ChatReceiveFormS(**data)
                 if receive.type == ChatType.PING:
-                    await ws_handler.send_text('pong')
+                    await ws_handler.send_json(jsonable_encoder(ChatSendFormS(
+                        type=receive.type,
+                        data=ChatSendDataS(pong=True)
+                    )))
 
     raised_errors = set()
     redis_hdr = RedisHandler()
