@@ -28,22 +28,29 @@ class ExceptionHandler:
             self.error = exc.detail
             self.status_code = exc.status_code
         else:
-            self.code = ResponseCode.INTERNAL_SERVER_ERROR
-            status_code = None
-            for status_key in ("status", "status_code"):
-                if hasattr(exc, status_key):
-                    status_code = getattr(exc, status_key)
-                    self.code = self.base_err.get(status_code, self.code)
-                    break
-            self.status_code = next((
-                k for k, v in self.base_err.items() if v == self.code
-            ), status.HTTP_500_INTERNAL_SERVER_ERROR) if not status_code else status_code
-
-            if isinstance(exc, HTTPException):
-                self.error = exc.detail
-            elif isinstance(exc, RequestValidationError):
-                self.error = exc.errors()
-            elif isinstance(exc, WebSocketDisconnect):
+            if isinstance(exc, WebSocketDisconnect):
+                self.code = exc.code
                 self.error = exc.reason
             else:
-                self.error = str(exc)
+                self.code = ResponseCode.INTERNAL_SERVER_ERROR
+                if isinstance(exc, HTTPException):
+                    self.error = exc.detail
+                elif isinstance(exc, RequestValidationError):
+                    self.error = exc.errors()
+                else:
+                    self.error = str(exc)
+
+            status_code = None
+            for status_key in ('status', 'status_code'):
+                if hasattr(exc, status_key):
+                    status_code = getattr(exc, status_key)
+                    if not isinstance(exc, WebSocketDisconnect):
+                        self.code = self.base_err.get(status_code, self.code)
+                    break
+
+            if not status_code:
+                self.status_code = next((
+                    k for k, v in self.base_err.items() if v == self.code
+                ), status.HTTP_500_INTERNAL_SERVER_ERROR)
+            else:
+                self.status_code = status_code
