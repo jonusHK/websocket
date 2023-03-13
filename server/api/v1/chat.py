@@ -23,7 +23,7 @@ from websockets.exceptions import WebSocketException
 from server.api import ExceptionHandlerRoute, templates
 from server.api.common import AuthValidator, RedisHandler, WebSocketHandler
 from server.core.authentications import cookie, RoleChecker
-from server.core.enums import UserType, ChatType, ChatHistoryType, ResponseCode
+from server.core.enums import UserType, ChatType, ChatHistoryType
 from server.core.exceptions import ExceptionHandler
 from server.core.externals.redis.schemas import (
     RedisUserProfilesByRoomS,
@@ -117,13 +117,10 @@ async def chat_rooms(
     await ws_handler.accept()
     async with async_session() as session:
         try:
-            user: User = await AuthValidator(session).get_user_by_websocket(websocket)
-            if not next((p for p in user.profiles if p.id == user_profile_id), None):
-                raise WebSocketDisconnect(status.WS_1008_POLICY_VIOLATION)
-        except:
-            code, reason = status.WS_1008_POLICY_VIOLATION, ResponseCode.UNAUTHORIZED.value
-            await ws_handler.close(code=code, reason=reason)
-            raise WebSocketDisconnect(code=code, reason=reason)
+            await AuthValidator(session).validate_profile_by_websocket(websocket, user_profile_id)
+        except WebSocketDisconnect as e:
+            await ws_handler.close(code=e.code, reason=e.reason)
+            raise e
 
     async def producer_handler():
         while True:
@@ -417,14 +414,7 @@ async def chat(
     await ws_handler.accept()
     async with async_session() as session:
         try:
-            try:
-                user: User = await AuthValidator(session).get_user_by_websocket(websocket)
-                if not next((p for p in user.profiles if p.id == user_profile_id), None):
-                    raise WebSocketDisconnect(code=status.WS_1008_POLICY_VIOLATION)
-            except:
-                raise WebSocketDisconnect(
-                    code=status.WS_1008_POLICY_VIOLATION, reason=ResponseCode.UNAUTHORIZED.value
-                )
+            await AuthValidator(session).validate_profile_by_websocket(websocket, user_profile_id)
 
             # 방 데이터 추출
             try:
@@ -465,11 +455,10 @@ async def chat(
                     )
 
         except Exception as e:
-            code = e.code if isinstance(e, WebSocketDisconnect) else status.WS_1011_INTERNAL_ERROR
-            reason = ExceptionHandler(e).error
+            code_reason: Dict[str, Any] = ws_handler.code_reason(e)
             logger.exception(get_log_error(e))
-            await ws_handler.close(code=code, reason=reason)
-            raise WebSocketDisconnect(code=code, reason=reason)
+            await ws_handler.close(**code_reason)
+            raise WebSocketDisconnect(**code_reason)
 
     async def producer_handler(pub: Redis, ws: WebSocket):
         raised_errors = set()
@@ -1237,15 +1226,10 @@ async def chat_followings(
     await ws_handler.accept()
     async with async_session() as session:
         try:
-            user: User = await AuthValidator(session).get_user_by_websocket(websocket)
-            user_profile: UserProfile = next((p for p in user.profiles if p.id == user_profile_id and p.is_active), None)
-            if not user_profile:
-                raise WebSocketDisconnect(code=status.WS_1008_POLICY_VIOLATION)
-        except:
-            code = status.WS_1008_POLICY_VIOLATION
-            reason = ResponseCode.UNAUTHORIZED.value
-            await ws_handler.close(code=code, reason=reason)
-            raise WebSocketDisconnect(code=code, reason=reason)
+            await AuthValidator(session).validate_profile_by_websocket(websocket, user_profile_id)
+        except WebSocketDisconnect as e:
+            await ws_handler.close(code=e.code, reason=e.reason)
+            raise e
 
     async def producer_handler():
         while True:

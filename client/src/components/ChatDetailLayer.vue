@@ -338,7 +338,7 @@ export default {
             }
         }
         const getUserCnt = function() {
-            return state.room.user_profiles.length > 2 ? state.room.user_profiles.length : null;
+            return state.room.user_profiles !== undefined && state.room.user_profiles.length > 2 ? state.room.user_profiles.length : null;
         }
         const refreshRoom = function() {
             proxy.$axios.get(VITE_SERVER_HOST + `/v1/chats/room/${state.loginProfileId}/${state.roomId}`)

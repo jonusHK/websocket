@@ -12,7 +12,7 @@ from starlette.websockets import WebSocket, WebSocketDisconnect, WebSocketState
 from websockets.exceptions import ConnectionClosedOK
 
 from server.core.authentications import COOKIE_NAME, cookie, backend
-from server.core.enums import IntValueEnum
+from server.core.enums import IntValueEnum, ResponseCode
 from server.core.exceptions import ExceptionHandler
 from server.core.externals.redis import AioRedis
 from server.core.externals.redis.schemas import (
@@ -30,11 +30,16 @@ from server.models import (
 
 
 class AuthValidator:
+
+    websocket_exception = WebSocketDisconnect(
+        code=status.WS_1008_POLICY_VIOLATION, reason=ResponseCode.UNAUTHORIZED.value
+    )
+
     def __init__(self, session: AsyncSession):
         self.session = session
 
     @classmethod
-    def get_user_profile(cls, user_session: UserSession, user_profile_id):
+    def get_user_profile(cls, user_session: UserSession, user_profile_id: int):
         assert hasattr(user_session, 'user') and hasattr(user_session.user, 'profiles')
         profile: UserProfile = next((
             p for p in user_session.user.profiles if p.id == user_profile_id and p.is_active),
@@ -44,7 +49,7 @@ class AuthValidator:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
         return profile
 
-    async def get_user_by_websocket(self, websocket: WebSocket) -> User:
+    async def get_user_session_by_websocket(self, websocket: WebSocket) -> User:
         signed_session_id = websocket.cookies[COOKIE_NAME]
         session_id = UUID(
             cookie.signer.loads(
@@ -54,8 +59,20 @@ class AuthValidator:
             )
         )
         user_session = await backend.read(session_id, self.session)
-        user = user_session.user
-        return user
+        return user_session
+
+    async def validate_profile_by_websocket(
+        self,
+        websocket: WebSocket,
+        user_profile_id: int,
+        e: Optional[Exception] = None
+    ) -> User:
+        try:
+            user_session: UserSession = await self.get_user_session_by_websocket(websocket)
+            user_profile: UserProfile = self.get_user_profile(user_session, user_profile_id)
+        except:
+            raise e if e else self.websocket_exception
+        return user_profile
 
 
 class RedisHandler:
