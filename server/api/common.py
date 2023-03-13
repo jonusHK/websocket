@@ -1,4 +1,5 @@
 import asyncio
+from copy import deepcopy
 from datetime import datetime
 from typing import Iterable, List, Any, Optional, Callable, Coroutine, Tuple, Awaitable
 from uuid import UUID
@@ -19,7 +20,7 @@ from server.core.externals.redis.schemas import (
     RedisChatRoomByUserProfileS, RedisChatRoomsByUserProfileS, RedisUserProfilesByRoomS,
     RedisChatHistoriesByRoomS, RedisChatHistoriesToSyncS, RedisUserImageFileS,
     RedisUserProfileByRoomS, RedisChatHistoryByRoomS, RedisInfoByRoomS,
-    RedisChatRoomInfoS
+    RedisChatRoomInfoS, RedisChatHistoryPatchS
 )
 from server.core.utils import async_iter
 from server.crud.service import ChatRoomCRUD, ChatRoomUserAssociationCRUD
@@ -419,6 +420,101 @@ class RedisHandler:
                         )
                     )
                     await pipe.execute()
+
+    async def init_unread_msg_cnt(
+        self,
+        user_profile_id: int,
+        room: RedisChatRoomByUserProfileS
+    ):
+        async with await self.lock(
+            key=RedisChatRoomsByUserProfileS.get_lock_key(user_profile_id)
+        ):
+            async with await self.pipeline() as pipe:
+                pipe = await RedisChatRoomsByUserProfileS.zrem(pipe, user_profile_id, room)
+                room.unread_msg_cnt = 0
+                pipe = await RedisChatRoomsByUserProfileS.zadd(pipe, user_profile_id, room)
+                await pipe.execute()
+
+    async def connect_profile_by_room(
+        self,
+        user_profile_id: int,
+        room_id: int,
+        room: RedisChatRoomInfoS
+    ):
+        async with await self.lock(key=RedisInfoByRoomS.get_lock_key(room_id)):
+            room.add_connected_profile_id(user_profile_id)
+            await RedisInfoByRoomS.hset(
+                await self.redis,
+                room_id,
+                field=RedisChatRoomInfoS.__fields__['connected_profile_ids'].name,
+                value=room.connected_profile_ids
+            )
+
+    async def disconnect_profile_by_room(
+        self,
+        user_profile_id: int,
+        room_id: int,
+        room: RedisChatRoomInfoS
+    ):
+        async with await self.lock(key=RedisInfoByRoomS.get_lock_key(room_id)):
+            room.connected_profile_ids = [
+                profile_id for profile_id in room.connected_profile_ids
+                if profile_id != user_profile_id
+            ]
+            await RedisInfoByRoomS.hset(
+                await self.redis,
+                room_id,
+                field=RedisChatRoomInfoS.__fields__['connected_profile_ids'].name,
+                value=room.connected_profile_ids
+            )
+
+    async def unsync_read_by_room(
+        self,
+        room_id: int,
+        room: RedisChatRoomInfoS
+    ) -> List[Tuple[RedisChatHistoryByRoomS, List[int]]]:
+        # 최근 읽음 처리 동기화 안된 채팅 내역 추출
+        chat_histories_redis: List[RedisChatHistoryByRoomS] = (
+            await RedisChatHistoriesByRoomS.zrevrange(await self.redis, room_id)
+        )
+        unsync: List[Tuple[RedisChatHistoryByRoomS, List[int]]] = []
+        for h in chat_histories_redis:
+            if (
+                len(set(h.read_user_ids) & set(room.connected_profile_ids))
+                != len(room.connected_profile_ids)
+            ):
+                sync_read_user_ids = list(set(h.read_user_ids) | set(room.connected_profile_ids))
+                unsync.append((h, sync_read_user_ids))
+            else:
+                break
+        return unsync
+
+    async def patch_unsync_read_by_room(
+        self,
+        room_id: int,
+        room: RedisChatRoomInfoS
+    ) -> List[RedisChatHistoryPatchS]:
+        unsync_histories = await self.unsync_read_by_room(room_id, room)
+        patch_histories_redis: List[RedisChatHistoryPatchS] = []
+        if unsync_histories:
+            async with await self.pipeline() as pipe:
+                unsync, sync = [], []
+                async for history, read_user_ids in async_iter(unsync_histories):
+                    unsync.append(deepcopy(history))
+                    history.read_user_ids = read_user_ids
+                    sync.append(history)
+                    patch_histories_redis.append(RedisChatHistoryPatchS(
+                        id=history.id,
+                        redis_id=history.redis_id,
+                        user_profile_id=history.user_profile_id,
+                        is_active=history.is_active,
+                        read_user_ids=history.read_user_ids
+                    ))
+                pipe = await RedisChatHistoriesByRoomS.zrem(pipe, room_id, *unsync)
+                pipe = await RedisChatHistoriesByRoomS.zadd(pipe, room_id, sync)
+                await pipe.execute()
+
+        return patch_histories_redis
 
     async def handle_pubsub(self, ws: WebSocket, producer_handler: Callable, consumer_handler: Callable):
         pub: Redis = await self.redis

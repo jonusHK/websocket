@@ -486,68 +486,23 @@ async def chat(
                         reason=f'Failed to get room for user profile. {exc}'
                     )
 
-                # 방에 웹소켓 연결된 유저 프로필 ID 추가
-                room_redis.add_connected_profile_id(user_profile_id)
-                await RedisInfoByRoomS.hset(
-                    await redis_hdr.redis, room_id,
-                    field='connected_profile_ids', value=room_redis.connected_profile_ids
-                )
+                # 웹소켓 연결된 유저 프로필 ID 추가
+                await redis_hdr.connect_profile_by_room(user_profile_id, room_id, room_redis)
 
-                # 채팅방 unread_msg_cnt = 0 설정 (채팅방 접속 시, 모두 읽음 처리)
-                if room_by_profile_redis.unread_msg_cnt > 0:
-                    async with await redis_hdr.lock(
-                        key=RedisChatRoomsByUserProfileS.get_lock_key(user_profile_id)
-                    ):
-                        async with await redis_hdr.pipeline() as pipe:
-                            pipe = await RedisChatRoomsByUserProfileS.zrem(
-                                pipe, user_profile_id, room_by_profile_redis
-                            )
-                            room_by_profile_redis.unread_msg_cnt = 0
-                            pipe = await RedisChatRoomsByUserProfileS.zadd(
-                                pipe, user_profile_id, room_by_profile_redis
-                            )
-                            await pipe.execute()
+                # 채팅방 unread_msg_cnt 초기화 (채팅방 접속 시, 모두 읽음 처리)
+                await redis_hdr.init_unread_msg_cnt(user_profile_id, room_by_profile_redis)
 
+                # 채팅 내역 읽음 처리
                 async with await redis_hdr.lock(key=RedisChatHistoriesByRoomS.get_lock_key(room_id)):
-                    chat_histories_redis: List[RedisChatHistoryByRoomS] = (
-                        await RedisChatHistoriesByRoomS.zrevrange(await redis_hdr.redis, room_id)
-                    )
-                    target_histories_redis: List[Tuple[RedisChatHistoryByRoomS, List[int]]] = []
-                    # 최근 읽음 처리 동기화 안된 채팅 내역 추출
-                    for h in chat_histories_redis:
-                        if (
-                            len(set(h.read_user_ids) & set(room_redis.connected_profile_ids))
-                            != len(room_redis.connected_profile_ids)
-                        ):
-                            sync_read_user_ids = list(set(h.read_user_ids) | set(room_redis.connected_profile_ids))
-                            target_histories_redis.append((h, sync_read_user_ids))
-                        else:
-                            break
-
-                    # 채팅 내역 읽음 처리
-                    if target_histories_redis:
-                        async with await redis_hdr.pipeline() as pipe:
-                            unsync, sync = [], []
-                            patch_histories_redis = []
-                            async for history, read_user_ids in async_iter(target_histories_redis):
-                                unsync.append(deepcopy(history))
-                                history.read_user_ids = read_user_ids
-                                sync.append(history)
-                                patch_histories_redis.append(RedisChatHistoryPatchS(
-                                    id=history.id,
-                                    redis_id=history.redis_id,
-                                    user_profile_id=history.user_profile_id,
-                                    is_active=history.is_active,
-                                    read_user_ids=history.read_user_ids
-                                ))
-                            pipe = await RedisChatHistoriesByRoomS.zrem(pipe, room_id, *unsync)
-                            pipe = await RedisChatHistoriesByRoomS.zadd(pipe, room_id, sync)
-                            await pipe.execute()
-
-                        await pub.publish(RedisChatRoomPubSubS.get_key(room_id), ChatSendFormS(
-                            type=ChatType.UPDATE,
-                            data=ChatSendDataS(patch_histories=patch_histories_redis)
-                        ).json())
+                    patch_histories_redis = await redis_hdr.patch_unsync_read_by_room(room_id, room_redis)
+                    if patch_histories_redis:
+                        await pub.publish(
+                            RedisChatRoomPubSubS.get_key(room_id),
+                            ChatSendFormS(
+                                type=ChatType.UPDATE,
+                                data=ChatSendDataS(patch_histories=patch_histories_redis)
+                            ).json()
+                        )
 
             while True:
                 data = await ws_handler.receive_json()
@@ -600,6 +555,7 @@ async def chat(
                         # 요청 데이터
                         receive = ChatReceiveFormS(**data)
 
+                        # 메시지 전송
                         await ChatHandlerProxy(receive, session).send(
                             redis_handler=redis_hdr,
                             ws_handler=ws_handler,
@@ -648,14 +604,7 @@ async def chat(
     try:
         await redis_hdr.handle_pubsub(websocket, producer_handler, consumer_handler)
     finally:
-        room_redis.connected_profile_ids = [
-            profile_id for profile_id in room_redis.connected_profile_ids
-            if profile_id != user_profile_id
-        ]
-        await RedisInfoByRoomS.hset(
-            await redis_hdr.redis, room_id,
-            field='connected_profile_ids', value=room_redis.connected_profile_ids
-        )
+        await redis_hdr.disconnect_profile_by_room(user_profile_id, room_id, room_redis)
         await redis_hdr.close()
 
 
