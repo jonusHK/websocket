@@ -1,6 +1,6 @@
 import asyncio
 from datetime import datetime
-from typing import Iterable, List, Dict, Any, Optional, Callable, Coroutine, Tuple, Awaitable
+from typing import Iterable, List, Any, Optional, Callable, Coroutine, Tuple, Awaitable
 from uuid import UUID
 
 from aioredis.client import Pipeline, Redis, PubSub
@@ -12,20 +12,19 @@ from starlette.websockets import WebSocket, WebSocketDisconnect, WebSocketState
 from websockets.exceptions import ConnectionClosedOK
 
 from server.core.authentications import COOKIE_NAME, cookie, backend
-from server.core.enums import IntValueEnum, ResponseCode
+from server.core.enums import ResponseCode
 from server.core.exceptions import ExceptionHandler
 from server.core.externals.redis import AioRedis
 from server.core.externals.redis.schemas import (
     RedisChatRoomByUserProfileS, RedisChatRoomsByUserProfileS, RedisUserProfilesByRoomS,
     RedisChatHistoriesByRoomS, RedisChatHistoriesToSyncS, RedisUserImageFileS,
-    RedisChatHistoryFileS, RedisUserProfileByRoomS, RedisChatHistoryByRoomS, RedisInfoByRoomS,
+    RedisUserProfileByRoomS, RedisChatHistoryByRoomS, RedisInfoByRoomS,
     RedisChatRoomInfoS
 )
 from server.core.utils import async_iter
 from server.crud.service import ChatRoomCRUD, ChatRoomUserAssociationCRUD
 from server.models import (
-    User, ChatRoomUserAssociation, UserProfile, UserProfileImage,
-    ChatHistoryFile, UserSession, ChatRoom
+    User, ChatRoomUserAssociation, UserProfile, UserSession, ChatRoom
 )
 
 
@@ -88,7 +87,6 @@ class RedisHandler:
             info = await conn.info()
             if info.get('role') == 'master':
                 return conn
-        return
 
     @staticmethod
     def get_redis_module(**kwargs):
@@ -128,98 +126,17 @@ class RedisHandler:
             raise RuntimeError('Redis connection not initialized.')
         await self._redis.close()
 
-    @classmethod
-    async def generate_files_schema(
-        cls,
-        model,
-        iterable: Iterable,
-        presigned=False
-    ) -> List[RedisUserImageFileS | RedisChatHistoryFileS]:
-        assert issubclass(model, UserProfileImage | ChatHistoryFile), 'Invalid model type.'
-
-        model_schema_mapper = {
-            UserProfileImage: RedisUserImageFileS,
-            ChatHistoryFile: RedisChatHistoryFileS
-        }
-        schema = model_schema_mapper[model]
-
-        files_s: List[schema] = []
-        if iterable:
-            urls: List[Dict[str, Any]] = (
-                await model.asynchronous_presigned_url(*iterable)
-                if presigned
-                else model.get_file_urls(*iterable)
-            )
-            for m in iterable:
-                model_to_dict = m.to_dict()
-                model_to_dict.update({
-                    'url': next((u['url'] for u in urls if u['id'] == m.id), None)
-                })
-
-                for k, v in schema.__annotations__.items():
-                    if type(model_to_dict[k]) is not v:
-                        if isinstance(model_to_dict[k], IntValueEnum):
-                            if v is str:
-                                model_to_dict[k] = model_to_dict[k].name.lower()
-                            elif v is int:
-                                model_to_dict[k] = model_to_dict[k].value
-                files_s.append(schema(**model_to_dict))
-
-        return files_s
-
-    @classmethod
-    async def generate_profile_images_schema(
-        cls,
-        profiles: List[UserProfile],
-        only_default=False
-    ) -> List[RedisUserImageFileS]:
-        images: List[UserProfileImage] = []
-        for p in profiles:
-            assert hasattr(p, 'images'), 'Profile must have `images` attr.'
-            if only_default:
-                image = next((im for im in p.images if im.is_default), None)
-                if image:
-                    images.append(image)
-            else:
-                for image in p.images:
-                    images.append(image)
-        return await cls.generate_files_schema(UserProfileImage, images)
-
-    async def generate_default_room_name(
-        self,
-        room_id: int,
-        user_profile_id: int,
-        profiles_by_room_redis: List[RedisUserProfileByRoomS] = None
-    ) -> str | None:
-        profiles_by_room_redis: List[RedisUserProfileByRoomS] = (
-            profiles_by_room_redis
-            or await RedisUserProfilesByRoomS.smembers(
-                await self.redis, (room_id, user_profile_id)
-            )
-        )
-        if not profiles_by_room_redis:
-            return
-        profiles_by_room_redis.sort(key=lambda x: x.nickname)
-        if len(profiles_by_room_redis) == 2:
-            room_name = next(
-                (p.nickname for p in profiles_by_room_redis if p.id != user_profile_id),
-                None
-            )
-        else:
-            room_name: str = ', '.join([p.nickname for p in profiles_by_room_redis])
-        return room_name
-
-    async def get_room(
+    async def sync_room(
         self,
         room_id: int,
         crud: Optional[ChatRoomCRUD] = None,
         pipe: Optional[Pipeline] = None,
-        sync=False, lock=True, raise_exception=False
+        lock=True, raise_exception=False
     ) -> Tuple[RedisChatRoomInfoS, Pipeline | None]:
         async def _action():
             callback_pipe = None
             room_redis: RedisChatRoomInfoS = await RedisInfoByRoomS.hgetall(await self.redis, room_id)
-            if not room_redis and sync:
+            if not room_redis:
                 room_db: ChatRoom = await crud.get(
                     conditions=(ChatRoom.id == room_id,),
                     options=[
@@ -234,7 +151,7 @@ class RedisHandler:
                             pipeline, room_id, data=RedisChatRoomInfoS(
                                 id=room_db.id, type=room_db.type.name.lower(),
                                 user_profile_ids=[m.user_profile_id for m in room_db.user_profiles],
-                                user_profile_files=await self.generate_profile_images_schema(
+                                user_profile_files=await RedisUserImageFileS.generate_profile_images_schema(
                                     [m.user_profile for m in room_db.user_profiles], only_default=True
                                 ), connected_profile_ids=[]
                             )
@@ -255,12 +172,12 @@ class RedisHandler:
                 return await _action()
         return await _action()
 
-    async def get_rooms_by_user_profile(
+    async def sync_rooms_by_user_profile(
         self,
         user_profile_id: int,
         crud: Optional[ChatRoomUserAssociationCRUD] = None,
         pipe: Optional[Pipeline] = None,
-        reverse=False, sync=False, lock=True, raise_exception=False
+        reverse=False, lock=True, raise_exception=False
     ) -> Tuple[List[RedisChatRoomByUserProfileS], Pipeline | None]:
         now = datetime.now().astimezone()
 
@@ -270,7 +187,7 @@ class RedisHandler:
                 await getattr(
                     RedisChatRoomsByUserProfileS,
                     'zrevrange' if reverse else 'zrange')(await self.redis, user_profile_id)
-            if not rooms_by_profile_redis and sync:
+            if not rooms_by_profile_redis:
                 room_by_profile_db: List[ChatRoomUserAssociation] = await crud.list(
                     conditions=(ChatRoomUserAssociation.user_profile_id == user_profile_id,)
                 )
@@ -299,13 +216,13 @@ class RedisHandler:
                 return await _action()
         return await _action()
 
-    async def get_room_by_user_profile(
+    async def sync_room_by_user_profile(
         self,
         room_id: int,
         user_profile_id: int,
         crud: Optional[ChatRoomUserAssociationCRUD] = None,
         pipe: Optional[Pipeline] = None,
-        sync=False, lock=True, raise_exception=False
+        lock=True, raise_exception=False
     ) -> Tuple[RedisChatRoomByUserProfileS, Pipeline | None]:
         now = datetime.now().astimezone()
 
@@ -316,7 +233,7 @@ class RedisHandler:
             room_by_profile_redis: RedisChatRoomByUserProfileS = next(
                 (r for r in rooms_by_profile_redis if r.id == room_id), None
             )
-            if not room_by_profile_redis and sync:
+            if not room_by_profile_redis:
                 room_by_profile_db: ChatRoomUserAssociation = await crud.get(
                     conditions=(
                         ChatRoomUserAssociation.room_id == room_id,
@@ -349,19 +266,19 @@ class RedisHandler:
                 return await _action()
         return await _action()
 
-    async def get_user_profiles_in_room(
+    async def sync_user_profiles_in_room(
         self,
         room_id: int,
         user_profile_id: int,
         crud: Optional[ChatRoomUserAssociationCRUD] = None,
         pipe: Optional[Pipeline] = None,
-        sync=False, lock=True, raise_exception=False
+        lock=True, raise_exception=False
     ) -> Tuple[List[RedisUserProfileByRoomS], Pipeline | None]:
         async def _action():
             callback_pipe = None
             profiles_by_room_redis: List[RedisUserProfileByRoomS] = \
                 await RedisUserProfilesByRoomS.smembers(await self.redis, (room_id, user_profile_id))
-            if not profiles_by_room_redis and sync:
+            if not profiles_by_room_redis:
                 room_user_mapping: List[ChatRoomUserAssociation] = \
                     await crud.list(
                         conditions=(
@@ -381,8 +298,8 @@ class RedisHandler:
                                     id=p.user_profile.id,
                                     identity_id=p.user_profile.identity_id,
                                     nickname=p.user_profile.get_nickname_by_other(user_profile_id),
-                                    files=await self.generate_files_schema(
-                                        UserProfileImage, p.user_profile.images
+                                    files=await RedisUserImageFileS.generate_files_schema(
+                                        p.user_profile.images
                                     )
                                 ) for p in room_user_mapping
                             ]
@@ -403,13 +320,13 @@ class RedisHandler:
                 return await _action()
         return await _action()
 
-    async def get_user_profile_in_room(
+    async def sync_user_profile_in_room(
         self,
         room_id: int,
         user_profile_id: int,
         crud: Optional[ChatRoomUserAssociationCRUD] = None,
         pipe: Optional[Pipeline] = None,
-        sync=False, lock=True, raise_exception=False,
+        lock=True, raise_exception=False,
     ) -> Tuple[RedisUserProfileByRoomS, Pipeline | None]:
         async def _action():
             callback_pipeline = None
@@ -418,7 +335,7 @@ class RedisHandler:
             user_profile_redis: RedisUserProfileByRoomS = next(
                 (p for p in user_profiles_redis if p.id == user_profile_id), None
             )
-            if not user_profile_redis and sync:
+            if not user_profile_redis:
                 room_user_mapping: List[ChatRoomUserAssociation] = \
                     await crud.list(
                         conditions=(
@@ -439,7 +356,7 @@ class RedisHandler:
                                     id=m.user_profile.id,
                                     identity_id=m.user_profile.identity_id,
                                     nickname=m.user_profile.get_nickname_by_other(user_profile_id),
-                                    files=await self.generate_files_schema(UserProfileImage, m.user_profile.images)
+                                    files=await RedisUserImageFileS.generate_files_schema(m.user_profile.images)
                                 )
                             )
 
@@ -485,8 +402,8 @@ class RedisHandler:
         crud: ChatRoomUserAssociationCRUD
     ):
         async with await self.lock(key=RedisChatRoomsByUserProfileS.get_lock_key(profile_id)):
-            room_by_profile_redis, _ = await self.get_room_by_user_profile(
-                room_id, profile_id, crud, sync=True, lock=False
+            room_by_profile_redis, _ = await self.sync_room_by_user_profile(
+                room_id, profile_id, crud, lock=False
             )
             if room_by_profile_redis:
                 async with await self.pipeline() as pipe:
