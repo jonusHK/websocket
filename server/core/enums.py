@@ -92,7 +92,7 @@ class UserType(IntValueEnum):
 class ChatType(IntValueEnum):
     MESSAGE = "메시지"
     FILE = "파일"
-    UPDATE = "변경"
+    PATCH = "변경"
     INVITE = "초대"
     LOOKUP = "조회"
     TERMINATE = "연결 종료"

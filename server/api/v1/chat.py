@@ -1,10 +1,9 @@
 import asyncio
 import json
 import logging
-from copy import deepcopy
 from datetime import datetime
 from itertools import groupby
-from typing import List, Set, Dict, Any, Tuple
+from typing import List, Set, Dict, Any
 
 from aioredis import Redis
 from aioredis.client import PubSub
@@ -19,25 +18,17 @@ from websockets.exceptions import WebSocketException
 
 from server.api import ExceptionHandlerRoute, templates
 from server.api.common import AuthValidator, RedisHandler, WebSocketHandler
-from server.api.websocket.chat.file import FileHandler
-from server.api.websocket.chat.invite import InviteHandler
-from server.api.websocket.chat.lookup import LookUpHandler
-from server.api.websocket.chat.message import MessageHandler
-from server.api.websocket.chat.ping import PingHandler
 from server.api.websocket.chat.proxy import ChatHandlerProxy
-from server.api.websocket.chat.terminate import TerminateHandler
-from server.api.websocket.chat.update import UpdateHandler
 from server.core.authentications import cookie, RoleChecker
-from server.core.enums import UserType, ChatType, SendMessageType
+from server.core.enums import UserType, ChatType
 from server.core.exceptions import ExceptionHandler
 from server.core.externals.redis.schemas import (
     RedisUserProfilesByRoomS,
     RedisChatHistoriesByRoomS, RedisUserProfileByRoomS, RedisChatHistoryByRoomS,
     RedisChatRoomsByUserProfileS, RedisFollowingsByUserProfileS,
-    RedisFollowingByUserProfileS, RedisUserImageFileS, RedisChatRoomByUserProfileS, RedisChatHistoryPatchS,
-    RedisInfoByRoomS, RedisChatRoomInfoS, RedisChatRoomPubSubS, RedisChatRoomListS
+    RedisFollowingByUserProfileS, RedisUserImageFileS, RedisChatRoomByUserProfileS, RedisInfoByRoomS,
+    RedisChatRoomInfoS, RedisChatRoomPubSubS, RedisChatRoomListS
 )
-from server.core.utils import async_iter
 from server.crud.service import (
     ChatRoomUserAssociationCRUD, ChatRoomCRUD
 )
@@ -505,7 +496,7 @@ async def chat(
                         await pub.publish(
                             RedisChatRoomPubSubS.get_key(room_id),
                             ChatSendFormS(
-                                type=ChatType.UPDATE,
+                                type=ChatType.PATCH,
                                 data=ChatSendDataS(patch_histories=patch_histories_redis)
                             ).json()
                         )

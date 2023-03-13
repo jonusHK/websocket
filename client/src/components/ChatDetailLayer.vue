@@ -280,7 +280,7 @@ export default {
                     const json = JSON.parse(event.data);
                     if (json.type === 'lookup') {
                         state.chatHistories = [...json.data.histories, ...state.chatHistories];
-                    } else if (json.type === 'update') {
+                    } else if (json.type === 'patch') {
                         const patchHistories = json.data.patch_histories;
                         if (patchHistories.length > 0 && state.chatHistories.length > 0) {
                             for (let i=0; i < patchHistories.length; i++) {

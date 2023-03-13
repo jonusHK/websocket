@@ -7,7 +7,7 @@ from server.api.websocket.chat.lookup import LookUpHandler
 from server.api.websocket.chat.message import MessageHandler
 from server.api.websocket.chat.ping import PingHandler
 from server.api.websocket.chat.terminate import TerminateHandler
-from server.api.websocket.chat.update import UpdateHandler
+from server.api.websocket.chat.patch import PatchHandler
 from server.core.enums import ChatType, SendMessageType
 from server.core.externals.redis.schemas import RedisChatRoomPubSubS
 
@@ -23,8 +23,8 @@ class ChatHandlerProxy(ChatHandler):
 
         if self.receive.type == ChatType.LOOKUP:
             handler = LookUpHandler
-        elif self.receive.type == ChatType.UPDATE:
-            handler = UpdateHandler
+        elif self.receive.type == ChatType.PATCH:
+            handler = PatchHandler
         elif self.receive.type == ChatType.MESSAGE:
             handler = MessageHandler
         elif self.receive.type == ChatType.FILE:

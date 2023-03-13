@@ -11,7 +11,7 @@ from server.crud.service import ChatHistoryCRUD
 from server.models import ChatHistory
 
 
-class UpdateHandler(ChatHandler):
+class PatchHandler(ChatHandler):
 
     send_type = SendMessageType.MULTICAST
 
@@ -21,11 +21,11 @@ class UpdateHandler(ChatHandler):
         redis_handler = kwargs.get('redis_handler')
         room_id = kwargs.get('room_id')
 
-        patch_histories_redis: List[RedisChatHistoryPatchS] = []
-        # 채팅 내역 상태를 업데이트 하는 경우
         if not self.receive.data.history_redis_ids:
             self.logger.warning("Not exists chat history redis ids.")
             return
+
+        patch_histories_redis: List[RedisChatHistoryPatchS] = []
 
         # 업데이트 필요한 필드 확인
         update_fields = (ChatHistory.is_active.name,)
@@ -47,10 +47,10 @@ class UpdateHandler(ChatHandler):
                         h for h in chat_histories_redis if h.redis_id == redis_id
                     ]
                     history_redis: RedisChatHistoryByRoomS = (
-                            duplicated_histories_redis and duplicated_histories_redis[0]
+                        duplicated_histories_redis and duplicated_histories_redis[0]
                     )
                     copied_history_redis: RedisChatHistoryByRoomS = (
-                            history_redis and deepcopy(history_redis)
+                        history_redis and deepcopy(history_redis)
                     )
                     update_redis = False
                     for f in update_fields:

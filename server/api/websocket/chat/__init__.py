@@ -21,13 +21,6 @@ class ChatHandler:
         self.receive = receive
         self.session = session
 
-    @staticmethod
-    async def get_chat_histories(models: Iterable[ChatHistory]) -> List[RedisChatHistoryByRoomS]:
-        return [
-            await RedisChatHistoryByRoomS.from_model(m)
-            for m in models
-        ]
-
     @abstractmethod
     async def handle(self, **kwargs) -> RedisChatHistoryByRoomS | List[RedisChatHistoryByRoomS] | None:
         raise NotImplementedError
