@@ -169,15 +169,15 @@ async def chat_rooms(
                             if chat_histories:
                                 last_chat_history = chat_histories[0]
 
-                            obj: Dict[str, Any] = jsonable_encoder(room_by_profile_redis)
-                            obj.update(jsonable_encoder({
-                                'name': room_name,
-                                'type': room and room.type,
-                                'user_profiles': profiles_by_room_redis,
-                                'user_profile_files': room and room.user_profile_files,
-                                'last_chat_history': last_chat_history,
-                                'last_chat_timestamp': last_chat_history and last_chat_history.timestamp
-                            }))
+                            obj: Dict[str, Any] = room_by_profile_redis.dict()
+                            obj.update(dict(
+                                name=room_name,
+                                type=room and room.type,
+                                user_profiles=profiles_by_room_redis,
+                                user_profile_files=room and room.user_profile_files,
+                                last_chat_history=last_chat_history,
+                                last_chat_timestamp=last_chat_history and last_chat_history.timestamp
+                            ))
                             result.append(RedisChatRoomListS(**obj))
                 await ws_handler.send_json(jsonable_encoder(ChatSendFormS(
                     type=ChatType.LOOKUP,
