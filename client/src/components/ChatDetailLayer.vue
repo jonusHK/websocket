@@ -305,7 +305,7 @@ export default {
                     if (_.includes(['lookup', 'message', 'file', 'invite'], json.type)) {
                     // 스크롤 이동
                     nextTick(() => {
-                        setTimeout(() => moveChatBodyPosition(), 50);
+                        moveChatBodyPosition();
                     })
                 }
                 } catch (e) {}
