@@ -42,13 +42,18 @@ class ChatSendDataS(BaseModel):
     from server.core.externals.redis.schemas import (
         RedisChatHistoryByRoomS,
         RedisChatHistoryPatchS,
-        RedisUserProfileByRoomS
+        RedisUserProfileByRoomS,
+        RedisChatRoomListS,
+        RedisFollowingByUserProfileS
     )
 
     history: Optional[RedisChatHistoryByRoomS] = None
     histories: Optional[List[RedisChatHistoryByRoomS]] = None
     patch_histories: Optional[List[RedisChatHistoryPatchS]] = None
     user_profiles: Optional[List[RedisUserProfileByRoomS]] = None
+    rooms: Optional[List[RedisChatRoomListS]] = None
+    followings: Optional[List[RedisFollowingByUserProfileS]] = None
+    pong: Optional[bool] = None
 
 
 class ChatReceiveFormS(BaseModel):

@@ -41,7 +41,7 @@ class ChatHistory(TimestampMixin, ConvertMixin, Base):
 
     id = Column(BigInteger, primary_key=True, index=True)
     redis_id = Column(String(32), nullable=False, unique=True, index=True)
-    room_id = Column(BigInteger, ForeignKey("chat_rooms.id"), nullable=False)
+    room_id = Column(BigInteger, ForeignKey("chat_rooms.id"), index=True, nullable=False)
     user_profile_id = Column(BigInteger, ForeignKey("user_profiles.id", ondelete="CASCADE"))
     contents = Column(Text, nullable=True)
     type = Column(IntTypeEnum(enum_class=ChatHistoryType), nullable=False)

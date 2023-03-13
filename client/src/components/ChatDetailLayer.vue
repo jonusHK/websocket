@@ -280,7 +280,7 @@ export default {
                     const json = JSON.parse(event.data);
                     if (json.type === 'lookup') {
                         state.chatHistories = [...json.data.histories, ...state.chatHistories];
-                    } else if (json.type === 'update') {
+                    } else if (json.type === 'patch') {
                         const patchHistories = json.data.patch_histories;
                         if (patchHistories.length > 0 && state.chatHistories.length > 0) {
                             for (let i=0; i < patchHistories.length; i++) {
@@ -293,6 +293,7 @@ export default {
                                 }
                             }
                         }
+                    } else if (json.type === 'ping') { 
                     } else {
                         // type => message, file, invite, terminate
                         if (_.includes(['invite', 'terminate'], json.type) === true) {
@@ -304,41 +305,39 @@ export default {
                     if (_.includes(['lookup', 'message', 'file', 'invite'], json.type)) {
                     // 스크롤 이동
                     nextTick(() => {
-                        setTimeout(() => moveChatBodyPosition(), 50);
+                        moveChatBodyPosition();
                     })
                 }
                 } catch (e) {}
             }
             ws.value.onclose = function(event) {
-                console.log('chat socket close - ', event);
                 isConnected.value = false;
                 clearInterval(state.pingInterval);
                 if (_.includes([1008, 1006], event.code)) {
                     proxy.$alert({
                         state: 'error',
                         stateOutlined: true,
-                        message: event.reason || '연결이 끊어습니다.',
+                        message: event.reason || '연결이 끊어졌습니다.',
                     });
                     proxy.$router.replace('/login');
                     
                 }
             }
             ws.value.onerror = function(event) {
-                console.log('chat socket error - ', event);
                 isConnected.value = false;
                 clearInterval(state.pingInterval);
                 if (_.includes([1008, 1006], event.code)) {
                     proxy.$alert({
                         state: 'error',
                         stateOutlined: true,
-                        message: event.reason || '연결이 끊어습니다.',
+                        message: event.reason || '연결이 끊어졌습니다.',
                     });
                     proxy.$router.replace('/login');
                 }
             }
         }
         const getUserCnt = function() {
-            return state.room.user_profiles.length > 2 ? state.room.user_profiles.length : null;
+            return state.room.user_profiles !== undefined && state.room.user_profiles.length > 2 ? state.room.user_profiles.length : null;
         }
         const refreshRoom = function() {
             proxy.$axios.get(VITE_SERVER_HOST + `/v1/chats/room/${state.loginProfileId}/${state.roomId}`)

@@ -13,7 +13,8 @@ from server.api.common import AuthValidator, RedisHandler
 from server.core.authentications import SessionData, backend, cookie, verifier
 from server.core.enums import ProfileImageType, RelationshipType, ResponseCode, IntValueEnum, FollowType
 from server.core.exceptions import ClassifiableException
-from server.core.externals.redis.schemas import RedisFollowingsByUserProfileS, RedisFollowingByUserProfileS
+from server.core.externals.redis.schemas import RedisFollowingsByUserProfileS, RedisFollowingByUserProfileS, \
+    RedisUserImageFileS
 from server.core.utils import verify_password, generate_random_string
 from server.crud.user import UserCRUD, UserProfileCRUD, UserRelationshipCRUD
 from server.db.databases import get_async_session, settings
@@ -115,8 +116,8 @@ async def signup(user_s: UserCreateS, session: AsyncSession = Depends(get_async_
                 favorites=relationship.favorites,
                 is_hidden=relationship.is_hidden,
                 is_forbidden=relationship.is_forbidden,
-                files=await redis_hdr.generate_files_schema(
-                    UserProfileImage, [i for i in profile_images if i.is_default]
+                files=await RedisUserImageFileS.generate_files_schema(
+                    [i for i in profile_images if i.is_default]
                 )
             )
         )
@@ -376,8 +377,8 @@ async def create_relationship(
                 favorites=relationship.favorites,
                 is_hidden=relationship.is_hidden,
                 is_forbidden=relationship.is_forbidden,
-                files=await redis_hdr.generate_files_schema(
-                    UserProfileImage, [i for i in other_profile_images if i.is_default]
+                files=await RedisUserImageFileS.generate_files_schema(
+                    [i for i in other_profile_images if i.is_default]
                 )
             )
         )
@@ -452,8 +453,8 @@ async def update_relationship(
                         favorites=following_db.favorites,
                         is_hidden=following_db.is_hidden,
                         is_forbidden=following_db.is_forbidden,
-                        files=await redis_hdr.generate_files_schema(
-                            UserProfileImage, [i for i in following_db.other_profile.images if i.is_default]
+                        files=await RedisUserImageFileS.generate_files_schema(
+                            [i for i in following_db.other_profile.images if i.is_default]
                         )
                     )
                 )
