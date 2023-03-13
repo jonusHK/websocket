@@ -108,3 +108,9 @@ class ChatHistoryType(IntValueEnum):
     MESSAGE = '메시지'
     FILE = '파일'
     NOTICE = '안내'
+
+
+class SendMessageType(IntValueEnum):
+    UNICAST = '유니캐스트'
+    BROADCAST = '브로드캐스트'
+    MULTICAST = '멀티캐스트'

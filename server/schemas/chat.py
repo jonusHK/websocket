@@ -49,6 +49,7 @@ class ChatSendDataS(BaseModel):
     histories: Optional[List[RedisChatHistoryByRoomS]] = None
     patch_histories: Optional[List[RedisChatHistoryPatchS]] = None
     user_profiles: Optional[List[RedisUserProfileByRoomS]] = None
+    pong: Optional[bool] = None
 
 
 class ChatReceiveFormS(BaseModel):

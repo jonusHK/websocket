@@ -293,6 +293,7 @@ export default {
                                 }
                             }
                         }
+                    } else if (json.type === 'ping') { 
                     } else {
                         // type => message, file, invite, terminate
                         if (_.includes(['invite', 'terminate'], json.type) === true) {

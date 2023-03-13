@@ -6,7 +6,7 @@ from server.core.enums import IntValueEnum
 from server.core.externals.redis.mixin import (
     SortedSetCollectionMixin, SetCollectionMixin, HashCollectionMixin, ScanMixin
 )
-from server.models import S3Media, UserProfileImage, ChatHistoryFile, UserProfile
+from server.models import S3Media, UserProfileImage, ChatHistoryFile, UserProfile, ChatHistory
 
 
 class RedisFileBaseS(BaseModel):
@@ -142,6 +142,25 @@ class RedisChatHistoryByRoomS(BaseModel):
     timestamp: float | int
     date: str
     is_active: bool
+
+    @classmethod
+    async def from_model(cls, model: ChatHistory):
+        assert hasattr(model, 'user_profile_mapping'), 'Must have `user_profile_mapping` attr.'
+        return cls(
+            id=model.id,
+            redis_id=model.redis_id,
+            user_profile_id=model.user_profile_id,
+            type=model.type.name.lower(),
+            files=await RedisChatHistoryFileS.generate_files_schema(
+                model.files, presigned=True
+            ),
+            read_user_ids=[
+                m.user_profile_id for m in getattr(model, 'user_profile_mapping') if m.is_read
+            ],
+            timestamp=model.created.timestamp(),
+            date=model.created.date().isoformat(),
+            is_active=model.is_active
+        )
 
 
 class RedisChatRoomInfoS(BaseModel):
