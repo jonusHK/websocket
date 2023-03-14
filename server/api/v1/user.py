@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload, joinedload
 
 from server.api import ExceptionHandlerRoute
-from server.api.common import AuthValidator, RedisHandler
+from server.api.common import AuthValidator, AsyncRedisHandler, get_async_redis_handler
 from server.core.authentications import SessionData, backend, cookie, verifier
 from server.core.enums import ProfileImageType, RelationshipType, ResponseCode, IntValueEnum, FollowType
 from server.core.exceptions import ClassifiableException
@@ -32,9 +32,13 @@ router = APIRouter(route_class=ExceptionHandlerRoute)
     '/signup',
     response_model=UserS,
     response_model_include={'id', 'uid'},
-    status_code=status.HTTP_201_CREATED
+    status_code=status.HTTP_201_CREATED,
 )
-async def signup(user_s: UserCreateS, session: AsyncSession = Depends(get_async_session)):
+async def signup(
+    user_s: UserCreateS,
+    session: AsyncSession = Depends(get_async_session),
+    redis_handler: AsyncRedisHandler = Depends(get_async_redis_handler)
+):
     error_code = None
     if not user_s.email:
         error_code = ResponseCode.INVALID_UID
@@ -103,26 +107,22 @@ async def signup(user_s: UserCreateS, session: AsyncSession = Depends(get_async_
     profile_images: List[UserProfileImage] = user_profile.images
 
     # Redis 데이터 추가
-    redis_hdr = RedisHandler()
-    try:
-        await RedisFollowingsByUserProfileS.sadd(
-            await redis_hdr.redis,
-            user_profile_id,
-            RedisFollowingsByUserProfileS.schema(
-                id=user_profile_id,
-                identity_id=user_profile.identity_id,
-                nickname=user_profile.nickname,
-                type=relationship.type.name.lower(),
-                favorites=relationship.favorites,
-                is_hidden=relationship.is_hidden,
-                is_forbidden=relationship.is_forbidden,
-                files=await RedisUserImageFileS.generate_files_schema(
-                    [i for i in profile_images if i.is_default]
-                )
+    await RedisFollowingsByUserProfileS.sadd(
+        await redis_handler.redis,
+        user_profile_id,
+        RedisFollowingsByUserProfileS.schema(
+            id=user_profile_id,
+            identity_id=user_profile.identity_id,
+            nickname=user_profile.nickname,
+            type=relationship.type.name.lower(),
+            favorites=relationship.favorites,
+            is_hidden=relationship.is_hidden,
+            is_forbidden=relationship.is_forbidden,
+            files=await RedisUserImageFileS.generate_files_schema(
+                [i for i in profile_images if i.is_default]
             )
         )
-    finally:
-        await redis_hdr.close()
+    )
 
     return UserS.from_orm(user)
 
@@ -320,9 +320,9 @@ async def create_relationship(
     other_profile_id: int,
     relation_type: int = Body(embed=True, default=RelationshipType.FRIEND.value),
     user_session: UserSession = Depends(verifier),
-    session=Depends(get_async_session)
+    session=Depends(get_async_session),
+    redis_handler: AsyncRedisHandler = Depends(get_async_redis_handler)
 ):
-    redis_hdr = RedisHandler()
     crud_user_profile = UserProfileCRUD(session)
     crud_relationship = UserRelationshipCRUD(session)
 
@@ -364,26 +364,23 @@ async def create_relationship(
     await session.commit()
     await session.refresh(relationship)
 
-    try:
-        # Redis 데이터 추가
-        await RedisFollowingsByUserProfileS.sadd(
-            await redis_hdr.redis,
-            user_profile_id,
-            RedisFollowingsByUserProfileS.schema(
-                id=other_profile_id,
-                identity_id=other_profile.identity_id,
-                nickname=other_profile.get_nickname_by_other(user_profile_id),
-                type=relationship.type.name.lower(),
-                favorites=relationship.favorites,
-                is_hidden=relationship.is_hidden,
-                is_forbidden=relationship.is_forbidden,
-                files=await RedisUserImageFileS.generate_files_schema(
-                    [i for i in other_profile_images if i.is_default]
-                )
+    # Redis 데이터 추가
+    await RedisFollowingsByUserProfileS.sadd(
+        await redis_handler.redis,
+        user_profile_id,
+        RedisFollowingsByUserProfileS.schema(
+            id=other_profile_id,
+            identity_id=other_profile.identity_id,
+            nickname=other_profile.get_nickname_by_other(user_profile_id),
+            type=relationship.type.name.lower(),
+            favorites=relationship.favorites,
+            is_hidden=relationship.is_hidden,
+            is_forbidden=relationship.is_forbidden,
+            files=await RedisUserImageFileS.generate_files_schema(
+                [i for i in other_profile_images if i.is_default]
             )
         )
-    finally:
-        await redis_hdr.close()
+    )
 
     return UserRelationshipS.from_orm(relationship)
 
@@ -394,7 +391,8 @@ async def update_relationship(
     other_profile_id: int,
     data: UserRelationshipUpdateS,
     user_session: UserSession = Depends(verifier),
-    session=Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    redis_handler: AsyncRedisHandler = Depends(get_async_redis_handler)
 ):
     crud = UserRelationshipCRUD(session)
 
@@ -416,50 +414,46 @@ async def update_relationship(
             .selectinload(UserProfile.images)
         ])
 
-    redis_hdr = RedisHandler()
-    try:
-        async with await redis_hdr.lock(
-            key=RedisFollowingsByUserProfileS.get_lock_key(user_profile_id)
-        ):
-            followings_redis: List[RedisFollowingByUserProfileS] = (
-                await RedisFollowingsByUserProfileS.smembers(await redis_hdr.redis, user_profile_id)
-            )
-            duplicated_following_redis: List[RedisFollowingByUserProfileS] = [
-                f for f in followings_redis if f.id == other_profile_id
-            ]
+    async with await redis_handler.lock(
+        key=RedisFollowingsByUserProfileS.get_lock_key(user_profile_id)
+    ):
+        followings_redis: List[RedisFollowingByUserProfileS] = (
+            await RedisFollowingsByUserProfileS.smembers(await redis_handler.redis, user_profile_id)
+        )
+        duplicated_following_redis: List[RedisFollowingByUserProfileS] = [
+            f for f in followings_redis if f.id == other_profile_id
+        ]
 
-            if duplicated_following_redis:
-                async with await redis_hdr.pipeline() as pipe:
-                    pipe = await RedisFollowingsByUserProfileS.srem(pipe, user_profile_id, *duplicated_following_redis)
-                    following_redis = duplicated_following_redis[-1]
-                    for k, v in values.items():
-                        if k == UserRelationship.type.key:
-                            setattr(following_redis, k, v.name.lower())
-                        elif k == UserRelationship.other_profile_nickname.key:
-                            setattr(following_redis, 'nickname', v)
-                        else:
-                            setattr(following_redis, k, v)
-                    pipe = await RedisFollowingsByUserProfileS.sadd(pipe, user_profile_id, following_redis)
-                    await pipe.execute()
-            else:
-                await RedisFollowingsByUserProfileS.sadd(
-                    await redis_hdr.redis,
-                    user_profile_id,
-                    RedisFollowingsByUserProfileS.schema(
-                        id=other_profile_id,
-                        identity_id=following_db.other_profile.identity_id,
-                        nickname=following_db.other_profile.nickname,
-                        type=following_db.type.name.lower(),
-                        favorites=following_db.favorites,
-                        is_hidden=following_db.is_hidden,
-                        is_forbidden=following_db.is_forbidden,
-                        files=await RedisUserImageFileS.generate_files_schema(
-                            [i for i in following_db.other_profile.images if i.is_default]
-                        )
+        if duplicated_following_redis:
+            async with await redis_handler.pipeline() as pipe:
+                pipe = await RedisFollowingsByUserProfileS.srem(pipe, user_profile_id, *duplicated_following_redis)
+                following_redis = duplicated_following_redis[-1]
+                for k, v in values.items():
+                    if k == UserRelationship.type.key:
+                        setattr(following_redis, k, v.name.lower())
+                    elif k == UserRelationship.other_profile_nickname.key:
+                        setattr(following_redis, 'nickname', v)
+                    else:
+                        setattr(following_redis, k, v)
+                pipe = await RedisFollowingsByUserProfileS.sadd(pipe, user_profile_id, following_redis)
+                await pipe.execute()
+        else:
+            await RedisFollowingsByUserProfileS.sadd(
+                await redis_handler.redis,
+                user_profile_id,
+                RedisFollowingsByUserProfileS.schema(
+                    id=other_profile_id,
+                    identity_id=following_db.other_profile.identity_id,
+                    nickname=following_db.other_profile.nickname,
+                    type=following_db.type.name.lower(),
+                    favorites=following_db.favorites,
+                    is_hidden=following_db.is_hidden,
+                    is_forbidden=following_db.is_forbidden,
+                    files=await RedisUserImageFileS.generate_files_schema(
+                        [i for i in following_db.other_profile.images if i.is_default]
                     )
                 )
-    finally:
-        await redis_hdr.close()
+            )
 
     return UserRelationshipS.from_orm(following_db)
 
@@ -469,7 +463,8 @@ async def delete_relationship(
     user_profile_id: int,
     other_profile_id: int,
     user_session: UserSession = Depends(verifier),
-    session=Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session),
+    redis_handler: AsyncRedisHandler = Depends(get_async_redis_handler)
 ):
     crud = UserRelationshipCRUD(session)
 
@@ -484,20 +479,16 @@ async def delete_relationship(
     )
     await session.commit()
 
-    redis_hdr = RedisHandler()
-    try:
-        followings_redis: List[RedisFollowingByUserProfileS] = (
-            await RedisFollowingsByUserProfileS.smembers(await redis_hdr.redis, user_profile_id)
+    followings_redis: List[RedisFollowingByUserProfileS] = (
+        await RedisFollowingsByUserProfileS.smembers(await redis_handler.redis, user_profile_id)
+    )
+    duplicated_following_redis: List[RedisFollowingByUserProfileS] = [
+        f for f in followings_redis if f.id == other_profile_id
+    ]
+    if duplicated_following_redis:
+        await RedisFollowingsByUserProfileS.srem(
+            await redis_handler.redis, user_profile_id, *duplicated_following_redis
         )
-        duplicated_following_redis: List[RedisFollowingByUserProfileS] = [
-            f for f in followings_redis if f.id == other_profile_id
-        ]
-        if duplicated_following_redis:
-            await RedisFollowingsByUserProfileS.srem(
-                await redis_hdr.redis, user_profile_id, *duplicated_following_redis
-            )
-    finally:
-        await redis_hdr.close()
 
     return {'success': True}
 
@@ -512,7 +503,7 @@ async def search_relationship(
     is_hidden: Optional[bool] = False,
     is_forbidden: Optional[bool] = False,
     user_session: UserSession = Depends(verifier),
-    session=Depends(get_async_session)
+    session: AsyncSession = Depends(get_async_session)
 ):
     crud_relationship = UserRelationshipCRUD(session)
 

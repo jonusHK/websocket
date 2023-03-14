@@ -1,7 +1,7 @@
 import asyncio
 from copy import deepcopy
 from datetime import datetime
-from typing import Iterable, List, Any, Optional, Callable, Coroutine, Tuple, Awaitable
+from typing import Iterable, List, Any, Optional, Callable, Coroutine, Tuple, Awaitable, AsyncGenerator
 from uuid import UUID
 
 from aioredis.client import Pipeline, Redis, PubSub
@@ -75,7 +75,7 @@ class AuthValidator:
         return user_profile
 
 
-class RedisHandler:
+class AsyncRedisHandler:
 
     RETRY_COUNT = 5
     RETRY_DELAY = 0.2
@@ -98,6 +98,13 @@ class RedisHandler:
             redis_module = self.get_redis_module(**kwargs)
             redis_coro = self.generate_primary_redis(redis_module.connections)
         self._redis_coro = redis_coro
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, type_, value, traceback):
+        task = asyncio.get_event_loop().create_task(self.close())
+        await asyncio.shield(task)
 
     @property
     async def redis(self):
@@ -126,6 +133,11 @@ class RedisHandler:
         if not self._redis:
             raise RuntimeError('Redis connection not initialized.')
         await self._redis.close()
+
+    async def flushall(self):
+        if not self._redis:
+            raise RuntimeError('Redis connection not initialized.')
+        await self._redis.flushall()
 
     async def sync_room(
         self,
@@ -441,7 +453,7 @@ class RedisHandler:
         room_id: int,
         room: RedisChatRoomInfoS
     ):
-        async with await self.lock(key=RedisInfoByRoomS.get_lock_key(room_id)):
+        if room:
             room.add_connected_profile_id(user_profile_id)
             await RedisInfoByRoomS.hset(
                 await self.redis,
@@ -456,7 +468,7 @@ class RedisHandler:
         room_id: int,
         room: RedisChatRoomInfoS
     ):
-        async with await self.lock(key=RedisInfoByRoomS.get_lock_key(room_id)):
+        if room:
             room.connected_profile_ids = [
                 profile_id for profile_id in room.connected_profile_ids
                 if profile_id != user_profile_id
@@ -576,17 +588,16 @@ class WebSocketHandler:
         e: Optional[Exception] = None
     ):
         assert code or e, 'code or e must be provided.'
-        if self.connect_ok():
-            try:
-                kwargs = {}
-                if code:
-                    kwargs['code'] = code
-                    kwargs['reason'] = reason
-                elif e:
-                    kwargs = self.code_reason(e)
-                await self.ws.close(**kwargs)
-            except RuntimeError:
-                pass
+        try:
+            kwargs = {}
+            if code:
+                kwargs['code'] = code
+                kwargs['reason'] = reason
+            elif e:
+                kwargs = self.code_reason(e)
+            await self.ws.close(**kwargs)
+        except RuntimeError:
+            pass
 
     @classmethod
     def self_disconnected(cls, e: Exception):
@@ -597,3 +608,8 @@ class WebSocketHandler:
                 and e.code in (status.WS_1000_NORMAL_CLOSURE, status.WS_1001_GOING_AWAY)
             )
         )
+
+
+async def get_async_redis_handler() -> AsyncGenerator[AsyncRedisHandler, None]:
+    async with AsyncRedisHandler() as handler:
+        yield handler
