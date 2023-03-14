@@ -1,12 +1,7 @@
-import ssl
 import time
-from copy import deepcopy
-from typing import Optional, List
+from typing import List
 
 import aioredis
-import aioredis_cluster
-from aioredis_cluster.typedef import CommandsFactory
-from rediscluster import RedisCluster as SyncRedisCluster
 
 from server.db.databases import settings
 
