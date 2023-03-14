@@ -1,7 +1,7 @@
 import asyncio
 from copy import deepcopy
 from datetime import datetime
-from typing import Iterable, List, Any, Optional, Callable, Coroutine, Tuple, Awaitable, AsyncGenerator
+from typing import Iterable, List, Any, Optional, Callable, Coroutine, Tuple, AsyncGenerator
 from uuid import UUID
 
 from aioredis.client import Pipeline, Redis, PubSub
@@ -81,6 +81,7 @@ class AsyncRedisHandler:
     RETRY_DELAY = 0.2
 
     _redis = None
+    _init_dict = None
 
     @classmethod
     async def generate_primary_redis(cls, connections: List[Redis]):
@@ -93,11 +94,21 @@ class AsyncRedisHandler:
     def get_redis_module(**kwargs):
         return AioRedis(**kwargs)
 
-    def __init__(self, redis_coro: Optional[Awaitable[Redis]] = None, **kwargs):
-        if redis_coro is None:
-            redis_module = self.get_redis_module(**kwargs)
-            redis_coro = self.generate_primary_redis(redis_module.connections)
-        self._redis_coro = redis_coro
+    async def _connect_redis(self, **kwargs):
+        module = self.get_redis_module(**kwargs)
+        redis = await self.generate_primary_redis(module.get_connections())
+        if not redis:
+            for _ in range(self.RETRY_COUNT):
+                redis = await self.generate_primary_redis(module.get_connections(refresh=True))
+                if redis:
+                    return redis
+            raise ConnectionError('No connected master node for redis.')
+        return redis
+
+    def __init__(self, redis: Optional[Redis] = None, **kwargs):
+        self._init_dict = kwargs
+        if redis:
+            self._redis = redis
 
     async def __aenter__(self):
         return self
@@ -108,14 +119,9 @@ class AsyncRedisHandler:
 
     @property
     async def redis(self):
-        for _ in range(self.RETRY_COUNT):
-            try:
-                if not self._redis:
-                    self._redis = await self._redis_coro
-                return self._redis
-            except ConnectionError:
-                await asyncio.sleep(self.RETRY_DELAY)
-        raise ConnectionError('No connected master node for redis.')
+        if not self._redis:
+            self._redis = await self._connect_redis(**self._init_dict)
+        return self._redis
 
     async def pipeline(self):
         redis = await self.redis
