@@ -1,11 +1,14 @@
 import asyncio
+import os
 import uuid
 from datetime import datetime, timedelta
 from typing import AsyncGenerator
 
+import boto3
 import pytest
 from fastapi.encoders import jsonable_encoder
 from httpx import AsyncClient
+from moto import mock_s3
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker, selectinload
 
@@ -90,6 +93,19 @@ async def redis_handler():
 async def client():
     async with AsyncClient(app=app, base_url=base_url) as client:
         yield client
+
+
+@pytest.fixture
+def s3_client():
+    with mock_s3():
+        conn = boto3.client('s3')
+        yield conn
+
+
+@pytest.fixture
+def s3_bucket(s3_client):
+    s3_client.create_bucket(Bucket=settings.aws_storage_bucket_name)
+    yield
 
 
 async def create_test_user_db(
