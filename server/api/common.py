@@ -24,6 +24,7 @@ from server.core.externals.redis.schemas import (
 )
 from server.core.utils import async_iter
 from server.crud.service import ChatRoomCRUD, ChatRoomUserAssociationCRUD
+from server.db.databases import settings
 from server.models import (
     User, ChatRoomUserAssociation, UserProfile, UserSession, ChatRoom
 )
@@ -96,14 +97,7 @@ class AsyncRedisHandler:
 
     async def _connect_redis(self, **kwargs):
         module = self.get_redis_module(**kwargs)
-        redis = await self.generate_primary_redis(module.get_connections())
-        if not redis:
-            for _ in range(self.RETRY_COUNT):
-                redis = await self.generate_primary_redis(module.get_connections(refresh=True))
-                if redis:
-                    return redis
-            raise ConnectionError('No connected master node for redis.')
-        return redis
+        return await self.generate_primary_redis(module.get_connections())
 
     def __init__(self, redis: Optional[Redis] = None, **kwargs):
         self._init_dict = kwargs
@@ -136,14 +130,13 @@ class AsyncRedisHandler:
         return redis.pubsub()
 
     async def close(self):
-        if not self._redis:
-            raise RuntimeError('Redis connection not initialized.')
-        await self._redis.close()
+        if self._redis:
+            await self._redis.close()
 
-    async def flushall(self):
-        if not self._redis:
-            raise RuntimeError('Redis connection not initialized.')
-        await self._redis.flushall()
+    async def _flushall(self):
+        assert settings.debug
+        redis = await self.redis
+        await redis.flushall()
 
     async def sync_room(
         self,

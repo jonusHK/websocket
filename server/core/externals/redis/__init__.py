@@ -11,12 +11,8 @@ class AioRedis:
     RETRY_COUNT = 5
     RETRY_DELAY = 0.2
 
-    _connections = []
-
-    def get_connections(self, refresh=False):
-        if self._connections and not refresh:
-            return self._connections
-
+    def get_connections(self):
+        connections = []
         for _ in range(self.RETRY_COUNT):
             for ep in self.endpoint:
                 try:
@@ -30,9 +26,9 @@ class AioRedis:
                 except:
                     time.sleep(self.RETRY_DELAY)
                 else:
-                    self._connections.append(conn)
-            if self._connections:
-                return self._connections
+                    connections.append(conn)
+            if connections:
+                return connections
         raise ConnectionError('Failed to connect Redis.')
 
     def __init__(

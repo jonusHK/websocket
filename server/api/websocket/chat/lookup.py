@@ -79,12 +79,12 @@ class LookUpHandler(ChatHandler):
                             user_profile_id=user_profile_id
                         ) for h in create_target_db
                     ])
-                    await self.session.commit()
                 if update_target_db:
                     await crud_history_user_mapping.bulk_update([
                         dict(id=m.id, is_read=True) for m in update_target_db
                     ])
-                    await self.session.commit()
+
+                await self.session.commit()
 
                 migrated_chat_histories_redis = [
                     await RedisChatHistoryByRoomS.from_model(m)
@@ -92,7 +92,6 @@ class LookUpHandler(ChatHandler):
                 ]
         if migrated_chat_histories_redis:
             chat_histories_redis.extend(migrated_chat_histories_redis)
-        chat_histories_redis.sort(key=lambda x: x.timestamp)
 
         self._result = chat_histories_redis
         return self._result
