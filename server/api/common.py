@@ -145,9 +145,14 @@ class AsyncRedisHandler:
         pipe: Optional[Pipeline] = None,
         lock=True, raise_exception=False
     ) -> Tuple[RedisChatRoomInfoS, Pipeline | None]:
+
+        async def _get_redis():
+            room_redis: RedisChatRoomInfoS = await RedisInfoByRoomS.hgetall(await self.redis, room_id)
+            return room_redis
+
         async def _action():
             callback_pipe = None
-            room_redis: RedisChatRoomInfoS = await RedisInfoByRoomS.hgetall(await self.redis, room_id)
+            room_redis: RedisChatRoomInfoS = await _get_redis()
             if not room_redis:
                 room_db: ChatRoom = await crud.get(
                     conditions=(ChatRoom.id == room_id,),
@@ -175,6 +180,8 @@ class AsyncRedisHandler:
                     else:
                         callback_pipe = await _transaction(pipe)
 
+                    room_redis = await _get_redis()
+
                 elif raise_exception:
                     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
             return room_redis, callback_pipe
@@ -193,12 +200,16 @@ class AsyncRedisHandler:
     ) -> Tuple[List[RedisChatRoomByUserProfileS], Pipeline | None]:
         now = datetime.now().astimezone()
 
-        async def _action():
-            callback_pipeline = None
+        async def _get_redis():
             rooms_by_profile_redis: List[RedisChatRoomByUserProfileS] = \
                 await getattr(
                     RedisChatRoomsByUserProfileS,
                     'zrevrange' if reverse else 'zrange')(await self.redis, user_profile_id)
+            return rooms_by_profile_redis
+
+        async def _action():
+            callback_pipeline = None
+            rooms_by_profile_redis: List[RedisChatRoomByUserProfileS] = await _get_redis()
             if not rooms_by_profile_redis:
                 room_by_profile_db: List[ChatRoomUserAssociation] = await crud.list(
                     conditions=(ChatRoomUserAssociation.user_profile_id == user_profile_id,)
@@ -219,6 +230,8 @@ class AsyncRedisHandler:
                     else:
                         callback_pipeline = await _transaction(pipe)
 
+                    rooms_by_profile_redis = await _get_redis()
+
                 elif raise_exception:
                     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
             return rooms_by_profile_redis, callback_pipeline
@@ -238,13 +251,17 @@ class AsyncRedisHandler:
     ) -> Tuple[RedisChatRoomByUserProfileS, Pipeline | None]:
         now = datetime.now().astimezone()
 
-        async def _action():
-            callback_pipe = None
+        async def _get_redis():
             rooms_by_profile_redis: List[RedisChatRoomByUserProfileS] = \
                 await RedisChatRoomsByUserProfileS.zrevrange(await self.redis, user_profile_id)
             room_by_profile_redis: RedisChatRoomByUserProfileS = next(
                 (r for r in rooms_by_profile_redis if r.id == room_id), None
             )
+            return room_by_profile_redis
+
+        async def _action():
+            callback_pipe = None
+            room_by_profile_redis: RedisChatRoomByUserProfileS = await _get_redis()
             if not room_by_profile_redis:
                 room_by_profile_db: ChatRoomUserAssociation = await crud.get(
                     conditions=(
@@ -269,6 +286,8 @@ class AsyncRedisHandler:
                     else:
                         callback_pipe = await _transaction(pipe)
 
+                    room_by_profile_redis = await _get_redis()
+
                 elif raise_exception:
                     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
             return room_by_profile_redis, callback_pipe
@@ -286,10 +305,15 @@ class AsyncRedisHandler:
         pipe: Optional[Pipeline] = None,
         lock=True, raise_exception=False
     ) -> Tuple[List[RedisUserProfileByRoomS], Pipeline | None]:
-        async def _action():
-            callback_pipe = None
+
+        async def _get_redis():
             profiles_by_room_redis: List[RedisUserProfileByRoomS] = \
                 await RedisUserProfilesByRoomS.smembers(await self.redis, (room_id, user_profile_id))
+            return profiles_by_room_redis
+
+        async def _action():
+            callback_pipe = None
+            profiles_by_room_redis: List[RedisUserProfileByRoomS] = await _get_redis()
             if not profiles_by_room_redis:
                 room_user_mapping: List[ChatRoomUserAssociation] = \
                     await crud.list(
@@ -323,6 +347,8 @@ class AsyncRedisHandler:
                     else:
                         callback_pipe = await _transaction(pipe)
 
+                    profiles_by_room_redis = await _get_redis()
+
                 elif raise_exception:
                     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
             return profiles_by_room_redis, callback_pipe
@@ -340,13 +366,18 @@ class AsyncRedisHandler:
         pipe: Optional[Pipeline] = None,
         lock=True, raise_exception=False,
     ) -> Tuple[RedisUserProfileByRoomS, Pipeline | None]:
-        async def _action():
-            callback_pipeline = None
+
+        async def _get_redis():
             user_profiles_redis: List[RedisUserProfileByRoomS] = \
                 await RedisUserProfilesByRoomS.smembers(await self.redis, (room_id, user_profile_id))
             user_profile_redis: RedisUserProfileByRoomS = next(
                 (p for p in user_profiles_redis if p.id == user_profile_id), None
             )
+            return user_profile_redis
+
+        async def _action():
+            callback_pipeline = None
+            user_profile_redis: RedisUserProfileByRoomS = await _get_redis()
             if not user_profile_redis:
                 room_user_mapping: List[ChatRoomUserAssociation] = \
                     await crud.list(
@@ -377,6 +408,8 @@ class AsyncRedisHandler:
                                 await (await _transaction(_pipe)).execute()
                         else:
                             callback_pipeline = await _transaction(pipe)
+
+                        user_profile_redis = await _get_redis()
 
                 elif raise_exception:
                     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
