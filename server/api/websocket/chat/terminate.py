@@ -6,11 +6,12 @@ from fastapi import HTTPException
 from sqlalchemy.orm import joinedload
 from starlette import status
 
+from server.api.common import AsyncRedisHandler, WebSocketHandler
 from server.api.websocket.chat import ChatHandler
 from server.core.enums import SendMessageType, ChatHistoryType
 from server.core.externals.redis.schemas import RedisUserProfilesByRoomS, RedisChatRoomsByUserProfileS, \
     RedisChatRoomByUserProfileS, RedisUserProfileByRoomS, RedisInfoByRoomS, RedisChatHistoryByRoomS, \
-    RedisChatHistoriesByRoomS
+    RedisChatHistoriesByRoomS, RedisChatRoomInfoS
 from server.crud.service import ChatRoomUserAssociationCRUD
 from server.models import ChatRoomUserAssociation, ChatRoom
 
@@ -22,13 +23,13 @@ class TerminateHandler(ChatHandler):
     async def handle(self, **kwargs):
         crud_room_user_mapping = ChatRoomUserAssociationCRUD(self.session)
 
-        redis_handler = kwargs.get('redis_handler')
-        ws_handler = kwargs.get('ws_handler')
-        user_profile_id = kwargs.get('user_profile_id')
-        room_id = kwargs.get('room_id')
-        room_redis = kwargs.get('room_redis')
-        user_profile_redis = kwargs.get('user_profile_redis')
-        now = datetime.now().astimezone()
+        redis_handler: AsyncRedisHandler = kwargs.get('redis_handler')
+        ws_handler: WebSocketHandler = kwargs.get('ws_handler')
+        user_profile_id: int = kwargs.get('user_profile_id')
+        room_id: int = kwargs.get('room_id')
+        room_redis: RedisChatRoomInfoS = kwargs.get('room_redis')
+        user_profile_redis: RedisUserProfileByRoomS = kwargs.get('user_profile_redis')
+        now: datetime = datetime.now().astimezone()
 
         room_db: ChatRoom | None = None
         try:

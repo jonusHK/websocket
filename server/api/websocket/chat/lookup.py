@@ -2,6 +2,7 @@ from typing import List
 
 from sqlalchemy.orm import selectinload, joinedload
 
+from server.api.common import AsyncRedisHandler
 from server.api.websocket.chat import ChatHandler
 from server.core.enums import SendMessageType
 from server.core.externals.redis.schemas import RedisChatHistoryByRoomS, RedisChatHistoriesByRoomS
@@ -17,9 +18,9 @@ class LookUpHandler(ChatHandler):
         crud_chat_history = ChatHistoryCRUD(self.session)
         crud_history_user_mapping = ChatHistoryUserAssociationCRUD(self.session)
 
-        redis_handler = kwargs.get('redis_handler')
-        user_profile_id = kwargs.get('user_profile_id')
-        room_id = kwargs.get('room_id')
+        redis_handler: AsyncRedisHandler = kwargs.get('redis_handler')
+        user_profile_id: int = kwargs.get('user_profile_id')
+        room_id: int = kwargs.get('room_id')
 
         if self.receive.data.offset is None or self.receive.data.limit is None:
             self.logger.warning("Not exists offset or limit for page.")

@@ -3,6 +3,7 @@ from typing import List, Dict, Any
 
 from sqlalchemy.orm import selectinload
 
+from server.api.common import AsyncRedisHandler
 from server.api.websocket.chat import ChatHandler
 from server.core.enums import SendMessageType
 from server.core.externals.redis.schemas import RedisChatHistoryPatchS, RedisChatHistoryByRoomS, \
@@ -18,8 +19,8 @@ class PatchHandler(ChatHandler):
     async def handle(self, **kwargs):
         crud_chat_history = ChatHistoryCRUD(self.session)
 
-        redis_handler = kwargs.get('redis_handler')
-        room_id = kwargs.get('room_id')
+        redis_handler: AsyncRedisHandler = kwargs.get('redis_handler')
+        room_id: int = kwargs.get('room_id')
 
         if not self.receive.data.history_redis_ids:
             self.logger.warning("Not exists chat history redis ids.")

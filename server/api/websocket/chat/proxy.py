@@ -1,5 +1,6 @@
 from fastapi.encoders import jsonable_encoder
 
+from server.api.common import AsyncRedisHandler, WebSocketHandler
 from server.api.websocket.chat import ChatHandler
 from server.api.websocket.chat.file import FileHandler
 from server.api.websocket.chat.invite import InviteHandler
@@ -46,9 +47,9 @@ class ChatHandlerProxy(ChatHandler):
         if not await self.execute(**kwargs):
             return
 
-        ws_handler = kwargs.get('ws_handler')
-        redis_handler = kwargs.get('redis_handler')
-        room_id = kwargs.get('room_id')
+        ws_handler: WebSocketHandler = kwargs.get('ws_handler')
+        redis_handler: AsyncRedisHandler = kwargs.get('redis_handler')
+        room_id: int = kwargs.get('room_id')
 
         response_s, send_type = self.handler.send_response
         if send_type == SendMessageType.UNICAST:
