@@ -84,12 +84,12 @@ class InviteHandler(ChatHandler):
                         await pipe.execute()
 
         add_profile_ids: Set[int] = set(target_profile_ids)
-        profile_ids: Set[int] = add_profile_ids - current_profile_ids
-        if not profile_ids:
+        invited_profile_ids: Set[int] = add_profile_ids - current_profile_ids
+        if not invited_profile_ids:
             return
-        profiles: List[UserProfile] = await crud_user_profile.list(
+        invited_profiles: List[UserProfile] = await crud_user_profile.list(
             conditions=(
-                UserProfile.id.in_(profile_ids),
+                UserProfile.id.in_(invited_profile_ids),
                 UserProfile.is_active == 1
             ),
             options=[
@@ -99,16 +99,18 @@ class InviteHandler(ChatHandler):
         )
         # 초대 받은 유저에 대해 DB 방 연동
         await crud_room_user_mapping.bulk_create([
-            dict(room_id=room_id, user_profile_id=p.id) for p in profiles
+            dict(room_id=room_id, user_profile_id=p.id) for p in invited_profiles
         ])
         await self.session.commit()
 
-        total_profiles: List[UserProfile] = current_profiles + profiles
-        profile_images_redis: List[RedisUserImageFileS] = (
-            await RedisUserImageFileS.generate_profile_images_schema(profiles, only_default=True)
+        total_profiles: List[UserProfile] = current_profiles + invited_profiles
+        invited_profile_images_redis: List[RedisUserImageFileS] = (
+            await RedisUserImageFileS.generate_profile_images_schema(
+                invited_profiles, only_default=True
+            )
         )
         total_profile_images_redis: List[RedisUserImageFileS] = (
-                current_profile_images_redis + profile_images_redis
+                current_profile_images_redis + invited_profile_images_redis
         )
 
         # 방 정보 업데이트
@@ -122,7 +124,7 @@ class InviteHandler(ChatHandler):
         for target_profile in total_profiles:
             # 각 방에 있는 유저 기준으로 데이터 업데이트
             async with await redis_handler.lock(
-                    key=RedisUserProfilesByRoomS.get_lock_key((room_id, target_profile.id))
+                key=RedisUserProfilesByRoomS.get_lock_key((room_id, target_profile.id))
             ):
                 await RedisUserProfilesByRoomS.sadd(
                     await redis_handler.redis, (room_id, target_profile.id), *[
@@ -134,27 +136,30 @@ class InviteHandler(ChatHandler):
                                 im for im in total_profile_images_redis
                                 if im.user_profile_id == p.id
                             ]
-                        ) for p in (total_profiles if target_profile in profiles else profiles)
+                        ) for p in (
+                            total_profiles if target_profile in invited_profiles
+                            else invited_profiles
+                        )
                     ]
                 )
-            # 각 유저 기준으로 방 정보 없다면 생성
+
+        for p in invited_profiles:
+            # 방 정보 생성
             async with await redis_handler.lock(
-                    key=RedisChatRoomsByUserProfileS.get_lock_key(target_profile.id)
+                key=RedisChatRoomsByUserProfileS.get_lock_key(p.id)
             ):
-                _room_by_profile_redis = await RedisChatRoomsByUserProfileS.zrevrange(
-                    await redis_handler.redis, user_profile_id
-                )
-                if not _room_by_profile_redis:
+                rooms_by_profile_redis = await RedisChatRoomsByUserProfileS.zrange(await redis_handler.redis, p.id)
+                room_by_profile_redis = next((r for r in rooms_by_profile_redis if r.id == room_id), None)
+                if not room_by_profile_redis:
                     await RedisChatRoomsByUserProfileS.zadd(
-                        await redis_handler.redis, target_profile.id, RedisChatRoomByUserProfileS(
+                        await redis_handler.redis, p.id, RedisChatRoomByUserProfileS(
                             id=room_id, unread_msg_cnt=0, timestamp=now.timestamp()
-                        )
-                    )
+                        ))
         # 대화방 초대 메시지 전송
-        if len(profiles) > 1:
-            target_msg = '님과 '.join([p.nickname for p in profiles])
+        if len(invited_profiles) > 1:
+            target_msg = '님과 '.join([p.nickname for p in invited_profiles])
         else:
-            target_msg = profiles[0].nickname
+            target_msg = invited_profiles[0].nickname
 
         chat_history_redis: RedisChatHistoryByRoomS = RedisChatHistoryByRoomS(
             redis_id=uuid.uuid4().hex,
