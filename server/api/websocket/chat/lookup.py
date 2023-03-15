@@ -94,6 +94,8 @@ class LookUpHandler(ChatHandler):
         if migrated_chat_histories_redis:
             chat_histories_redis.extend(migrated_chat_histories_redis)
 
+        chat_histories_redis.sort(key=lambda x: x.timestamp)
+
         self._result = chat_histories_redis
         return self._result
 
