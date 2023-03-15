@@ -12,7 +12,7 @@ from server.crud.service import ChatRoomCRUD, ChatHistoryCRUD
 from server.crud.user import UserProfileCRUD
 from server.models import ChatRoom, UserProfile, ChatHistory
 from server.schemas.chat import ChatReceiveFormS, ChatReceiveDataS
-from server.tests.conftest import create_test_user, create_test_room
+from server.tests.conftest import create_test_user_db, create_test_room_db
 
 logger = logging.getLogger('test')
 
@@ -30,7 +30,7 @@ def generate_offset_limit(cnt: int, limit: int = 10):
         yield q * limit, r
 
 
-async def test_대화내용조회(db_setup, db_session, redis_handler):
+async def test_메시지조회(db_setup, db_session, redis_handler):
     now = datetime.now().astimezone()
 
     total_cnt = 100
@@ -40,8 +40,9 @@ async def test_대화내용조회(db_setup, db_session, redis_handler):
     crud_user_profile = UserProfileCRUD(db_session)
     crud_chat_history = ChatHistoryCRUD(db_session)
 
-    await create_test_user(db_session)
-    await create_test_room(db_session)
+    await create_test_user_db(db_session)
+    await create_test_room_db(db_session)
+    await db_session.commit()
 
     room: ChatRoom = await crud_room.get(conditions=(ChatRoom.id == 1,))
     user_profile: UserProfile = await crud_user_profile.get(conditions=(UserProfile.id == 1,))
