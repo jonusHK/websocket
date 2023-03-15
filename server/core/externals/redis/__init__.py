@@ -11,7 +11,7 @@ class AioRedis:
     RETRY_COUNT = 5
     RETRY_DELAY = 0.2
 
-    def _get_connections(self):
+    def get_connections(self):
         connections = []
         for _ in range(self.RETRY_COUNT):
             for ep in self.endpoint:
@@ -44,4 +44,3 @@ class AioRedis:
         self.encoding = encoding
         self.max_connections = max_connections
         self.decode_responses = decode_responses
-        self.connections = self._get_connections()

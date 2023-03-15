@@ -15,9 +15,6 @@ from server.core.externals.redis.schemas import RedisInfoByRoomS
 from server.core.responses import WebsocketJSONResponse
 from server.db.databases import settings, engine, Base
 
-logging.config.fileConfig("logging.conf", disable_existing_loggers=False)
-
-# app = FastAPI(root_path="/api/v1", default_response_class=WebsocketJSONResponse)
 app = FastAPI(default_response_class=WebsocketJSONResponse)
 
 if settings.backend_cors_origins:
@@ -48,6 +45,7 @@ async def on_startup():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
+    logging.config.fileConfig("logging.conf", disable_existing_loggers=False)
     log_level = logging.DEBUG if settings.debug else logging.INFO
     logging.basicConfig(level=log_level)
     logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
