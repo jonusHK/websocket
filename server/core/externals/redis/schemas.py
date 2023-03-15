@@ -146,6 +146,7 @@ class RedisChatHistoryByRoomS(BaseModel):
     @classmethod
     async def from_model(cls, model: ChatHistory):
         assert hasattr(model, 'user_profile_mapping'), 'Must have `user_profile_mapping` attr.'
+        assert hasattr(model, 'files'), 'Must have `files` attr.'
         return cls(
             id=model.id,
             redis_id=model.redis_id,
@@ -155,7 +156,7 @@ class RedisChatHistoryByRoomS(BaseModel):
                 model.files, presigned=True
             ),
             read_user_ids=[
-                m.user_profile_id for m in getattr(model, 'user_profile_mapping') if m.is_read
+                m.user_profile_id for m in model.user_profile_mapping if m.is_read
             ],
             timestamp=model.created.timestamp(),
             date=model.created.date().isoformat(),

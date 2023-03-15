@@ -4,10 +4,11 @@ from datetime import datetime
 from io import BytesIO
 from typing import List
 
+from server.api.common import AsyncRedisHandler
 from server.api.websocket.chat import ChatHandler
 from server.core.enums import SendMessageType, ChatHistoryType
 from server.core.externals.redis.schemas import RedisChatHistoryFileS, RedisChatHistoryByRoomS, \
-    RedisChatHistoriesByRoomS
+    RedisChatHistoriesByRoomS, RedisChatRoomInfoS, RedisUserProfileByRoomS
 from server.crud.service import ChatHistoryCRUD, ChatRoomUserAssociationCRUD
 from server.db.databases import settings
 from server.models import ChatHistory, ChatHistoryFile
@@ -22,12 +23,12 @@ class FileHandler(ChatHandler):
         crud_chat_history = ChatHistoryCRUD(self.session)
         crud_room_user_mapping = ChatRoomUserAssociationCRUD(self.session)
 
-        redis_handler = kwargs.get('redis_handler')
-        user_profile_id = kwargs.get('user_profile_id')
-        user_profiles_redis = kwargs.get('user_profiles_redis')
-        room_id = kwargs.get('room_id')
-        room_redis = kwargs.get('room_redis')
-        now = datetime.now().astimezone()
+        redis_handler: AsyncRedisHandler = kwargs.get('redis_handler')
+        user_profile_id: int = kwargs.get('user_profile_id')
+        user_profiles_redis: List[RedisUserProfileByRoomS] = kwargs.get('user_profiles_redis')
+        room_id: int = kwargs.get('room_id')
+        room_redis: RedisChatRoomInfoS = kwargs.get('room_redis')
+        now: datetime = datetime.now().astimezone()
 
         redis_id = uuid.uuid4().hex
         chat_history_db: ChatHistory = await crud_chat_history.create(
@@ -49,11 +50,11 @@ class FileHandler(ChatHandler):
             ) for f in self.receive.data.files
         ]
         async for o in ChatHistoryFile.files_to_models(
-                self.session,
-                converted_files,
-                root='chat_upload/',
-                uploaded_by_id=user_profile_id,
-                bucket_name=settings.aws_storage_bucket_name,
+            self.session,
+            converted_files,
+            root='chat_upload/',
+            uploaded_by_id=user_profile_id,
+            bucket_name=settings.aws_storage_bucket_name,
         ):
             o.chat_history_id = chat_history_db.id
             o.order = _idx

@@ -4,11 +4,12 @@ from typing import List, Set
 
 from sqlalchemy.orm import selectinload, joinedload
 
+from server.api.common import AsyncRedisHandler
 from server.api.websocket.chat import ChatHandler
 from server.core.enums import SendMessageType, ChatHistoryType
 from server.core.externals.redis.schemas import RedisChatHistoriesByRoomS, RedisChatHistoryByRoomS, \
     RedisChatRoomsByUserProfileS, RedisChatRoomByUserProfileS, RedisUserProfilesByRoomS, RedisInfoByRoomS, \
-    RedisUserImageFileS, RedisUserProfileByRoomS
+    RedisUserImageFileS, RedisUserProfileByRoomS, RedisChatRoomInfoS
 from server.crud.service import ChatRoomUserAssociationCRUD
 from server.crud.user import UserProfileCRUD
 from server.models import UserProfile, ChatRoomUserAssociation
@@ -22,12 +23,12 @@ class InviteHandler(ChatHandler):
         crud_room_user_mapping = ChatRoomUserAssociationCRUD(self.session)
         crud_user_profile = UserProfileCRUD(self.session)
 
-        redis_handler = kwargs.get('redis_handler')
-        user_profile_id = kwargs.get('user_profile_id')
-        user_profile_redis = kwargs.get('user_profile_redis')
-        room_id = kwargs.get('room_id')
-        room_redis = kwargs.get('room_redis')
-        now = datetime.now().astimezone()
+        redis_handler: AsyncRedisHandler = kwargs.get('redis_handler')
+        user_profile_id: int = kwargs.get('user_profile_id')
+        user_profile_redis: RedisUserProfileByRoomS = kwargs.get('user_profile_redis')
+        room_id: int = kwargs.get('room_id')
+        room_redis: RedisChatRoomInfoS = kwargs.get('room_redis')
+        now: datetime = datetime.now().astimezone()
 
         target_profile_ids: List[int] = self.receive.data.target_profile_ids
         if not target_profile_ids:

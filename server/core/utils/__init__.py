@@ -58,7 +58,22 @@ def validate_region(region):
 
 
 def get_formatted_phone(parsed_value: PhoneNumber, with_country=False, with_hyphen=False, raise_exception=False) -> str:
-    if parsed_value.is_valid_number():
+    is_valid = True
+    while not parsed_value.is_valid_number():
+        # 010 뒤 0 으로 시작하는 경우, is_valid_number = False 로 리턴되는 현상 대응
+        if (
+            parsed_value.region == 'KR'
+            and 9 <= len(str(parsed_value.national_number)) <= 10
+            and str(parsed_value.national_number).startswith('100')
+        ):
+            break
+
+        is_valid = False
+        if raise_exception:
+            raise ValueError('Invalid phone number.')
+        break
+
+    if is_valid:
         if with_country:
             # INTERNATIONAL -> +82 10-1234-5678, E164 -> +821086075857
             attr = 'INTERNATIONAL' if with_hyphen else 'E164'
@@ -68,8 +83,6 @@ def get_formatted_phone(parsed_value: PhoneNumber, with_country=False, with_hyph
             fmt = phonenumbers.PhoneNumberFormat.NATIONAL
         value = phonenumbers.format_number(parsed_value, fmt)
     else:
-        if raise_exception:
-            raise ValueError('Invalid phone number.')
         value = parsed_value.raw_input
 
     if not with_hyphen:

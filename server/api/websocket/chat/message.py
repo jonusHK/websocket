@@ -1,9 +1,12 @@
 import uuid
 from datetime import datetime
+from typing import List
 
+from server.api.common import AsyncRedisHandler
 from server.api.websocket.chat import ChatHandler
 from server.core.enums import SendMessageType, ChatHistoryType
-from server.core.externals.redis.schemas import RedisChatHistoryByRoomS, RedisChatHistoriesByRoomS
+from server.core.externals.redis.schemas import RedisChatHistoryByRoomS, RedisChatHistoriesByRoomS, RedisChatRoomInfoS, \
+    RedisUserProfileByRoomS
 from server.crud.service import ChatRoomUserAssociationCRUD
 
 
@@ -14,12 +17,12 @@ class MessageHandler(ChatHandler):
     async def handle(self, **kwargs):
         crud_room_user_mapping = ChatRoomUserAssociationCRUD(self.session)
 
-        redis_handler = kwargs.get('redis_handler')
-        user_profile_id = kwargs.get('user_profile_id')
-        room_id = kwargs.get('room_id')
-        room_redis = kwargs.get('room_redis')
-        user_profiles_redis = kwargs.get('user_profiles_redis')
-        now = datetime.now().astimezone()
+        redis_handler: AsyncRedisHandler = kwargs.get('redis_handler')
+        user_profile_id: int = kwargs.get('user_profile_id')
+        room_id: int = kwargs.get('room_id')
+        room_redis: RedisChatRoomInfoS = kwargs.get('room_redis')
+        user_profiles_redis: List[RedisUserProfileByRoomS] = kwargs.get('user_profiles_redis')
+        now: datetime = datetime.now().astimezone()
 
         # Redis 저장
         chat_history_redis: RedisChatHistoryByRoomS = RedisChatHistoryByRoomS(
