@@ -1,6 +1,7 @@
 import uuid
 
-from sqlalchemy import Column, BigInteger, String, ForeignKey, Text, Boolean, Integer, UniqueConstraint
+from sqlalchemy import Column, BigInteger, String, ForeignKey, Text, Boolean, Integer, UniqueConstraint, \
+    PrimaryKeyConstraint
 from sqlalchemy.orm import relationship
 
 from server.core.enums import ChatRoomType, ChatHistoryType
@@ -28,8 +29,9 @@ class ChatRoomUserAssociation(TimestampMixin, ConvertMixin, Base):
         UniqueConstraint('room_id', 'user_profile_id', name='unique association for both room_id and user_profile_id.'),
     )
 
-    room_id = Column(BigInteger, ForeignKey("chat_rooms.id", ondelete="CASCADE"), primary_key=True)
-    user_profile_id = Column(BigInteger, ForeignKey("user_profiles.id", ondelete="CASCADE"), primary_key=True)
+    id = Column(BigInteger, primary_key=True)
+    room_id = Column(BigInteger, ForeignKey("chat_rooms.id", ondelete="CASCADE"), index=True, nullable=False)
+    user_profile_id = Column(BigInteger, ForeignKey("user_profiles.id", ondelete="CASCADE"), index=True, nullable=False)
     room_name = Column(String(30), nullable=True)
 
     room = relationship("ChatRoom", back_populates="user_profiles")
@@ -74,9 +76,17 @@ class ChatHistoryFile(S3Media):
 # 채팅 내역을 읽을 유저들 간의 관계
 class ChatHistoryUserAssociation(ConvertMixin, Base):
     __tablename__ = "chat_history_user_association"
+    __table_args__ = (
+        UniqueConstraint(
+            'history_id',
+            'user_profile_id',
+            name='unique association for both history_id and user_profile_id.'
+        ),
+    )
 
-    history_id = Column(BigInteger, ForeignKey("chat_histories.id", ondelete="CASCADE"), primary_key=True)
-    user_profile_id = Column(BigInteger, ForeignKey("user_profiles.id", ondelete="CASCADE"), primary_key=True)
+    id = Column(BigInteger, primary_key=True)
+    history_id = Column(BigInteger, ForeignKey("chat_histories.id", ondelete="CASCADE"), index=True, nullable=False)
+    user_profile_id = Column(BigInteger, ForeignKey("user_profiles.id", ondelete="CASCADE"), index=True, nullable=False)
     is_read = Column(Boolean, default=True, nullable=False)
 
     history = relationship("ChatHistory", back_populates="user_profile_mapping")
