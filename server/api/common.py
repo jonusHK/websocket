@@ -20,7 +20,7 @@ from server.core.externals.redis.schemas import (
     RedisChatRoomByUserProfileS, RedisChatRoomsByUserProfileS, RedisUserProfilesByRoomS,
     RedisChatHistoriesByRoomS, RedisChatHistoriesToSyncS, RedisUserImageFileS,
     RedisUserProfileByRoomS, RedisChatHistoryByRoomS, RedisInfoByRoomS,
-    RedisChatRoomInfoS, RedisChatHistoryPatchS
+    RedisChatRoomInfoS, RedisChatHistoryPatchS, RedisChatHistoryToSyncS
 )
 from server.core.utils import async_iter
 from server.crud.service import ChatRoomCRUD, ChatRoomUserAssociationCRUD
@@ -395,7 +395,9 @@ class AsyncRedisHandler:
     ) -> Pipeline | None:
         async def _transaction(pipeline: Pipeline):
             pipeline = await RedisChatHistoriesByRoomS.zadd(pipeline, room_id, histories)
-            sync_histories: List[RedisChatHistoryByRoomS] = [h for h in histories if h.id]
+            sync_histories: List[RedisChatHistoryToSyncS] = [
+                RedisChatHistoryToSyncS(id=h.id) for h in histories if h.id
+            ]
             if sync_histories:
                 pipeline = await RedisChatHistoriesToSyncS.zadd(pipeline, room_id, sync_histories)
             return pipeline

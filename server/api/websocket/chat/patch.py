@@ -29,9 +29,9 @@ class PatchHandler(ChatHandler):
 
         # 업데이트 필요한 필드 확인
         update_fields = (ChatHistory.is_active.name,)
+        update_values: Dict[str, Any] = {}
         update_target_redis: List[RedisChatHistoryByRoomS] = []
         update_target_db: List[str] = []
-        update_values_db: Dict[str, Any] = {}
 
         async with await redis_handler.lock(key=RedisChatHistoriesByRoomS.get_lock_key(room_id)):
             chat_histories_redis: List[RedisChatHistoryByRoomS] = (
@@ -46,32 +46,32 @@ class PatchHandler(ChatHandler):
                     duplicated_histories_redis: List[RedisChatHistoryByRoomS] = [
                         h for h in chat_histories_redis if h.redis_id == redis_id
                     ]
-                    history_redis: RedisChatHistoryByRoomS = (
-                        duplicated_histories_redis and duplicated_histories_redis[0]
+                    history_redis: RedisChatHistoryByRoomS | None = (
+                        duplicated_histories_redis[0] if duplicated_histories_redis else None
                     )
-                    copied_history_redis: RedisChatHistoryByRoomS = (
+                    copied_history_redis: RedisChatHistoryByRoomS | None = (
                         history_redis and deepcopy(history_redis)
                     )
                     update_redis = False
                     for f in update_fields:
                         if getattr(self.receive.data, f) is None:
                             continue
-                        if duplicated_histories_redis:
-                            # 기존 데이터와 다른 경우 업데이트 설정
-                            if getattr(self.receive.data, f) != getattr(
-                                    duplicated_histories_redis[0], f
-                            ):
+
+                        update_values.update({
+                            f: getattr(self.receive.data, f)
+                        })
+                        if history_redis:
+                            # 기존 Redis 데이터와 다른 경우 업데이트 설정
+                            if getattr(self.receive.data, f) != getattr(history_redis, f):
                                 setattr(copied_history_redis, f, getattr(self.receive.data, f))
                                 update_redis = True
                         else:
-                            update_values_db.update({f: getattr(self.receive.data, f)})
+                            update_target_db.append(redis_id)
                     if update_redis:
                         update_target_redis.append(copied_history_redis)
                         pipe = await RedisChatHistoriesByRoomS.zrem(
                             pipe, room_id, *duplicated_histories_redis
                         )
-                    if update_values_db:
-                        update_target_db.append(redis_id)
                 # Redis 에 저장되어 있는 데이터 업데이트
                 if update_target_redis:
                     pipe = await redis_handler.update_histories_by_room(
@@ -91,7 +91,7 @@ class PatchHandler(ChatHandler):
         if update_target_db:
             await crud_chat_history.update(
                 conditions=(ChatHistory.redis_id.in_(update_target_db),),
-                **update_values_db
+                **update_values
             )
             await self.session.commit()
             updated_histories_db: List[ChatHistory] = await crud_chat_history.list(
