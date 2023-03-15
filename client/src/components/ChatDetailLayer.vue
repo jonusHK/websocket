@@ -9,7 +9,7 @@ export default {
     name: 'ChatDetailLayer',
     props: {
         chatRoom: Object,
-        chatRoomId: Number,
+        chatRoomId: Number
     },
     setup (props, { emit }) {
         const { proxy } = getCurrentInstance();
@@ -54,6 +54,7 @@ export default {
         const wsUrl = ref(`${VITE_SERVER_WEBSOCKET_HOST}/v1/chats/conversation/${state.loginProfileId}/${state.roomId}`);
         const isConnected = ref(false);
         const ws = ref(new WebSocket(wsUrl.value));
+        emit('chatDetailWebsocket', ws.value);
         const wsSend = function(data) {
             if (ws.value.readyState === WebSocket.OPEN) {
                 ws.value.send(JSON.stringify(data));
@@ -302,12 +303,12 @@ export default {
                         state.chatHistories.push(json.data.history);
                     }
 
-                    if (_.includes(['lookup', 'message', 'file', 'invite'], json.type)) {
-                    // 스크롤 이동
-                    nextTick(() => {
-                        moveChatBodyPosition();
-                    })
-                }
+                    if (_.includes(['lookup', 'message', 'file', 'invite', 'terminate'], json.type)) {
+                        // 스크롤 이동
+                        nextTick(() => {
+                            moveChatBodyPosition();
+                        })
+                    }
                 } catch (e) {}
             }
             ws.value.onclose = function(event) {
@@ -320,8 +321,8 @@ export default {
                         message: event.reason || '연결이 끊어졌습니다.',
                     });
                     proxy.$router.replace('/login');
-                    
                 }
+                emit('chatExit');
             }
             ws.value.onerror = function(event) {
                 isConnected.value = false;
@@ -334,6 +335,13 @@ export default {
                     });
                     proxy.$router.replace('/login');
                 }
+                emit('chatExit');
+            }
+        }
+        const disconnectWebsocket = function() {
+            if (_.includes([WebSocket.OPEN, WebSocket.CONNECTING], ws.value.readyState)) {
+                clearInterval(state.pingInterval);
+                ws.value.close(1000);
             }
         }
         const getUserCnt = function() {
@@ -361,10 +369,7 @@ export default {
             connectWebsocket();
         })
         onUnmounted(() => {
-            if (ws.value.readyState === WebSocket.OPEN) {
-                clearInterval(state.pingInterval);
-                ws.value.close(1000);
-            }
+            disconnectWebsocket();
         })
         const searchedFollowings = computed(() => {
             const searchedFollowings = _.filter(state.followingsNotInRoom, function(f) {
@@ -412,20 +417,21 @@ export default {
         watch(
             () => wsUrl.value,
             (newUrl) => {
-                if (ws.value && ws.value.readyState === WebSocket.OPEN) {
+                WebSocket.CONNECTING
+                if (ws.value && _.includes([WebSocket.CONNECTING, WebSocket.OPEN], ws.value.readyState)) {
                     ws.value.close(1000);
                 }
                 let retryCnt = 5;
                 while (retryCnt >= 0) {
                     try {
                         ws.value = new WebSocket(newUrl);
+                        emit('chatDetailWebsocket', ws.value);
                         break;
                     } catch (e) {
                         retryCnt -= 1;
                         sleep(200);
                     }
                 }
-                
                 connectWebsocket();
             }
         )

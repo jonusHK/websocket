@@ -1,5 +1,5 @@
 <script>
-import { reactive, onMounted, computed, getCurrentInstance } from 'vue';
+import { reactive, onMounted, onUnmounted, computed, getCurrentInstance } from 'vue';
 import FollowingListLayer from './FollowingListLayer.vue';
 import FollowingInfoLayer from './FollowingInfoLayer.vue';
 import ChatListLayer from './ChatListLayer.vue';
@@ -41,6 +41,7 @@ export default {
       searchFollowingNickname: '',
       selectedFollowingIds: [],
       showSettings: false,
+      chatDetailWebsocket: null,
     });
     if (proxy.$store.state.user.userId === '' || proxy.$store.state.user.userIsActive === false) {
       proxy.$router.replace('/login');
@@ -320,6 +321,22 @@ export default {
           });
         });
     }
+    const closeWebsocket = function(ws) {
+      if (_.includes([WebSocket.CONNECTING, WebSocket.OPEN], ws.readyState)) {
+        ws.close(1000);
+      }
+    }
+    const disconnectWebsocket = function() {
+      clearInterval(state.pingInterval);
+      [followingListSocket, chatRoomListSocket, state.chatDetailWebsocket].forEach((ws) => {
+        if (ws !== null) {
+          closeWebsocket(ws);
+        }
+      });
+    }
+    const chatDetailWebsocket = function(ws) {
+      state.chatDetailWebsocket = ws;
+    }
     onMounted(() => {
       followingInfo(state.loginProfileId);
       // Send a ping message every 30 seconds
@@ -401,6 +418,9 @@ export default {
           proxy.$router.replace('/login');
       }
     });
+    onUnmounted(() => {
+      disconnectWebsocket();
+    });
     return {
       state,
       onChangeChatMenuType,
@@ -420,6 +440,7 @@ export default {
       onClickProfileId,
       onCancelCreateRoom,
       onConfirmCreateRoom,
+      chatDetailWebsocket,
       logout,
     }
   },
@@ -637,7 +658,9 @@ export default {
         <ChatDetailLayer
           v-if="state.chatBodyDetailView['chat']"
           :chatRoomId="state.chatRoomId"
+          @chatDetailWebsocket="chatDetailWebsocket"
           @followingInfo="followingInfo"
+          @chatExit="onChangeChatMenuType('chat')"
         />
         <FollowingInfoLayer
           v-if="state.chatBodyInfoView['following']"
