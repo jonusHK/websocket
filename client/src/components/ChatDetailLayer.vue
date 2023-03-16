@@ -135,13 +135,15 @@ export default {
             }
         }
         const moveChatBodyPosition = function() {
-            const currentScrollHeight = document.querySelector('.chat-detail-body-list').scrollHeight;
-            if (state.bottomFlag || (state.moveFlag && currentScrollHeight !== state.scrollHeight)) {
-                if (state.bottomFlag) {
-                    state.scrollHeight = 0;
+            if (document.querySelector('.chat-detail-body-list') !== null) {
+                const currentScrollHeight = document.querySelector('.chat-detail-body-list').scrollHeight;
+                if (state.bottomFlag || (state.moveFlag && currentScrollHeight !== state.scrollHeight)) {
+                    if (state.bottomFlag) {
+                        state.scrollHeight = 0;
+                    }
+                    const height = currentScrollHeight - state.scrollHeight;
+                    document.querySelector('.chat-detail-body-list').scrollTop = height;
                 }
-                const height = currentScrollHeight - state.scrollHeight;
-                document.querySelector('.chat-detail-body-list').scrollTop = height;
             }
         }
         const getChatUserProfileNickname = function(obj) {
