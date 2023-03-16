@@ -314,8 +314,7 @@ export default {
                 } catch (e) {}
             }
             ws.value.onclose = function(event) {
-                isConnected.value = false;
-                clearInterval(state.pingInterval);
+                disconnectWebsocket();
                 if (_.includes([1008, 1006], event.code)) {
                     proxy.$alert({
                         state: 'error',
@@ -326,8 +325,7 @@ export default {
                 }
             }
             ws.value.onerror = function(event) {
-                isConnected.value = false;
-                clearInterval(state.pingInterval);
+                disconnectWebsocket();
                 if (_.includes([1008, 1006], event.code)) {
                     proxy.$alert({
                         state: 'error',
@@ -339,6 +337,9 @@ export default {
             }
         }
         const disconnectWebsocket = function() {
+            emit('disconnect');
+            isConnected.value = false;
+            clearInterval(state.pingInterval);
             if (_.includes([WebSocket.OPEN, WebSocket.CONNECTING], ws.value.readyState)) {
                 clearInterval(state.pingInterval);
                 ws.value.close(1000);

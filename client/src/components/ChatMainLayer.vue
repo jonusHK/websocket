@@ -337,6 +337,14 @@ export default {
     const chatDetailWebsocket = function(ws) {
       state.chatDetailWebsocket = ws;
     }
+    const disconnectChatDetail = function() {
+      for (const key in state.chatBodyDetailView) {
+          state.chatBodyDetailView[key] = false;
+      }
+      for (const key in state.chatBodyInfoView) {
+        state.chatBodyInfoView[key] = false;
+      };
+    }
     onMounted(() => {
       followingInfo(state.loginProfileId);
       // Send a ping message every 30 seconds
@@ -441,6 +449,7 @@ export default {
       onCancelCreateRoom,
       onConfirmCreateRoom,
       chatDetailWebsocket,
+      disconnectChatDetail,
       logout,
     }
   },
@@ -660,6 +669,7 @@ export default {
           :chatRoomId="state.chatRoomId"
           @chatDetailWebsocket="chatDetailWebsocket"
           @followingInfo="followingInfo"
+          @disconnect="disconnectChatDetail"
         />
         <FollowingInfoLayer
           v-if="state.chatBodyInfoView['following']"
