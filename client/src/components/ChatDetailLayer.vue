@@ -322,7 +322,6 @@ export default {
                     });
                     proxy.$router.replace('/login');
                 }
-                emit('chatExit');
             }
             ws.value.onerror = function(event) {
                 isConnected.value = false;
@@ -335,7 +334,6 @@ export default {
                     });
                     proxy.$router.replace('/login');
                 }
-                emit('chatExit');
             }
         }
         const disconnectWebsocket = function() {

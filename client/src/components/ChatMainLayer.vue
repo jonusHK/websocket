@@ -660,7 +660,6 @@ export default {
           :chatRoomId="state.chatRoomId"
           @chatDetailWebsocket="chatDetailWebsocket"
           @followingInfo="followingInfo"
-          @chatExit="onChangeChatMenuType('chat')"
         />
         <FollowingInfoLayer
           v-if="state.chatBodyInfoView['following']"
