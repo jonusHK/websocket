@@ -5,7 +5,8 @@ from sqlalchemy.orm import selectinload, joinedload
 from server.api.common import AsyncRedisHandler
 from server.api.websocket.chat import ChatHandler
 from server.core.enums import SendMessageType
-from server.core.externals.redis.schemas import RedisChatHistoryByRoomS, RedisChatHistoriesByRoomS
+from server.core.externals.redis.schemas import RedisChatHistoryByRoomS, RedisChatHistoriesByRoomS, \
+    RedisChatRoomInfoS, RedisChatRoomByUserProfileS
 from server.crud.service import ChatHistoryCRUD, ChatHistoryUserAssociationCRUD
 from server.models import ChatHistory, UserProfile, ChatHistoryUserAssociation
 
@@ -21,15 +22,26 @@ class LookUpHandler(ChatHandler):
         redis_handler: AsyncRedisHandler = kwargs.get('redis_handler')
         user_profile_id: int = kwargs.get('user_profile_id')
         room_id: int = kwargs.get('room_id')
+        room_redis: RedisChatRoomInfoS = kwargs.get('room_redis')
+        room_by_profile_redis: RedisChatRoomByUserProfileS = kwargs.get('room_by_profile_redis')
+
+        redis = await redis_handler.redis
+
+        if self.receive.data.exit:
+            await redis_handler.exit_room(room_id, user_profile_id)
+            return
 
         if self.receive.data.offset is None or self.receive.data.limit is None:
             self.logger.warning("Not exists offset or limit for page.")
             return
 
+        if self.receive.data.offset == 0:
+            await redis_handler.enter_room(room_id, user_profile_id, room_redis, room_by_profile_redis)
+
         # Redis 대화 내용 조회
         chat_histories_redis: List[RedisChatHistoryByRoomS] = (
             await RedisChatHistoriesByRoomS.zrevrange(
-                await redis_handler.redis, room_id,
+                redis, room_id,
                 start=self.receive.data.offset,
                 end=self.receive.data.offset + self.receive.data.limit - 1
             )

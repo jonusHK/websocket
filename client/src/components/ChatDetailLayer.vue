@@ -34,6 +34,7 @@ export default {
             followingsNotInRoom: [],
             scrollHeight: 0,
             pingInterval: null,
+            wsConnected: {},
         });
         proxy.$axios.get(VITE_SERVER_HOST + `/v1/chats/room/${state.loginProfileId}/${state.roomId}`)
         .then((res) => {
@@ -54,9 +55,22 @@ export default {
         const wsUrl = ref(`${VITE_SERVER_WEBSOCKET_HOST}/v1/chats/conversation/${state.loginProfileId}/${state.roomId}`);
         const isConnected = ref(false);
         const ws = ref(new WebSocket(wsUrl.value));
-        emit('chatDetailWebsocket', ws.value);
+        _.merge(state.wsConnected, {[state.roomId]: ws.value});
+        emit('chatDetailWsConnected', ws.value, true);
+
         const wsSend = function(data) {
             if (ws.value.readyState === WebSocket.OPEN) {
+                ws.value.send(JSON.stringify(data));
+            }
+        }
+        const wsChangeRoom = function() {
+            if (ws.value.readyState === WebSocket.OPEN) {
+                const data = {
+                    'type': 'lookup',
+                    'data': {
+                        'exit': true
+                    }
+                };
                 ws.value.send(JSON.stringify(data));
             }
         }
@@ -164,7 +178,9 @@ export default {
             return dt.format('A h:mm');
         }
         const getUnreadCnt = function(obj) {
-            const read_user_profiles = state.room.user_profiles.filter(p => obj.read_user_ids.includes(p.id));
+            const read_user_profiles =_.filter(state.room.user_profiles, function(p) {
+                return obj.read_user_ids.includes(p.id);
+            });
             const unreadCnt = state.room.user_profiles.length - read_user_profiles.length;
             return unreadCnt > 0 ? unreadCnt : null;
         }
@@ -253,7 +269,24 @@ export default {
         const stopEvent = function(e) {
             e.stopPropagation();
         }
+        const initLookup = function() {
+            const data = {
+                'type': 'lookup',
+                'data': {
+                    'offset': state.load.offset,
+                    'limit': state.load.limit,
+                }
+            };
+            wsSend(data);
+            state.bottomFlag = true;
+            nextTick(() => {
+                document.querySelector('.chat-input-body').focus();
+            })
+        }
         const connectWebsocket = function() {
+            initData();
+            refreshRoom();
+
             // Send a ping message every 30 seconds
             state.pingInterval = setInterval(() => {
                 const data = {
@@ -265,18 +298,7 @@ export default {
             ws.value.onopen = function(event) {
                 console.log('채팅 웹소켓 연결 성공');
                 isConnected.value = true;
-                const data = {
-                    'type': 'lookup',
-                    'data': {
-                        'offset': state.load.offset,
-                        'limit': state.load.limit,
-                    }
-                };
-                wsSend(data);
-                state.bottomFlag = true;
-                nextTick(() => {
-                    document.querySelector('.chat-input-body').focus();
-                })
+                initLookup();
             }
             ws.value.onmessage = function(event) {
                 try {
@@ -314,57 +336,59 @@ export default {
                 } catch (e) {}
             }
             ws.value.onclose = function(event) {
+                isConnected.value = false;
                 disconnectWebsocket();
-                if (_.includes([1008, 1006], event.code)) {
-                    proxy.$alert({
-                        state: 'error',
-                        stateOutlined: true,
-                        message: event.reason || '연결이 끊어졌습니다.',
-                    });
-                    proxy.$router.replace('/login');
-                }
+                handleWebsocketError(event);
             }
             ws.value.onerror = function(event) {
+                isConnected.value = false;
                 disconnectWebsocket();
-                if (_.includes([1008, 1006], event.code)) {
-                    proxy.$alert({
-                        state: 'error',
-                        stateOutlined: true,
-                        message: event.reason || '연결이 끊어졌습니다.',
-                    });
-                    proxy.$router.replace('/login');
-                }
+                handleWebsocketError(event);
+            }
+        }
+        const handleWebsocketError = function(event) {
+            if (event !== undefined && _.includes([1008, 1006], event.code)) {
+                proxy.$alert({
+                    state: 'error',
+                    stateOutlined: true,
+                    message: event.reason || '연결이 끊어졌습니다.',
+                });
+                proxy.$router.replace('/login');
             }
         }
         const disconnectWebsocket = function() {
-            emit('disconnect');
-            isConnected.value = false;
             clearInterval(state.pingInterval);
-            if (_.includes([WebSocket.OPEN, WebSocket.CONNECTING], ws.value.readyState)) {
-                clearInterval(state.pingInterval);
+            if (ws.value && _.includes([WebSocket.OPEN, WebSocket.CONNECTING], ws.value.readyState)) {
                 ws.value.close(1000);
             }
+            if (_.has(state.wsConnected, state.roomId)) {
+                emit('chatDetailWsConnected', state.wsConnected[state.roomId], false);
+                delete state.wsConnected[state.roomId];
+            }
+            emit('exit');
         }
         const getUserCnt = function() {
             return state.room.user_profiles !== undefined && state.room.user_profiles.length > 2 ? state.room.user_profiles.length : null;
         }
         const refreshRoom = function() {
-            proxy.$axios.get(VITE_SERVER_HOST + `/v1/chats/room/${state.loginProfileId}/${state.roomId}`)
-                .then((res) => {
-                    if (res.status === 200) {
-                        state.room = res.data.data;
-                    }
-                })
-                .catch((err) => {
-                    proxy.$alert({
-                        state: 'error',
-                        stateOutlined: true,
-                        message: err.response.data.message,
+            try {
+                proxy.$axios.get(VITE_SERVER_HOST + `/v1/chats/room/${state.loginProfileId}/${state.roomId}`)
+                    .then((res) => {
+                        if (res.status === 200) {
+                            state.room = res.data.data;
+                        }
+                    })
+                    .catch((err) => {
+                        proxy.$alert({
+                            state: 'error',
+                            stateOutlined: true,
+                            message: err.response.data.message,
+                        });
+                        if (_.includes(['PERMISSION_DENIED', 'UNAUTHORIZED'], err.response.data.code)) {
+                            proxy.$router.replace('/login');
+                        }
                     });
-                    if (_.includes(['PERMISSION_DENIED', 'UNAUTHORIZED'], err.response.data.code)) {
-                        proxy.$router.replace('/login');
-                    }
-                });
+            } catch (e) {}
         }
         onMounted(() => {
             connectWebsocket();
@@ -410,27 +434,29 @@ export default {
         watch(
             () => props.chatRoomId,
             (cur) => {
-                initData();
-                refreshRoom();
+                wsChangeRoom();
                 wsUrl.value = `${VITE_SERVER_WEBSOCKET_HOST}/v1/chats/conversation/${state.loginProfileId}/${cur}`;
             },
         )
         watch(
             () => wsUrl.value,
             (newUrl) => {
-                WebSocket.CONNECTING
-                if (ws.value && _.includes([WebSocket.CONNECTING, WebSocket.OPEN], ws.value.readyState)) {
-                    ws.value.close(1000);
-                }
                 let retryCnt = 5;
                 while (retryCnt >= 0) {
                     try {
-                        ws.value = new WebSocket(newUrl);
-                        emit('chatDetailWebsocket', ws.value);
-                        break;
+                        if (_.has(state.wsConnected, props.chatRoomId)) {
+                            ws.value = state.wsConnected[props.chatRoomId];
+                            initLookup();
+                            break;
+                        } else {
+                            ws.value = new WebSocket(newUrl);
+                            _.merge(state.wsConnected, {[props.chatRoomId]: ws.value});
+                            emit('chatDetailWsConnected', ws.value, true);
+                            break;
+                        }
                     } catch (e) {
                         retryCnt -= 1;
-                        sleep(200);
+                        sleep(100);
                     }
                 }
                 connectWebsocket();
