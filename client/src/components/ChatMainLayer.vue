@@ -41,7 +41,7 @@ export default {
       searchFollowingNickname: '',
       selectedFollowingIds: [],
       showSettings: false,
-      chatDetailWebsocket: null,
+      chatDetailWsConnected: [],
     });
     if (proxy.$store.state.user.userId === '' || proxy.$store.state.user.userIsActive === false) {
       proxy.$router.replace('/login');
@@ -328,22 +328,25 @@ export default {
     }
     const disconnectWebsocket = function() {
       clearInterval(state.pingInterval);
-      [followingListSocket, chatRoomListSocket, state.chatDetailWebsocket].forEach((ws) => {
+      [followingListSocket, chatRoomListSocket].concat(state.chatDetailWsConnected).forEach((ws) => {
         if (ws !== null) {
           closeWebsocket(ws);
         }
       });
     }
-    const chatDetailWebsocket = function(ws) {
-      state.chatDetailWebsocket = ws;
+    const chatDetailWsConnected = function(ws, isConnected) {
+      if (isConnected) {
+        state.chatDetailWsConnected.push(ws);
+      } else {
+        state.chatDetailWsConnected = _.filter(state.chatDetailWsConnected, function(w) {
+          return w !== ws;
+        });
+      }
     }
-    const disconnectChatDetail = function() {
+    const exitChatDetail = function() {
       for (const key in state.chatBodyDetailView) {
           state.chatBodyDetailView[key] = false;
       }
-      for (const key in state.chatBodyInfoView) {
-        state.chatBodyInfoView[key] = false;
-      };
     }
     onMounted(() => {
       followingInfo(state.loginProfileId);
@@ -448,8 +451,8 @@ export default {
       onClickProfileId,
       onCancelCreateRoom,
       onConfirmCreateRoom,
-      chatDetailWebsocket,
-      disconnectChatDetail,
+      chatDetailWsConnected,
+      exitChatDetail,
       logout,
     }
   },
@@ -667,9 +670,9 @@ export default {
         <ChatDetailLayer
           v-if="state.chatBodyDetailView['chat']"
           :chatRoomId="state.chatRoomId"
-          @chatDetailWebsocket="chatDetailWebsocket"
+          @chatDetailWsConnected="chatDetailWsConnected"
           @followingInfo="followingInfo"
-          @disconnect="disconnectChatDetail"
+          @exit="exitChatDetail"
         />
         <FollowingInfoLayer
           v-if="state.chatBodyInfoView['following']"
