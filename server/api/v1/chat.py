@@ -451,47 +451,6 @@ async def chat(
         raised_errors = set()
 
         try:
-            async with async_session() as session:
-                crud_room = ChatRoomCRUD(session)
-                crud_room_user_mapping = ChatRoomUserAssociationCRUD(session)
-
-                # 방 데이터 추출
-                try:
-                    room_redis, _ = await redis_handler.sync_room(room_id, crud_room, raise_exception=True)
-                except Exception as exc:
-                    raise WebSocketDisconnect(
-                        code=status.WS_1011_INTERNAL_ERROR,
-                        reason=f'Failed to get room. {exc}'
-                    )
-                # 유저에 연결된 방 데이터 추출
-                try:
-                    room_by_profile_redis, _ = await redis_handler.sync_room_by_user_profile(
-                        room_id, user_profile_id, crud_room_user_mapping, raise_exception=True
-                    )
-                except Exception as exc:
-                    raise WebSocketDisconnect(
-                        code=status.WS_1011_INTERNAL_ERROR,
-                        reason=f'Failed to get room for user profile. {exc}'
-                    )
-
-                # 웹소켓 연결된 유저 프로필 ID 추가
-                await redis_handler.connect_profile_by_room(user_profile_id, room_id, room_redis)
-
-                # 채팅방 unread_msg_cnt 초기화 (채팅방 접속 시, 모두 읽음 처리)
-                await redis_handler.init_unread_msg_cnt(user_profile_id, room_by_profile_redis)
-
-                # 채팅 내역 읽음 처리
-                async with await redis_handler.lock(key=RedisChatHistoriesByRoomS.get_lock_key(room_id)):
-                    patch_histories_redis = await redis_handler.patch_unsync_read_by_room(room_id, room_redis)
-                    if patch_histories_redis:
-                        await pub.publish(
-                            RedisChatRoomPubSubS.get_key(room_id),
-                            ChatSendFormS(
-                                type=ChatType.PATCH,
-                                data=ChatSendDataS(patch_histories=patch_histories_redis)
-                            ).json()
-                        )
-
             while True:
                 data = await ws_handler.receive_json()
                 if not data:
@@ -552,6 +511,7 @@ async def chat(
                             user_profile_redis=user_profile_redis,
                             room_id=room_id,
                             room_redis=room_redis,
+                            room_by_profile_redis=room_by_profile_redis
                         )
 
                     except (WebSocketDisconnect, WebSocketException) as exc:
@@ -592,8 +552,7 @@ async def chat(
     try:
         await redis_handler.handle_pubsub(websocket, producer_handler, consumer_handler)
     finally:
-        room_redis: RedisChatRoomInfoS = await RedisInfoByRoomS.hgetall(await redis_handler.redis, room_id)
-        await redis_handler.disconnect_profile_by_room(user_profile_id, room_id, room_redis)
+        await redis_handler.exit_room(room_id, user_profile_id)
 
 
 @router.websocket('/followings/{user_profile_id}')

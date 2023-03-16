@@ -13,14 +13,14 @@ from starlette.websockets import WebSocket, WebSocketDisconnect, WebSocketState
 from websockets.exceptions import ConnectionClosedOK
 
 from server.core.authentications import COOKIE_NAME, cookie, backend
-from server.core.enums import ResponseCode
+from server.core.enums import ResponseCode, ChatType
 from server.core.exceptions import ExceptionHandler
 from server.core.externals.redis import AioRedis
 from server.core.externals.redis.schemas import (
     RedisChatRoomByUserProfileS, RedisChatRoomsByUserProfileS, RedisUserProfilesByRoomS,
     RedisChatHistoriesByRoomS, RedisChatHistoriesToSyncS, RedisUserImageFileS,
     RedisUserProfileByRoomS, RedisChatHistoryByRoomS, RedisInfoByRoomS,
-    RedisChatRoomInfoS, RedisChatHistoryPatchS, RedisChatHistoryToSyncS
+    RedisChatRoomInfoS, RedisChatHistoryPatchS, RedisChatHistoryToSyncS, RedisChatRoomPubSubS
 )
 from server.core.utils import async_iter
 from server.crud.service import ChatRoomCRUD, ChatRoomUserAssociationCRUD
@@ -28,6 +28,7 @@ from server.db.databases import settings
 from server.models import (
     User, ChatRoomUserAssociation, UserProfile, UserSession, ChatRoom
 )
+from server.schemas.chat import ChatSendFormS, ChatSendDataS
 
 
 class AuthValidator:
@@ -513,6 +514,30 @@ class AsyncRedisHandler:
                 field=RedisChatRoomInfoS.__fields__['connected_profile_ids'].name,
                 value=room.connected_profile_ids
             )
+
+    async def enter_room(self, room_id: int, user_profile_id: int, room_redis: RedisChatRoomInfoS, room_by_profile_redis: RedisChatRoomByUserProfileS):
+        # 웹소켓 연결된 유저 프로필 ID 추가
+        await self.connect_profile_by_room(user_profile_id, room_id, room_redis)
+
+        # 채팅방 unread_msg_cnt 초기화
+        await self.init_unread_msg_cnt(user_profile_id, room_by_profile_redis)
+
+        # 채팅 내역 읽음 처리
+        async with await self.lock(key=RedisChatHistoriesByRoomS.get_lock_key(room_id)):
+            patch_histories_redis = await self.patch_unsync_read_by_room(room_id, room_redis)
+            if patch_histories_redis:
+                redis = await self.redis
+                await redis.publish(
+                    RedisChatRoomPubSubS.get_key(room_id),
+                    ChatSendFormS(
+                        type=ChatType.PATCH,
+                        data=ChatSendDataS(patch_histories=patch_histories_redis)
+                    ).json()
+                )
+
+    async def exit_room(self, room_id: int, user_profile_id: int):
+        room_redis: RedisChatRoomInfoS = await RedisInfoByRoomS.hgetall(await self.redis, room_id)
+        await self.disconnect_profile_by_room(user_profile_id, room_id, room_redis)
 
     async def unsync_read_by_room(
         self,
