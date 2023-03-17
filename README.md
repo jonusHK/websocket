@@ -1,5 +1,7 @@
 # 웹챗 (WebChat)
 ### 유저들 간 실시간 채팅을 할 수 있는 서비스
+#### 시연 영상 : https://www.youtube.com/watch?v=aQTHKhHUfEQ
+#### 테스트 : http://13.125.196.205/
 
 ## Prerequisites
 > 언어
@@ -242,6 +244,3 @@ AWS_CDN_URL=""
 ```shell
 $ docker-compose up --build -d
 ```
-
-## Production
-- IP address: http://13.125.196.205/
