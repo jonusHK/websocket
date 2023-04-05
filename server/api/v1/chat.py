@@ -18,7 +18,7 @@ from websockets.exceptions import WebSocketException
 
 from server.api import ExceptionHandlerRoute, templates
 from server.api.common import AuthValidator, AsyncRedisHandler, WebSocketHandler, get_async_redis_handler
-from server.api.websocket.chat.proxy import ChatHandlerProxy
+from server.api.websocket.chat.proxy import ChatHandlerDecorator
 from server.core.authentications import cookie, RoleChecker
 from server.core.enums import UserType, ChatType
 from server.core.exceptions import ExceptionHandler
@@ -503,7 +503,7 @@ async def chat(
                         receive = ChatReceiveFormS(**data)
 
                         # 메시지 전송
-                        await ChatHandlerProxy(receive, session).send(
+                        await ChatHandlerDecorator(receive, session).send(
                             redis_handler=redis_handler,
                             ws_handler=ws_handler,
                             user_profile_id=user_profile_id,

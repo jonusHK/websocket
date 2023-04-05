@@ -4,7 +4,7 @@ import os
 import random
 from typing import List
 
-from server.api.websocket.chat.proxy import ChatHandlerProxy
+from server.api.websocket.chat.proxy import ChatHandlerDecorator
 from server.core.enums import ChatType
 from server.core.externals.redis.schemas import RedisChatHistoryByRoomS, \
     RedisChatHistoryFileS
@@ -63,7 +63,7 @@ async def test_파일전송(db_setup, db_session, redis_handler, s3_client, s3_b
                 ]
             ))
 
-    history: RedisChatHistoryByRoomS = await ChatHandlerProxy(receive, db_session).execute(
+    history: RedisChatHistoryByRoomS = await ChatHandlerDecorator(receive, db_session).execute(
         redis_handler=redis_handler,
         user_profile_id=user_profile.id,
         user_profiles_redis=user_profiles_redis,

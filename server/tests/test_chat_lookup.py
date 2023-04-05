@@ -5,7 +5,7 @@ from typing import List
 
 from sqlalchemy.orm import selectinload, joinedload
 
-from server.api.websocket.chat.proxy import ChatHandlerProxy
+from server.api.websocket.chat.proxy import ChatHandlerDecorator
 from server.core.enums import ChatType, ChatHistoryType
 from server.core.externals.redis.schemas import RedisChatHistoryByRoomS, RedisChatHistoriesByRoomS
 from server.crud.service import ChatRoomCRUD, ChatHistoryCRUD
@@ -98,7 +98,7 @@ async def test_메시지조회(db_setup, db_session, redis_handler):
                 limit=limit
             )
         )
-        lookup = await ChatHandlerProxy(receive, db_session).execute(
+        lookup = await ChatHandlerDecorator(receive, db_session).execute(
             redis_handler=redis_handler,
             user_profile_id=user_profile.id,
             room_id=room.id

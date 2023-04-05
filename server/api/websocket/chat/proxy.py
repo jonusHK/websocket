@@ -13,7 +13,7 @@ from server.core.enums import ChatType, SendMessageType
 from server.core.externals.redis.schemas import RedisChatRoomPubSubS
 
 
-class ChatHandlerProxy(ChatHandler):
+class ChatHandlerDecorator(ChatHandler):
 
     _handler = None
 

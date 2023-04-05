@@ -2,7 +2,7 @@ from typing import List
 
 from sqlalchemy.orm import selectinload
 
-from server.api.websocket.chat.proxy import ChatHandlerProxy
+from server.api.websocket.chat.proxy import ChatHandlerDecorator
 from server.core.enums import ChatType
 from server.core.externals.redis.schemas import RedisChatHistoriesByRoomS, RedisChatHistoryByRoomS
 from server.crud.service import ChatHistoryCRUD
@@ -44,7 +44,7 @@ async def test_메시지업데이트(db_setup, db_session, redis_handler):
         )
     )
 
-    patch_histories: List[RedisChatHistoryByRoomS] = await ChatHandlerProxy(receive, db_session).execute(
+    patch_histories: List[RedisChatHistoryByRoomS] = await ChatHandlerDecorator(receive, db_session).execute(
         redis_handler=redis_handler,
         user_profile_id=user_profile.id,
         room_id=room.id,
