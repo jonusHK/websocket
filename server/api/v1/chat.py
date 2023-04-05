@@ -18,7 +18,7 @@ from websockets.exceptions import WebSocketException
 
 from server.api import ExceptionHandlerRoute, templates
 from server.api.common import AuthValidator, AsyncRedisHandler, WebSocketHandler, get_async_redis_handler
-from server.api.websocket.chat.proxy import ChatHandlerDecorator
+from server.api.websocket.chat.decorator import ChatHandlerDecorator
 from server.core.authentications import cookie, RoleChecker
 from server.core.enums import UserType, ChatType
 from server.core.exceptions import ExceptionHandler

@@ -5,7 +5,7 @@ from typing import List
 
 from sqlalchemy.orm import selectinload, joinedload
 
-from server.api.websocket.chat.proxy import ChatHandlerDecorator
+from server.api.websocket.chat.decorator import ChatHandlerDecorator
 from server.core.enums import ChatType, ChatHistoryType
 from server.core.externals.redis.schemas import RedisChatHistoryByRoomS, RedisChatHistoriesByRoomS
 from server.crud.service import ChatRoomCRUD, ChatHistoryCRUD
