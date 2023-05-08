@@ -324,6 +324,9 @@ export default {
                         if (_.includes(['invite', 'terminate'], json.type) === true) {
                             refreshRoom();
                         }
+                        if (json.type === 'message') {
+                            load.offset++;
+                        }
                         state.chatHistories.push(json.data.history);
                     }
 
